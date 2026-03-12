@@ -55,7 +55,7 @@ class GCM:
         if r == 1:
             return np.sum(attention_weights * diff)
         else:
-            return np.sum(attention_weights * diff ** r) ** (1.0 / r)
+            return np.sum(attention_weights * diff**r) ** (1.0 / r)
 
     def _similarity(self, distance: float, c: float) -> float:
         """Exponential similarity function: eta = exp(-c * d)."""
@@ -74,10 +74,10 @@ class GCM:
     ) -> dict:
         """
         Predict category response probabilities for a single stimulus.
-        
+
         Returns:
             dict with keys:
-                "probabilities": {label: P(label|stimulus)} 
+                "probabilities": {label: P(label|stimulus)}
                 "similarities": {label: summed similarity to that category}
         """
         stimulus = np.asarray(stimulus, dtype=float)
@@ -105,8 +105,7 @@ class GCM:
 
         # Response rule (Luce choice)
         numerators = {
-            cat: bias[cat] * (cat_similarities[cat] ** gamma)
-            for cat in categories
+            cat: bias[cat] * (cat_similarities[cat] ** gamma) for cat in categories
         }
         total = sum(numerators.values())
         if total == 0:
@@ -142,12 +141,12 @@ class GCM:
     ) -> list[dict]:
         """
         Predict accuracy over the course of learning.
-        
+
         training_sequence: list of (stimulus, label) pairs in presentation order.
         test_items: items to test at each block boundary.
         test_labels: correct labels for test items.
         block_size: number of training trials per block.
-        
+
         Returns list of dicts, one per block:
             {"block": int, "accuracy": float, "item_probs": list}
         """
@@ -166,6 +165,9 @@ class GCM:
             if len(stored_items) == 0:
                 continue
 
+            if len(test_items) == 0:
+                continue
+
             # Test current state
             train_arr = np.array(stored_items)
             label_arr = np.array(stored_labels)
@@ -175,15 +177,20 @@ class GCM:
             for test_item, true_label in zip(test_items, test_labels):
                 pred = self.predict(test_item, train_arr, label_arr, **params)
                 item_probs.append(pred["probabilities"])
-                if max(pred["probabilities"], key=pred["probabilities"].get) == true_label:
+                if (
+                    max(pred["probabilities"], key=pred["probabilities"].get)
+                    == true_label
+                ):
                     correct += 1
 
-            curve.append({
-                "block": block_idx // block_size,
-                "n_stored": len(stored_items),
-                "accuracy": correct / len(test_items),
-                "item_probabilities": item_probs,
-            })
+            curve.append(
+                {
+                    "block": block_idx // block_size,
+                    "n_stored": len(stored_items),
+                    "accuracy": correct / len(test_items),
+                    "item_probabilities": item_probs,
+                }
+            )
 
         return curve
 
@@ -217,10 +224,10 @@ class GCM:
     ) -> dict:
         """
         Fit GCM parameters (c and attention weights) to response data.
-        
+
         response_data: array of shape (n_items,) with P(category 0) for each item.
             Typically averaged over participants.
-        
+
         Returns:
             dict with "c", "attention_weights", "loss", "predictions"
         """
@@ -236,19 +243,28 @@ class GCM:
             total_loss = 0.0
             for i, item in enumerate(training_items):
                 pred = self.predict(
-                    item, training_items, training_labels,
-                    c=c, attention_weights=attention_weights, r=r, gamma=gamma,
+                    item,
+                    training_items,
+                    training_labels,
+                    c=c,
+                    attention_weights=attention_weights,
+                    r=r,
+                    gamma=gamma,
                 )
                 p_cat0 = pred["probabilities"].get(0, 0.5)
                 # Negative log-likelihood
                 p_cat0 = np.clip(p_cat0, 1e-10, 1 - 1e-10)
                 target = response_data[i]
-                total_loss -= target * np.log(p_cat0) + (1 - target) * np.log(1 - p_cat0)
+                total_loss -= target * np.log(p_cat0) + (1 - target) * np.log(
+                    1 - p_cat0
+                )
 
             return total_loss
 
         bounds = [(0.1, 20.0)] + [(-5.0, 5.0)] * n_dims
-        result = differential_evolution(objective, bounds, seed=seed, maxiter=200, tol=1e-6)
+        result = differential_evolution(
+            objective, bounds, seed=seed, maxiter=200, tol=1e-6
+        )
 
         c_fit = result.x[0]
         raw_w = result.x[1:]
@@ -259,8 +275,13 @@ class GCM:
         predictions = []
         for item in training_items:
             pred = self.predict(
-                item, training_items, training_labels,
-                c=c_fit, attention_weights=attention_fit, r=r, gamma=gamma,
+                item,
+                training_items,
+                training_labels,
+                c=c_fit,
+                attention_weights=attention_fit,
+                r=r,
+                gamma=gamma,
             )
             predictions.append(pred["probabilities"].get(0, 0.5))
 
@@ -269,5 +290,6 @@ class GCM:
             "attention_weights": attention_fit.tolist(),
             "loss": result.fun,
             "predictions": predictions,
-            "n_free_params": 1 + n_dims,  # c + n_dims attention weights (minus 1 for sum constraint, but we count the raw params)
+            "n_free_params": 1
+            + n_dims,  # c + n_dims attention weights (minus 1 for sum constraint, but we count the raw params)
         }

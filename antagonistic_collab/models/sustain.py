@@ -29,9 +29,10 @@ from dataclasses import dataclass
 @dataclass
 class Cluster:
     """A single SUSTAIN cluster."""
-    position: np.ndarray          # centroid in stimulus space
-    lambdas: np.ndarray           # per-dimension receptive field tuning
-    associations: dict             # {category_label: weight}
+
+    position: np.ndarray  # centroid in stimulus space
+    lambdas: np.ndarray  # per-dimension receptive field tuning
+    associations: dict  # {category_label: weight}
     n_updates: int = 0
 
 
@@ -62,9 +63,7 @@ class SUSTAIN:
             "initial_lambdas": 1.0,
         }
 
-    def _activation(
-        self, stimulus: np.ndarray, cluster: Cluster, r: float
-    ) -> float:
+    def _activation(self, stimulus: np.ndarray, cluster: Cluster, r: float) -> float:
         """
         Compute activation of a cluster given a stimulus.
         Uses a dimension-weighted similarity function.
@@ -73,7 +72,7 @@ class SUSTAIN:
         dim_sim = np.exp(-cluster.lambdas * np.abs(stimulus - cluster.position))
         # Aggregate with attentional focus
         act = np.sum(cluster.lambdas * dim_sim) / np.sum(cluster.lambdas)
-        return act ** r
+        return act**r
 
     def _output(
         self, activations: np.ndarray, cluster_list: list[Cluster], beta: float
@@ -137,20 +136,28 @@ class SUSTAIN:
     ) -> dict:
         """
         Simulate SUSTAIN learning on a training sequence.
-        
+
         Returns:
             dict with:
                 "clusters": final list of Cluster objects
                 "trial_log": list of per-trial info (correct, recruited, n_clusters)
                 "lambdas": final attention weights
         """
+        if not training_sequence:
+            return {
+                "clusters": [],
+                "trial_log": [],
+                "lambdas": np.array([]),
+                "n_clusters_final": 0,
+            }
+
         clusters: list[Cluster] = []
         categories = set(label for _, label in training_sequence)
         n_dims = len(training_sequence[0][0])
-        
+
         # Global attention strengths (learned)
         lambdas = np.full(n_dims, initial_lambdas)
-        
+
         trial_log = []
 
         for trial_idx, (stimulus, label) in enumerate(training_sequence):
@@ -163,19 +170,19 @@ class SUSTAIN:
                 )
                 new_cluster.lambdas = lambdas.copy()
                 clusters.append(new_cluster)
-                trial_log.append({
-                    "trial": trial_idx,
-                    "correct": True,  # trivially correct with one cluster
-                    "recruited": True,
-                    "n_clusters": 1,
-                    "winning_cluster": 0,
-                })
+                trial_log.append(
+                    {
+                        "trial": trial_idx,
+                        "correct": True,  # trivially correct with one cluster
+                        "recruited": True,
+                        "n_clusters": 1,
+                        "winning_cluster": 0,
+                    }
+                )
                 continue
 
             # Compute activations for all existing clusters
-            activations = np.array([
-                self._activation(stimulus, c, r) for c in clusters
-            ])
+            activations = np.array([self._activation(stimulus, c, r) for c in clusters])
 
             # Find winning cluster
             winner_idx = np.argmax(activations)
@@ -188,8 +195,7 @@ class SUSTAIN:
             if cat_output:
                 max_out = max(cat_output.values())
                 exp_outs = {
-                    cat: np.exp(d * (val - max_out))
-                    for cat, val in cat_output.items()
+                    cat: np.exp(d * (val - max_out)) for cat, val in cat_output.items()
                 }
                 total = sum(exp_outs.values())
                 probs = {cat: exp_outs[cat] / total for cat, val in cat_output.items()}
@@ -218,34 +224,44 @@ class SUSTAIN:
             if not recruited:
                 # Move winner toward stimulus
                 winner.position += eta * (stimulus - winner.position)
-                
+
                 # Update associations via delta rule
                 for cat in categories:
                     target = 1.0 if cat == label else 0.0
                     error = target - winner.associations.get(cat, 0.0)
-                    winner.associations[cat] = winner.associations.get(cat, 0.0) + eta * error
-                
+                    winner.associations[cat] = (
+                        winner.associations.get(cat, 0.0) + eta * error
+                    )
+
                 winner.n_updates += 1
 
             # Update attention (dimension-wise error-driven)
             # Increase attention to dimensions that reduce error
             for c_idx, c in enumerate(clusters):
                 for dim in range(n_dims):
-                    dim_sim = np.exp(-c.lambdas[dim] * abs(stimulus[dim] - c.position[dim]))
+                    dim_sim = np.exp(
+                        -c.lambdas[dim] * abs(stimulus[dim] - c.position[dim])
+                    )
                     # Gradient: increase lambda for dimensions that help discriminate
-                    c.lambdas[dim] += eta * (1.0 - dim_sim) * activations[c_idx] if c_idx < len(activations) else 0
+                    c.lambdas[dim] += (
+                        eta * (1.0 - dim_sim) * activations[c_idx]
+                        if c_idx < len(activations)
+                        else 0
+                    )
                     c.lambdas[dim] = max(c.lambdas[dim], 0.01)  # floor
-            
+
             lambdas = clusters[winner_idx].lambdas.copy()
 
-            trial_log.append({
-                "trial": trial_idx,
-                "correct": correct,
-                "recruited": recruited,
-                "n_clusters": len(clusters),
-                "winning_cluster": winner_idx,
-                "response_probs": probs,
-            })
+            trial_log.append(
+                {
+                    "trial": trial_idx,
+                    "correct": correct,
+                    "recruited": recruited,
+                    "n_clusters": len(clusters),
+                    "winning_cluster": winner_idx,
+                    "response_probs": probs,
+                }
+            )
 
         return {
             "clusters": clusters,
@@ -267,36 +283,42 @@ class SUSTAIN:
         """
         # Build training sequence (random order, single pass)
         sequence = list(zip(training_items, training_labels))
-        
+
         # Use provided params or defaults
         p = {**self.default_params, **params}
-        
+
         result = self.simulate_learning(
             sequence,
-            r=p["r"], beta=p["beta"], d=p["d"],
-            eta=p["eta"], tau=p["tau"], initial_lambdas=p["initial_lambdas"],
+            r=p["r"],
+            beta=p["beta"],
+            d=p["d"],
+            eta=p["eta"],
+            tau=p["tau"],
+            initial_lambdas=p["initial_lambdas"],
         )
-        
+
         clusters = result["clusters"]
         if not clusters:
             categories = sorted(set(training_labels))
-            return {"probabilities": {c: 1.0/len(categories) for c in categories}}
-        
+            return {"probabilities": {c: 1.0 / len(categories) for c in categories}}
+
         # Classify the test stimulus
-        activations = np.array([
-            self._activation(np.asarray(stimulus), c, p["r"]) for c in clusters
-        ])
+        activations = np.array(
+            [self._activation(np.asarray(stimulus), c, p["r"]) for c in clusters]
+        )
         cat_output = self._output(activations, clusters, p["beta"])
-        
+
         if cat_output:
             max_out = max(cat_output.values())
-            exp_outs = {cat: np.exp(p["d"] * (val - max_out)) for cat, val in cat_output.items()}
+            exp_outs = {
+                cat: np.exp(p["d"] * (val - max_out)) for cat, val in cat_output.items()
+            }
             total = sum(exp_outs.values())
             probs = {cat: exp_outs[cat] / total for cat in cat_output}
         else:
             categories = sorted(set(training_labels))
-            probs = {c: 1.0/len(categories) for c in categories}
-        
+            probs = {c: 1.0 / len(categories) for c in categories}
+
         return {
             "probabilities": probs,
             "n_clusters": len(clusters),
@@ -316,21 +338,25 @@ class SUSTAIN:
         Unlike GCM, SUSTAIN is inherently sequential — order matters.
         """
         p = {**self.default_params, **params}
-        
+
         # Simulate full learning
-        result = self.simulate_learning(training_sequence, **{k: p[k] for k in 
-            ["r", "beta", "d", "eta", "tau", "initial_lambdas"]})
-        
+        result = self.simulate_learning(
+            training_sequence,
+            **{k: p[k] for k in ["r", "beta", "d", "eta", "tau", "initial_lambdas"]},
+        )
+
         # Extract block-level accuracy from trial log
         log = result["trial_log"]
         curve = []
         for block_start in range(0, len(log), block_size):
             block = log[block_start : block_start + block_size]
             acc = sum(1 for t in block if t["correct"]) / len(block) if block else 0
-            curve.append({
-                "block": block_start // block_size,
-                "accuracy": acc,
-                "n_clusters": block[-1]["n_clusters"] if block else 0,
-            })
+            curve.append(
+                {
+                    "block": block_start // block_size,
+                    "accuracy": acc,
+                    "n_clusters": block[-1]["n_clusters"] if block else 0,
+                }
+            )
 
         return curve

@@ -3,7 +3,7 @@ Debate Protocol — Phased state machine for adversarial scientific debate.
 
 Unlike round-robin chat, this implements distinct epistemic phases with
 different goals. The phases mirror how real scientific disputes unfold:
-commit → map disagreements → propose → critique → revise → arbitrate → 
+commit → map disagreements → propose → critique → revise → arbitrate →
 execute → interpret → audit.
 
 Each phase has:
@@ -19,9 +19,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Callable, Any
 import numpy as np
 
-from .epistemic_state import (
-    EpistemicState
-)
+from .epistemic_state import EpistemicState
 from .models.gcm import GCM
 from .models.sustain import SUSTAIN
 from .models.rulex import RULEX
@@ -29,30 +27,34 @@ from .models.category_structures import shepard_types, five_four_structure
 
 
 class Phase(Enum):
-    COMMITMENT = auto()       # Agents register theories & models
+    COMMITMENT = auto()  # Agents register theories & models
     DIVERGENCE_MAPPING = auto()  # Compute where predictions disagree
     EXPERIMENT_PROPOSAL = auto()  # Each agent proposes a design
     ADVERSARIAL_CRITIQUE = auto()  # Agents attack each other's proposals
     DESIGN_REVISION = auto()  # Proposals revised in light of critique
     HUMAN_ARBITRATION = auto()  # Moderator selects/edits final design
-    EXECUTION = auto()        # Run the experiment (synthetic or real)
-    INTERPRETATION = auto()   # Agents interpret results
-    AUDIT = auto()            # Summarize what was learned; prepare next cycle
+    EXECUTION = auto()  # Run the experiment (synthetic or real)
+    INTERPRETATION = auto()  # Agents interpret results
+    AUDIT = auto()  # Summarize what was learned; prepare next cycle
 
 
 @dataclass
 class PhaseResult:
     """Output of a single phase."""
+
     phase: Phase
     cycle: int
     outputs: dict
-    messages: list[dict] = field(default_factory=list)  # agent messages during this phase
+    messages: list[dict] = field(
+        default_factory=list
+    )  # agent messages during this phase
     transition_reason: str = ""
 
 
 @dataclass
 class AgentConfig:
     """Configuration for a theory agent."""
+
     name: str
     theory_name: str
     model_class: Any  # GCM, SUSTAIN, or RULEX instance
@@ -220,15 +222,15 @@ def default_agent_configs() -> list[AgentConfig]:
 class DebateProtocol:
     """
     Orchestrates the phased adversarial debate.
-    
+
     This class manages phase transitions and ensures each phase produces
     the structured output the next phase needs. It does NOT manage LLM calls —
     that's the job of the runner (which can use AutoGen, raw API calls, or anything else).
-    
+
     The protocol is agnostic about the LLM orchestration layer. It defines
     WHAT should happen at each phase, not HOW to talk to the model.
     """
-    
+
     def __init__(
         self,
         state: EpistemicState,
@@ -240,9 +242,9 @@ class DebateProtocol:
         self.experiment_runner = experiment_runner or self._synthetic_runner
         self.current_phase = Phase.COMMITMENT
         self.phase_history: list[PhaseResult] = []
-    
+
     # --- Phase specifications ---
-    
+
     def phase_spec(self, phase: Phase) -> dict:
         """
         Return the specification for a phase: what agents see, what they must produce.
@@ -359,14 +361,14 @@ class DebateProtocol:
         return specs[phase]
 
     # --- Phase transitions ---
-    
+
     def advance_phase(self, result: PhaseResult) -> Phase:
         """
         Record phase result and determine next phase.
         Returns the next Phase.
         """
         self.phase_history.append(result)
-        
+
         transition_map = {
             Phase.COMMITMENT: Phase.DIVERGENCE_MAPPING,
             Phase.DIVERGENCE_MAPPING: Phase.EXPERIMENT_PROPOSAL,
@@ -378,15 +380,21 @@ class DebateProtocol:
             Phase.INTERPRETATION: Phase.AUDIT,
             Phase.AUDIT: Phase.DIVERGENCE_MAPPING,  # new cycle
         }
-        
+
         if self.current_phase == Phase.AUDIT:
             self.state.advance_cycle()
-        
+
         self.current_phase = transition_map[self.current_phase]
         return self.current_phase
-    
+
+    def skip_to_phase(self, target: Phase):
+        """Set the current phase directly, with validation."""
+        if not isinstance(target, Phase):
+            raise ValueError(f"Expected a Phase enum member, got {type(target)}")
+        self.current_phase = target
+
     # --- Divergence mapping computation ---
-    
+
     def compute_divergence_map(
         self,
         structures: Optional[dict] = None,
@@ -394,7 +402,7 @@ class DebateProtocol:
         """
         Run all registered models on a set of category structures
         and identify where predictions diverge most.
-        
+
         This is the quantitative backbone of the debate — it ensures
         that proposals are grounded in actual model behavior.
         """
@@ -402,7 +410,7 @@ class DebateProtocol:
             # Default: Shepard types + 5-4 structure
             structures = shepard_types()
             structures["5-4"] = five_four_structure()
-        
+
         results = {}
         for struct_name, struct in structures.items():
             struct_results = {}
@@ -416,24 +424,25 @@ class DebateProtocol:
                     if isinstance(model, RULEX):
                         call_params.setdefault("seed", 42)
                     pred = model.predict(
-                        item, struct["stimuli"], struct["labels"],
-                        **call_params
+                        item, struct["stimuli"], struct["labels"], **call_params
                     )
                     item_probs.append(pred["probabilities"].get(0, 0.5))
-                
+
                 # Compute accuracy (proportion of items correctly classified)
                 correct = 0
-                for i, (item, label) in enumerate(zip(struct["stimuli"], struct["labels"])):
+                for i, (item, label) in enumerate(
+                    zip(struct["stimuli"], struct["labels"])
+                ):
                     pred_label = 0 if item_probs[i] > 0.5 else 1
                     if pred_label == label:
                         correct += 1
                 accuracy = correct / len(struct["labels"])
-                
+
                 struct_results[agent_config.name] = {
                     "item_probabilities": item_probs,
                     "accuracy": accuracy,
                 }
-            
+
             # Compute pairwise divergence between agents
             agent_names = list(struct_results.keys())
             divergences = {}
@@ -447,16 +456,16 @@ class DebateProtocol:
                         "max_diff_item": int(np.argmax(np.abs(probs_a - probs_b))),
                         "max_diff_value": float(np.max(np.abs(probs_a - probs_b))),
                     }
-            
+
             results[struct_name] = {
                 "predictions": struct_results,
                 "divergences": divergences,
             }
-        
+
         return results
-    
+
     # --- Context generators for each phase ---
-    
+
     def _divergence_context(self, div_map=None) -> str:
         """Context for the divergence mapping phase."""
         if div_map is None:
@@ -473,26 +482,30 @@ class DebateProtocol:
                 )
             lines.append("")
         return "\n".join(lines)
-    
+
     def _proposals_context(self) -> str:
         """Context for the adversarial critique phase."""
         current_proposals = [
-            e for e in self.state.experiments 
+            e
+            for e in self.state.experiments
             if e.cycle == self.state.cycle and e.status == "proposed"
         ]
         lines = ["## Current Experiment Proposals\n"]
         for p in current_proposals:
             lines.append(f"### {p.title} (proposed by {p.proposed_by})")
             lines.append(f"Rationale: {p.rationale}")
-            lines.append(f"Design spec: {json.dumps(p.design_spec, indent=2)}")
+            try:
+                spec_str = json.dumps(p.design_spec, indent=2)
+            except TypeError:
+                spec_str = str(p.design_spec)
+            lines.append(f"Design spec: {spec_str}")
             lines.append("")
         return "\n".join(lines)
-    
+
     def _critique_context(self) -> str:
         """Context for the design revision phase."""
         current_proposals = [
-            e for e in self.state.experiments 
-            if e.cycle == self.state.cycle
+            e for e in self.state.experiments if e.cycle == self.state.cycle
         ]
         lines = ["## Proposals and Critiques\n"]
         for p in current_proposals:
@@ -503,18 +516,20 @@ class DebateProtocol:
                     lines.append(f"  Evidence: {json.dumps(critique['evidence'])}")
             lines.append("")
         return "\n".join(lines)
-    
+
     def _full_round_context(self) -> str:
         """Full context for human arbitration."""
         return (
-            self.state.summary_for_agent("MODERATOR") + "\n\n" +
-            self._critique_context()
+            self.state.summary_for_agent("MODERATOR")
+            + "\n\n"
+            + self._critique_context()
         )
-    
+
     def _approved_experiment_context(self) -> str:
         """Context for the execution phase."""
         approved = [
-            e for e in self.state.experiments 
+            e
+            for e in self.state.experiments
             if e.cycle == self.state.cycle and e.status == "approved"
         ]
         if not approved:
@@ -527,21 +542,21 @@ class DebateProtocol:
             "EACH AGENT MUST NOW REGISTER A QUANTITATIVE PREDICTION "
             "before data is revealed."
         )
-    
+
     def _results_context(self) -> str:
         """Context for the interpretation phase."""
         executed = [
-            e for e in self.state.experiments 
+            e
+            for e in self.state.experiments
             if e.cycle == self.state.cycle and e.status == "executed"
         ]
         if not executed:
             return "No experiments executed this cycle."
         exp = executed[0]
-        
+
         # Include prediction scores
         preds = [
-            p for p in self.state.predictions 
-            if p.experiment_id == exp.experiment_id
+            p for p in self.state.predictions if p.experiment_id == exp.experiment_id
         ]
         lines = [
             f"## Experiment Results: {exp.title}\n",
@@ -550,33 +565,38 @@ class DebateProtocol:
         ]
         for p in preds:
             lines.append(
-                f"  {p.agent_name}: predicted {p.predicted_pattern}, "
-                f"score = {p.score}" 
+                f"  {p.agent_name}: predicted {p.predicted_pattern}, score = {p.score}"
             )
         return "\n".join(lines)
 
     # --- Synthetic experiment runner ---
-    
+
     def _synthetic_runner(
-        self, design_spec: dict, true_model: str = "GCM",
+        self,
+        design_spec: dict,
+        true_model: str = "GCM",
     ) -> dict:
         """
         Generate synthetic data from a specified ground-truth model.
-        
+
         For the first prototype, this replaces real data collection.
         The 'true_model' parameter controls which theory generates the data —
-        this lets you test whether the debate converges correctly when 
+        this lets you test whether the debate converges correctly when
         one theory is objectively right.
         """
         # Parse the design spec to get a category structure
         struct = design_spec.get("category_structure", None)
-        if not isinstance(struct, dict) or "stimuli" not in struct or "labels" not in struct:
+        if (
+            not isinstance(struct, dict)
+            or "stimuli" not in struct
+            or "labels" not in struct
+        ):
             # Default to Shepard Type II (interesting case)
             struct = shepard_types()["II"]
 
         stimuli = np.asarray(struct["stimuli"])
         labels = np.asarray(struct["labels"])
-        
+
         # Generate data from the true model
         if true_model == "GCM":
             model = GCM()
@@ -589,7 +609,7 @@ class DebateProtocol:
             params = {"p_single": 0.5, "p_conj": 0.3, "error_tolerance": 0.1}
         else:
             raise ValueError(f"Unknown model: {true_model}")
-        
+
         # Get model predictions for each item
         item_probs = {}
         for i, (stim, label) in enumerate(zip(stimuli, labels)):
@@ -598,7 +618,7 @@ class DebateProtocol:
             item_probs[f"item_{i}"] = {
                 int(k): float(v) for k, v in pred["probabilities"].items()
             }
-        
+
         # Add noise to simulate real behavioral data
         rng = np.random.default_rng(42)
         noisy_accuracy = {}
@@ -608,7 +628,7 @@ class DebateProtocol:
             # Simulate 30 subjects
             n_correct = rng.binomial(30, np.clip(p_correct, 0.01, 0.99))
             noisy_accuracy[item_key] = n_correct / 30
-        
+
         return {
             "item_accuracies": noisy_accuracy,
             "mean_accuracy": float(np.mean(list(noisy_accuracy.values()))),

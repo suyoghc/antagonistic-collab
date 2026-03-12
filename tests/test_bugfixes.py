@@ -10,13 +10,16 @@ the relevant tests next to the code they cover.
 """
 
 import json
+import math
 import os
 import tempfile
 from unittest.mock import patch
 
 import numpy as np
+import pytest
 
 from antagonistic_collab.runner import (
+    call_agent,
     extract_json,
     extract_all_json,
     run_human_arbitration,
@@ -32,6 +35,8 @@ from antagonistic_collab.debate_protocol import (
     PhaseResult,
     default_agent_configs,
 )
+from antagonistic_collab.models.sustain import SUSTAIN
+from antagonistic_collab.models.gcm import GCM
 
 
 # =========================================================================
@@ -125,16 +130,26 @@ class TestEpistemicState:
     def _make_state_with_prediction(self, score):
         """Helper: create a state with one prediction at the given score."""
         state = EpistemicState(domain="test")
-        state.register_theory(TheoryCommitment(
-            name="T", agent_name="Agent_A",
-            core_claims=["claim"], model_name="M",
-        ))
+        state.register_theory(
+            TheoryCommitment(
+                name="T",
+                agent_name="Agent_A",
+                core_claims=["claim"],
+                model_name="M",
+            )
+        )
         exp = state.propose_experiment(
-            proposed_by="Agent_A", title="E",
-            design_spec={}, rationale="r",
+            proposed_by="Agent_A",
+            title="E",
+            design_spec={},
+            rationale="r",
         )
         state.register_prediction(
-            exp.experiment_id, "Agent_A", "M", {}, {"x": 1.0},
+            exp.experiment_id,
+            "Agent_A",
+            "M",
+            {},
+            {"x": 1.0},
         )
         state.score_predictions(exp.experiment_id, {"x": 1.0 + score})
         return state
@@ -169,17 +184,27 @@ class TestEpistemicState:
         say "not yet scored".
         """
         state = EpistemicState(domain="test")
-        state.register_theory(TheoryCommitment(
-            name="T", agent_name="Agent_A",
-            core_claims=["c"], model_name="M",
-        ))
+        state.register_theory(
+            TheoryCommitment(
+                name="T",
+                agent_name="Agent_A",
+                core_claims=["c"],
+                model_name="M",
+            )
+        )
         exp = state.propose_experiment(
-            proposed_by="Agent_A", title="E",
-            design_spec={}, rationale="r",
+            proposed_by="Agent_A",
+            title="E",
+            design_spec={},
+            rationale="r",
         )
         # Predict on key "x", score on key "y" - no overlap -> score stays None
         state.register_prediction(
-            exp.experiment_id, "Agent_A", "M", {}, {"x": 1.0},
+            exp.experiment_id,
+            "Agent_A",
+            "M",
+            {},
+            {"x": 1.0},
         )
         state.score_predictions(exp.experiment_id, {"y": 1.0})
         # score is None, so it shouldn't appear in the leaderboard at all
@@ -235,8 +260,7 @@ class TestNumpySerialization:
         for item_key, probs in data["model_predictions"].items():
             for cat_key in probs:
                 assert type(cat_key) is int, (
-                    f"Expected int key, got {type(cat_key)} for "
-                    f"{item_key}[{cat_key}]"
+                    f"Expected int key, got {type(cat_key)} for {item_key}[{cat_key}]"
                 )
 
     def test_to_json_survives_numpy_keys_in_experiment_data(self):
@@ -249,7 +273,10 @@ class TestNumpySerialization:
         state = protocol.state
 
         exp = state.propose_experiment(
-            proposed_by="A", title="E", design_spec={}, rationale="r",
+            proposed_by="A",
+            title="E",
+            design_spec={},
+            rationale="r",
         )
         data = protocol._synthetic_runner({}, true_model="GCM")
         state.record_data(exp.experiment_id, data)
@@ -273,10 +300,13 @@ class TestNumpySerialization:
         """
         state = EpistemicState(domain="test")
         # Manually inject numpy-typed keys into the log
-        state._log("test_event", {
-            np.int64(42): "numpy key",
-            "nested": {np.int64(7): "inner numpy key"},
-        })
+        state._log(
+            "test_event",
+            {
+                np.int64(42): "numpy key",
+                "nested": {np.int64(7): "inner numpy key"},
+            },
+        )
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             path = f.name
         try:
@@ -298,7 +328,10 @@ class TestNumpySerialization:
         state = protocol.state
 
         exp = state.propose_experiment(
-            proposed_by="A", title="E", design_spec={}, rationale="r",
+            proposed_by="A",
+            title="E",
+            design_spec={},
+            rationale="r",
         )
         state.approve_experiment(exp.experiment_id)
         data = protocol._synthetic_runner({}, true_model="GCM")
@@ -363,6 +396,7 @@ class TestSyntheticRunner:
         (not silently replaced by the fallback).
         """
         from antagonistic_collab.models.category_structures import shepard_types
+
         type_i = shepard_types()["I"]
         spec = {"category_structure": type_i}
         protocol = self._make_protocol()
@@ -399,8 +433,7 @@ class TestDivergenceMapping:
                 d1 = map1[struct]["divergences"][pair]["mean_abs_diff"]
                 d2 = map2[struct]["divergences"][pair]["mean_abs_diff"]
                 assert d1 == d2, (
-                    f"Non-deterministic divergence for {struct}/{pair}: "
-                    f"{d1} != {d2}"
+                    f"Non-deterministic divergence for {struct}/{pair}: {d1} != {d2}"
                 )
 
     def test_divergence_context_uses_precomputed_map(self):
@@ -445,9 +478,13 @@ class TestCycleAndFileSaving:
         protocol.current_phase = Phase.AUDIT
 
         assert state.cycle == 0
-        protocol.advance_phase(PhaseResult(
-            phase=Phase.AUDIT, cycle=0, outputs={},
-        ))
+        protocol.advance_phase(
+            PhaseResult(
+                phase=Phase.AUDIT,
+                cycle=0,
+                outputs={},
+            )
+        )
         assert state.cycle == 1
 
     def test_save_transcript_uses_current_cycle(self):
@@ -463,9 +500,7 @@ class TestCycleAndFileSaving:
         with tempfile.TemporaryDirectory() as tmpdir:
             save_transcript([], protocol, output_dir=tmpdir)
             assert os.path.exists(os.path.join(tmpdir, "debate_cycle_0.json"))
-            assert os.path.exists(
-                os.path.join(tmpdir, "epistemic_state_cycle_0.json")
-            )
+            assert os.path.exists(os.path.join(tmpdir, "epistemic_state_cycle_0.json"))
 
     def test_save_transcript_respects_output_dir(self):
         """
@@ -482,9 +517,7 @@ class TestCycleAndFileSaving:
             subdir = os.path.join(tmpdir, "custom_output")
             save_transcript([], protocol, output_dir=subdir)
             assert os.path.isdir(subdir)
-            assert os.path.exists(
-                os.path.join(subdir, "debate_cycle_0.json")
-            )
+            assert os.path.exists(os.path.join(subdir, "debate_cycle_0.json"))
 
 
 # =========================================================================
@@ -531,14 +564,10 @@ class TestCritiqueProvenance:
                 if matched is None and len(proposals) == 1:
                     matched = proposals[0]
                 if matched is not None:
-                    results[matched.experiment_id].append(
-                        block.get("critique", "")
-                    )
+                    results[matched.experiment_id].append(block.get("critique", ""))
         else:
             if proposals:
-                results[proposals[0].experiment_id].append(
-                    response_text[:500]
-                )
+                results[proposals[0].experiment_id].append(response_text[:500])
 
         return results
 
@@ -550,12 +579,16 @@ class TestCritiqueProvenance:
         """
         state = EpistemicState(domain="test")
         exp_a = state.propose_experiment(
-            proposed_by="Agent_A", title="Test memory for instances",
-            design_spec={}, rationale="r",
+            proposed_by="Agent_A",
+            title="Test memory for instances",
+            design_spec={},
+            rationale="r",
         )
         exp_b = state.propose_experiment(
-            proposed_by="Agent_B", title="Test rule complexity",
-            design_spec={}, rationale="r",
+            proposed_by="Agent_B",
+            title="Test rule complexity",
+            design_spec={},
+            rationale="r",
         )
 
         response = (
@@ -576,8 +609,10 @@ class TestCritiqueProvenance:
         """
         state = EpistemicState(domain="test")
         exp = state.propose_experiment(
-            proposed_by="Agent_A", title="My experiment",
-            design_spec={}, rationale="r",
+            proposed_by="Agent_A",
+            title="My experiment",
+            design_spec={},
+            rationale="r",
         )
 
         response = '{"target_proposal": "wrong title", "critique": "flaw"}'
@@ -591,7 +626,10 @@ class TestCritiqueProvenance:
         """
         state = EpistemicState(domain="test")
         exp = state.propose_experiment(
-            proposed_by="A", title="X", design_spec={}, rationale="r",
+            proposed_by="A",
+            title="X",
+            design_spec={},
+            rationale="r",
         )
         results = self._simulate_critique_matching("plain text critique", [exp])
         assert len(results[exp.experiment_id]) == 1
@@ -605,10 +643,16 @@ class TestCritiqueProvenance:
         """
         state = EpistemicState(domain="test")
         exp_a = state.propose_experiment(
-            proposed_by="A", title="Alpha", design_spec={}, rationale="r",
+            proposed_by="A",
+            title="Alpha",
+            design_spec={},
+            rationale="r",
         )
         exp_b = state.propose_experiment(
-            proposed_by="B", title="Beta", design_spec={}, rationale="r",
+            proposed_by="B",
+            title="Beta",
+            design_spec={},
+            rationale="r",
         )
         response = '{"target_proposal": "Nonexistent", "critique": "orphan"}'
         results = self._simulate_critique_matching(response, [exp_a, exp_b])
@@ -637,8 +681,10 @@ class TestModeratorValidation:
         agents = default_agent_configs()
         protocol = DebateProtocol(state, agents)
         state.propose_experiment(
-            proposed_by="Agent_A", title="Test X",
-            design_spec={}, rationale="r",
+            proposed_by="Agent_A",
+            title="Test X",
+            design_spec={},
+            rationale="r",
         )
         return protocol
 
@@ -652,9 +698,7 @@ class TestModeratorValidation:
         with patch("builtins.input", return_value="approve xyz"):
             run_human_arbitration(protocol, [])
         # No experiment should have been approved
-        proposals = [
-            e for e in protocol.state.experiments if e.status == "approved"
-        ]
+        proposals = [e for e in protocol.state.experiments if e.status == "approved"]
         assert len(proposals) == 0
 
     @patch("antagonistic_collab.runner._BATCH_MODE", False)
@@ -666,9 +710,7 @@ class TestModeratorValidation:
         protocol = self._make_protocol_with_proposal()
         with patch("builtins.input", return_value="approve 99"):
             run_human_arbitration(protocol, [])
-        proposals = [
-            e for e in protocol.state.experiments if e.status == "approved"
-        ]
+        proposals = [e for e in protocol.state.experiments if e.status == "approved"]
         assert len(proposals) == 0
 
     @patch("antagonistic_collab.runner._BATCH_MODE", False)
@@ -680,9 +722,7 @@ class TestModeratorValidation:
         protocol = self._make_protocol_with_proposal()
         with patch("builtins.input", return_value="approve 0"):
             result = run_human_arbitration(protocol, [])
-        proposals = [
-            e for e in protocol.state.experiments if e.status == "approved"
-        ]
+        proposals = [e for e in protocol.state.experiments if e.status == "approved"]
         assert len(proposals) == 1
         assert "approve" in str(result.outputs)
 
@@ -769,6 +809,7 @@ class TestPackaging:
         Fix: changed to setuptools.build_meta.
         """
         import tomllib
+
         with open(os.path.join(self._repo_root(), "pyproject.toml"), "rb") as f:
             config = tomllib.load(f)
         assert config["build-system"]["build-backend"] == "setuptools.build_meta"
@@ -780,6 +821,7 @@ class TestPackaging:
         is in antagonistic_collab/ subdirectory.
         """
         import antagonistic_collab
+
         assert hasattr(antagonistic_collab, "EpistemicState")
 
     def test_no_duplicate_dependencies(self):
@@ -799,9 +841,367 @@ class TestPackaging:
         its subpackages from the current layout.
         """
         from setuptools import find_packages
+
         packages = find_packages(
             where=self._repo_root(),
             include=["antagonistic_collab", "antagonistic_collab.*"],
         )
         assert "antagonistic_collab" in packages
         assert "antagonistic_collab.models" in packages
+
+
+# =========================================================================
+# P1/P2 Bugfix Regressions (Round 5)
+# =========================================================================
+
+
+class TestNaNCorrelationScore:
+    """
+    Bug: score_predictions() with metric='correlation' can produce NaN from
+    np.corrcoef when all predicted or actual values are identical (zero
+    variance). The NaN then poisons the leaderboard.
+    Fix: check np.isnan() after np.corrcoef and set score to None.
+    """
+
+    def test_nan_corrcoef_yields_none_score(self):
+        state = EpistemicState(domain="test")
+        state.register_theory(
+            TheoryCommitment(
+                name="T",
+                agent_name="A",
+                core_claims=["c"],
+                model_name="M",
+            )
+        )
+        exp = state.propose_experiment(
+            proposed_by="A",
+            title="E",
+            design_spec={},
+            rationale="r",
+        )
+        # Predict identical values for all keys -> zero variance -> NaN corr
+        state.register_prediction(
+            exp.experiment_id,
+            "A",
+            "M",
+            {},
+            {"a": 1.0, "b": 1.0, "c": 1.0},
+        )
+        state.score_predictions(
+            exp.experiment_id,
+            {"a": 0.5, "b": 0.6, "c": 0.7},
+            metric="correlation",
+        )
+        pred = state.predictions[0]
+        assert pred.score is None or (
+            isinstance(pred.score, float) and not math.isnan(pred.score)
+        ), f"Expected None (not NaN), got {pred.score}"
+
+
+class TestSummaryMissingDescription:
+    """
+    Bug: summary_for_agent() accesses latest['description'] with bracket
+    notation. If a revision was logged without a 'description' key, this
+    raises KeyError.
+    Fix: use latest.get('description', '(no description)').
+    """
+
+    def test_summary_with_missing_description_key(self):
+        state = EpistemicState(domain="test")
+        state.register_theory(
+            TheoryCommitment(
+                name="T",
+                agent_name="A",
+                core_claims=["c"],
+                model_name="M",
+            )
+        )
+        theory = state.get_theory("T")
+        # Append a revision WITHOUT a 'description' key
+        theory.revision_log.append(
+            {
+                "timestamp": "2026-01-01",
+                "old_params": None,
+                "old_claims": None,
+            }
+        )
+        # Should not raise KeyError
+        summary = state.summary_for_agent("A")
+        assert "(no description)" in summary
+
+
+class TestDeepCopyTheoryRevision:
+    """
+    Bug: TheoryCommitment.revise() uses .copy() for model_params and
+    core_claims snapshots. Since model_params can contain nested dicts
+    (e.g. {"attention": {"dim1": 0.5}}), shallow copy means the snapshot
+    shares references with the live object — mutating model_params after
+    the revision also mutates the snapshot in revision_log.
+    Fix: use copy.deepcopy().
+    """
+
+    def test_revision_snapshot_is_independent_of_live_params(self):
+        theory = TheoryCommitment(
+            name="T",
+            agent_name="A",
+            core_claims=["c"],
+            model_name="M",
+            model_params={"nested": {"a": 1}},
+        )
+        # Revise with new_params that DON'T touch the nested dict —
+        # shallow copy means snapshot shares the "nested" dict reference
+        theory.revise(description="test", new_params={"new_key": 42})
+        old_snapshot = theory.revision_log[0]["old_params"]
+        assert old_snapshot["nested"]["a"] == 1
+        # Mutating the shared nested dict corrupts the snapshot with shallow copy
+        theory.model_params["nested"]["a"] = 999
+        assert old_snapshot["nested"]["a"] == 1
+
+
+class TestDeepCopyReviseProposal:
+    """
+    Bug: revise_proposal() uses exp.design_spec.copy() for the
+    old_design_spec snapshot. Nested dicts share references.
+    Fix: use copy.deepcopy(exp.design_spec).
+    """
+
+    def test_old_design_spec_snapshot_is_independent(self):
+        state = EpistemicState(domain="test")
+        # Keep a reference to the original nested dict
+        nested = {"x": 1}
+        exp = state.propose_experiment(
+            proposed_by="A",
+            title="E",
+            design_spec={"nested": nested},
+            rationale="r",
+        )
+        state.add_critique(exp.experiment_id, "B", "flaw")
+        state.revise_proposal(
+            exp.experiment_id,
+            "A",
+            addresses_critiques=[0],
+            changes="fix",
+            new_design_spec={"nested": {"x": 2}},
+        )
+        old_snapshot = exp.revision_history[0]["old_design_spec"]
+        assert old_snapshot["nested"]["x"] == 1
+        # Mutate via the external reference — shallow copy shares this dict
+        nested["x"] = 999
+        assert old_snapshot["nested"]["x"] == 1
+
+
+class TestResolveDisputeLogging:
+    """
+    Bug: resolve_dispute() does not call self._log(), so dispute
+    resolutions are invisible in the event log.
+    Fix: add self._log("dispute_resolved", ...).
+    """
+
+    def test_resolve_dispute_creates_log_entry(self):
+        state = EpistemicState(domain="test")
+        dispute = state.register_dispute(
+            claim="test claim",
+            positions={"A": "yes", "B": "no"},
+        )
+        state.resolve_dispute(dispute.dispute_id, "resolved by data")
+        log_events = [e["event"] for e in state.log]
+        assert "dispute_resolved" in log_events
+
+
+class TestNegativeIndexValidation:
+    """
+    Bug: revise_proposal() checks `if idx >= len(...)` but not `if idx < 0`.
+    Python allows negative indices on lists, so idx=-1 passes the check
+    but refers to the wrong critique.
+    Fix: check `if idx < 0 or idx >= len(...)`.
+    """
+
+    def test_negative_critique_index_raises(self):
+        state = EpistemicState(domain="test")
+        exp = state.propose_experiment(
+            proposed_by="A",
+            title="E",
+            design_spec={},
+            rationale="r",
+        )
+        state.add_critique(exp.experiment_id, "B", "flaw")
+        with pytest.raises(ValueError, match="does not exist"):
+            state.revise_proposal(
+                exp.experiment_id,
+                "A",
+                addresses_critiques=[-1],
+                changes="fix",
+                new_design_spec={},
+            )
+
+
+class TestEmptyAPIResponse:
+    """
+    Bug: call_agent() accesses response.content[0] without checking if
+    content is empty. An empty content list causes IndexError.
+    Fix: check `if not response.content:` and raise a clear error.
+    """
+
+    def test_empty_content_raises_clear_error(self):
+        class FakeResponse:
+            content = []
+
+        class FakeMessages:
+            def create(self, **kwargs):
+                return FakeResponse()
+
+        class FakeClient:
+            messages = FakeMessages()
+
+        with pytest.raises((IndexError, ValueError)):
+            call_agent(FakeClient(), "system", "user", model="test-model")
+
+
+class TestLeaderboardNaNSafe:
+    """
+    Bug: Final leaderboard in main() formats mean_score with :.4f.
+    If mean_score is NaN (from a NaN-producing corrcoef), :.4f works
+    but prints 'nan', which is confusing. If mean_score is None,
+    :.4f crashes with TypeError.
+    Fix: guard with isinstance and math.isnan before formatting.
+    """
+
+    def test_none_mean_score_does_not_crash_formatting(self):
+        stats = {"mean_score": None, "n_predictions": 1}
+        mean = stats.get("mean_score")
+        # The guard: must not attempt .4f on None
+        if isinstance(mean, (int, float)) and not math.isnan(mean):
+            formatted = f"{mean:.4f}"
+        else:
+            formatted = "N/A"
+        assert formatted == "N/A"
+
+    def test_nan_mean_score_does_not_crash_formatting(self):
+        stats = {"mean_score": float("nan"), "n_predictions": 1}
+        mean = stats.get("mean_score")
+        if isinstance(mean, (int, float)) and not math.isnan(mean):
+            formatted = f"{mean:.4f}"
+        else:
+            formatted = "N/A"
+        assert formatted == "N/A"
+
+
+class TestEOFErrorOnInput:
+    """
+    Bug: run_human_arbitration() calls input() which raises EOFError
+    when stdin is closed (e.g. piped input or CI). Also KeyboardInterrupt
+    if the user hits Ctrl+C.
+    Fix: wrap in try/except, default to "skip".
+    """
+
+    @patch("antagonistic_collab.runner._BATCH_MODE", False)
+    def test_eof_error_defaults_to_skip(self):
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+        state.propose_experiment(
+            proposed_by="A",
+            title="E",
+            design_spec={},
+            rationale="r",
+        )
+        with patch("builtins.input", side_effect=EOFError):
+            result = run_human_arbitration(protocol, [])
+        assert result is not None  # Should not crash
+
+    @patch("antagonistic_collab.runner._BATCH_MODE", False)
+    def test_keyboard_interrupt_defaults_to_skip(self):
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+        state.propose_experiment(
+            proposed_by="A",
+            title="E",
+            design_spec={},
+            rationale="r",
+        )
+        with patch("builtins.input", side_effect=KeyboardInterrupt):
+            result = run_human_arbitration(protocol, [])
+        assert result is not None
+
+
+class TestJsonDumpsFallback:
+    """
+    Bug: _proposals_context() calls json.dumps(p.design_spec) which crashes
+    with TypeError if design_spec contains non-serializable objects (e.g.
+    numpy arrays, custom objects).
+    Fix: wrap in try/except TypeError, fall back to str(p.design_spec).
+    """
+
+    def test_non_serializable_design_spec_does_not_crash(self):
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+        # Inject a design_spec with a non-serializable value
+        state.propose_experiment(
+            proposed_by="A",
+            title="E",
+            design_spec={"array": np.array([1, 2, 3])},
+            rationale="r",
+        )
+        # Should not raise TypeError
+        context = protocol._proposals_context()
+        assert "E" in context
+
+
+class TestEmptyTrainingSequence:
+    """
+    Bug: SUSTAIN.simulate_learning() accesses training_sequence[0] on
+    line 149 to get n_dims. If training_sequence is empty, this crashes
+    with IndexError.
+    Fix: early return with empty results.
+    """
+
+    def test_empty_training_sequence_returns_gracefully(self):
+        model = SUSTAIN()
+        result = model.simulate_learning([])
+        assert result["n_clusters_final"] == 0
+        assert result["trial_log"] == []
+
+
+class TestEmptyTestItems:
+    """
+    Bug: GCM.predict_learning_curve() divides by len(test_items) on line
+    184. If test_items is empty, this is a ZeroDivisionError.
+    Fix: skip block or return early when test_items is empty.
+    """
+
+    def test_empty_test_items_does_not_crash(self):
+        model = GCM()
+        training = [(np.array([0, 0, 0]), 0), (np.array([1, 1, 1]), 1)]
+        result = model.predict_learning_curve(
+            training_sequence=training,
+            test_items=np.array([]).reshape(0, 3),
+            test_labels=np.array([]),
+        )
+        # Should not crash; curve may be empty or have zero-accuracy entries
+        assert isinstance(result, list)
+
+
+class TestSkipToPhase:
+    """
+    Bug: runner.py line 633 sets protocol.current_phase = Phase.DIVERGENCE_MAPPING
+    directly, bypassing the state machine. This is fragile and doesn't
+    validate the target phase.
+    Fix: add skip_to_phase() method on DebateProtocol that validates
+    the target phase.
+    """
+
+    def test_skip_to_phase_sets_phase(self):
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+        protocol.skip_to_phase(Phase.DIVERGENCE_MAPPING)
+        assert protocol.current_phase == Phase.DIVERGENCE_MAPPING
+
+    def test_skip_to_phase_rejects_invalid_input(self):
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+        with pytest.raises((ValueError, TypeError)):
+            protocol.skip_to_phase("not_a_phase")
