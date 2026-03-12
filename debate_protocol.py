@@ -1,0 +1,615 @@
+"""
+Debate Protocol — Phased state machine for adversarial scientific debate.
+
+Unlike round-robin chat, this implements distinct epistemic phases with
+different goals. The phases mirror how real scientific disputes unfold:
+commit → map disagreements → propose → critique → revise → arbitrate → 
+execute → interpret → audit.
+
+Each phase has:
+- A goal (what it's trying to produce)
+- Inputs (what the agents see)
+- Outputs (structured artifacts, not just messages)
+- Transition criteria (when to move on)
+"""
+
+import json
+from enum import Enum, auto
+from dataclasses import dataclass, field
+from typing import Optional, Callable, Any
+import numpy as np
+
+from .epistemic_state import (
+    EpistemicState, TheoryCommitment, ExperimentRecord, Prediction
+)
+from .models.gcm import GCM
+from .models.sustain import SUSTAIN
+from .models.rulex import RULEX
+from .models.category_structures import shepard_types, five_four_structure
+
+
+class Phase(Enum):
+    COMMITMENT = auto()       # Agents register theories & models
+    DIVERGENCE_MAPPING = auto()  # Compute where predictions disagree
+    EXPERIMENT_PROPOSAL = auto()  # Each agent proposes a design
+    ADVERSARIAL_CRITIQUE = auto()  # Agents attack each other's proposals
+    DESIGN_REVISION = auto()  # Proposals revised in light of critique
+    HUMAN_ARBITRATION = auto()  # Moderator selects/edits final design
+    EXECUTION = auto()        # Run the experiment (synthetic or real)
+    INTERPRETATION = auto()   # Agents interpret results
+    AUDIT = auto()            # Summarize what was learned; prepare next cycle
+
+
+@dataclass
+class PhaseResult:
+    """Output of a single phase."""
+    phase: Phase
+    cycle: int
+    outputs: dict
+    messages: list[dict] = field(default_factory=list)  # agent messages during this phase
+    transition_reason: str = ""
+
+
+@dataclass
+class AgentConfig:
+    """Configuration for a theory agent."""
+    name: str
+    theory_name: str
+    model_class: Any  # GCM, SUSTAIN, or RULEX instance
+    system_prompt: str
+    default_params: dict = field(default_factory=dict)
+
+
+# --- System prompts for categorization agents ---
+
+EXEMPLAR_AGENT_PROMPT = """You are a cognitive scientist committed to the EXEMPLAR theory of 
+human categorization. Your formal model is the Generalized Context Model (GCM; Nosofsky, 1986).
+
+CORE THEORETICAL COMMITMENTS:
+- People store individual exemplars (specific training instances), not summaries or rules.
+- Classification is based on summed similarity to all stored instances of each category.
+- Dimensional attention weights are learned — diagnostic dimensions receive more weight.
+- No information is lost during learning. All instances are retained.
+- The similarity function is exponential decay over weighted psychological distance.
+
+YOUR MODEL (GCM):
+- Parameters: c (sensitivity), attention weights w_i (per dimension, sum to 1), r (distance metric)
+- Key equation: P(A|x) = Σ_a sim(x,a) / [Σ_a sim(x,a) + Σ_b sim(x,b)]
+- You can call the model to generate quantitative predictions for any category structure.
+
+WHAT YOU SHOULD ARGUE FOR:
+- Experiments that test memory for specific training instances
+- Designs where non-linearly-separable categories are learned well (your model handles these)
+- Transfer tests that probe generalization gradients (smooth, similarity-based)
+- Paradigms where individual item effects matter
+
+WHAT YOUR THEORY STRUGGLES WITH (be honest about this):
+- Computational cost at scale (comparing to all stored exemplars)
+- Very high-dimensional stimuli where attention weights are underdetermined
+- Cases where people clearly abstract rules (Shepard Type I is fast, but your model also predicts that)
+
+WHEN CRITIQUING OPPONENTS:
+- Rule models: challenge them on categories without simple rules (Type VI, family resemblance)
+- Clustering models: point out that SUSTAIN's predictions depend heavily on presentation order, 
+  which is an auxiliary assumption, not a core theoretical prediction
+- Always back up critiques with quantitative model predictions when possible.
+
+FORMAT:
+When proposing experiments, output a structured JSON block with:
+{
+    "title": "...",
+    "design": "between|within|mixed",
+    "category_structure": "description + formal spec",
+    "conditions": ["..."],
+    "dependent_variables": ["..."],
+    "n_subjects_recommended": int,
+    "prediction_if_supports_me": "...",
+    "prediction_if_challenges_me": "...",
+    "rationale": "..."
+}
+"""
+
+RULE_AGENT_PROMPT = """You are a cognitive scientist committed to the RULE-BASED theory of 
+human categorization. Your formal model is RULEX (Nosofsky, Palmeri & McKinley, 1994).
+
+CORE THEORETICAL COMMITMENTS:
+- People primarily search for and apply verbalizable rules to classify stimuli.
+- Rule search is hierarchical: simple single-dimension rules tried first, then conjunctions.
+- Items that violate the best rule are stored as exceptions (a hybrid mechanism).
+- Rule discovery is a discrete event — learning curves should show sudden transitions.
+- Categorization interacts with verbal working memory (rules are linguistically mediated).
+
+YOUR MODEL (RULEX):
+- Parameters: p_single (probability of testing single rules), p_conj (conjunctive rules), 
+  p_exception (exception memorization), error_tolerance
+- The model stochastically searches rule space, so predictions are probabilistic over search paths.
+- You can call the model to show which rules it finds for any category structure.
+
+WHAT YOU SHOULD ARGUE FOR:
+- Experiments that manipulate rule complexity (Shepard Type I vs II vs VI)
+- Dual-task paradigms with verbal working memory load (should disrupt rule learning)
+- Designs where verbalizable rule structures are pitted against similarity-based ones
+- Transfer tests with items that follow the rule but are dissimilar to training items
+
+WHAT YOUR THEORY STRUGGLES WITH (be honest about this):
+- Categories with no simple rule (Type VI) — your model resorts entirely to exception storage
+- The flexibility of attention weight fitting in exemplar models (GCM can sometimes mimic rule behavior)
+- Categories where people clearly use similarity, not rules (e.g., face categorization)
+
+WHEN CRITIQUING OPPONENTS:
+- Exemplar model: GCM with free attention weights is very flexible — show that its apparent
+  fits are post-hoc and don't make specific a priori predictions
+- Clustering model: SUSTAIN's cluster recruitment is order-dependent — argue this is an 
+  artifact of the model, not a real cognitive mechanism
+- Challenge opponents to explain the Type I advantage without invoking rules.
+
+FORMAT:
+[same JSON format as exemplar agent]
+"""
+
+CLUSTERING_AGENT_PROMPT = """You are a cognitive scientist committed to the CLUSTERING theory 
+of human categorization. Your formal model is SUSTAIN (Love, Medin & Gureckis, 2004).
+
+CORE THEORETICAL COMMITMENTS:
+- Learners form a flexible number of clusters (neither one prototype nor N exemplars).
+- New clusters are recruited when current ones fail to predict — surprisal drives learning.
+- The number of clusters depends on category structure complexity, not a fixed parameter.
+- Dimensional attention is learned via error-driven updating.
+- Presentation order matters — the same items in different order can produce different representations.
+
+YOUR MODEL (SUSTAIN):
+- Parameters: r (attentional focus), beta (cluster competition), d (response consistency),
+  eta (learning rate), tau (recruitment threshold)
+- Key mechanism: cluster recruitment at prediction failures creates a flexible representation
+  that adapts its complexity to the task.
+- You can call the model to simulate learning trial-by-trial and show cluster recruitment dynamics.
+
+WHAT YOU SHOULD ARGUE FOR:
+- Experiments that vary within-category structure (subgroups, multimodal distributions)
+- Designs that manipulate presentation order to show order-dependent learning
+- Transfer tests that probe cluster structure (not just boundaries)
+- Paradigms where category complexity (number of clusters needed) is the key manipulation
+
+WHAT YOUR THEORY STRUGGLES WITH (be honest about this):
+- Presentation order dependence is both a prediction and a liability — many experiments 
+  randomize order, making your order-dependent predictions hard to test
+- With enough clusters, SUSTAIN can approximate an exemplar model — this flexibility 
+  makes it hard to falsify
+- The cluster recruitment mechanism is sensitive to parameter settings of tau
+
+WHEN CRITIQUING OPPONENTS:
+- Exemplar model: storing ALL instances is biologically implausible at scale and ignores
+  the evidence that people form abstractions
+- Rule model: too rigid — most natural categories don't have clean rules; RULEX's 
+  exception mechanism is ad hoc
+- Point out that both exemplar and rule models treat presentation order as irrelevant,
+  which is an empirically testable (and likely false) assumption.
+
+FORMAT:
+[same JSON format as exemplar agent]
+"""
+
+
+def default_agent_configs() -> list[AgentConfig]:
+    """Default agent configurations for human categorization domain."""
+    return [
+        AgentConfig(
+            name="Exemplar_Agent",
+            theory_name="Exemplar Theory (GCM)",
+            model_class=GCM(),
+            system_prompt=EXEMPLAR_AGENT_PROMPT,
+            default_params={"c": 3.0, "r": 1, "gamma": 1.0},
+        ),
+        AgentConfig(
+            name="Rule_Agent",
+            theory_name="Rule-Based Theory (RULEX)",
+            model_class=RULEX(),
+            system_prompt=RULE_AGENT_PROMPT,
+            default_params={"p_single": 0.5, "p_conj": 0.3, "error_tolerance": 0.1},
+        ),
+        AgentConfig(
+            name="Clustering_Agent",
+            theory_name="Clustering Theory (SUSTAIN)",
+            model_class=SUSTAIN(),
+            system_prompt=CLUSTERING_AGENT_PROMPT,
+            default_params={"r": 9.01, "beta": 1.252, "d": 16.924, "eta": 0.092},
+        ),
+    ]
+
+
+class DebateProtocol:
+    """
+    Orchestrates the phased adversarial debate.
+    
+    This class manages phase transitions and ensures each phase produces
+    the structured output the next phase needs. It does NOT manage LLM calls —
+    that's the job of the runner (which can use AutoGen, raw API calls, or anything else).
+    
+    The protocol is agnostic about the LLM orchestration layer. It defines
+    WHAT should happen at each phase, not HOW to talk to the model.
+    """
+    
+    def __init__(
+        self,
+        state: EpistemicState,
+        agent_configs: list[AgentConfig],
+        experiment_runner: Optional[Callable] = None,
+    ):
+        self.state = state
+        self.agent_configs = agent_configs
+        self.experiment_runner = experiment_runner or self._synthetic_runner
+        self.current_phase = Phase.COMMITMENT
+        self.phase_history: list[PhaseResult] = []
+    
+    # --- Phase specifications ---
+    
+    def phase_spec(self, phase: Phase) -> dict:
+        """
+        Return the specification for a phase: what agents see, what they must produce.
+        This is what gets injected into agent prompts.
+        """
+        specs = {
+            Phase.COMMITMENT: {
+                "goal": (
+                    "Register your theory's core claims and the formal model that "
+                    "instantiates it. Specify your model's parameters and their "
+                    "plausible ranges. State your auxiliary assumptions explicitly."
+                ),
+                "required_output": "TheoryCommitment object (JSON)",
+                "context": self.state.summary_for_agent("{agent_name}"),
+                "max_rounds": 1,  # each agent speaks once
+            },
+            Phase.DIVERGENCE_MAPPING: {
+                "goal": (
+                    "Using the registered models, identify experimental conditions "
+                    "where predictions diverge most. Call your model on a grid of "
+                    "plausible category structures and report where you and your "
+                    "opponents disagree quantitatively."
+                ),
+                "required_output": "Divergence report with quantitative predictions",
+                "context": self._divergence_context(),
+                "max_rounds": 2,  # models report, then discuss
+            },
+            Phase.EXPERIMENT_PROPOSAL: {
+                "goal": (
+                    "Given the divergence map, propose an experiment that would "
+                    "be maximally diagnostic from YOUR theoretical perspective. "
+                    "The design should capitalize on the regions of maximal "
+                    "prediction divergence identified in the previous phase."
+                ),
+                "required_output": "ExperimentProposal JSON",
+                "context": self.state.summary_for_agent("{agent_name}"),
+                "max_rounds": 1,
+            },
+            Phase.ADVERSARIAL_CRITIQUE: {
+                "goal": (
+                    "Critique the other agents' experiment proposals. Specifically:\n"
+                    "1. Show that under alternative auxiliary assumptions, YOUR model "
+                    "   could also produce their predicted pattern.\n"
+                    "2. Identify confounds that make the proposal non-diagnostic.\n"
+                    "3. Demonstrate quantitatively (by calling your model) that the "
+                    "   proposed design doesn't discriminate as well as claimed.\n"
+                    "Be specific and quantitative. Vague objections don't count."
+                ),
+                "required_output": "Structured critique with quantitative evidence",
+                "context": self._proposals_context(),
+                "max_rounds": 3,  # critique, rebut, final response
+            },
+            Phase.DESIGN_REVISION: {
+                "goal": (
+                    "Revise your experiment proposal in light of the critiques. "
+                    "Address specific objections. You may also propose a JOINT design "
+                    "that incorporates insights from multiple critiques."
+                ),
+                "required_output": "Revised ExperimentProposal JSON",
+                "context": self._critique_context(),
+                "max_rounds": 2,
+            },
+            Phase.HUMAN_ARBITRATION: {
+                "goal": (
+                    "MODERATOR: Review the proposals and critiques. Select or "
+                    "synthesize a final experiment design. You may:\n"
+                    "1. Approve one proposal as-is.\n"
+                    "2. Edit a proposal (specify changes).\n"
+                    "3. Synthesize elements from multiple proposals.\n"
+                    "4. Reject all and ask for a new round (with guidance)."
+                ),
+                "required_output": "Approved experiment design + moderator notes",
+                "context": self._full_round_context(),
+                "max_rounds": None,  # human decides when done
+            },
+            Phase.EXECUTION: {
+                "goal": (
+                    "Run the approved experiment. Before seeing data, each agent "
+                    "MUST register a quantitative prediction for the expected results. "
+                    "This prediction is logged and will be scored against actual data."
+                ),
+                "required_output": "Predictions registered, data returned",
+                "context": self._approved_experiment_context(),
+                "max_rounds": 1,
+            },
+            Phase.INTERPRETATION: {
+                "goal": (
+                    "Interpret the experimental results from your theoretical stance. "
+                    "Specifically:\n"
+                    "1. How well did your model's prediction match the data?\n"
+                    "2. Does this support, challenge, or leave unchanged your theory?\n"
+                    "3. Do you need to revise your theory? If so, specify WHAT changes "
+                    "   and register the revised model.\n"
+                    "4. What experiment should come next?"
+                ),
+                "required_output": "Interpretation + optional theory revision",
+                "context": self._results_context(),
+                "max_rounds": 2,
+            },
+            Phase.AUDIT: {
+                "goal": (
+                    "SYSTEM: Summarize this cycle.\n"
+                    "- What was established?\n"
+                    "- Which predictions were accurate?\n"
+                    "- What theories were revised?\n"
+                    "- What disputes remain open?\n"
+                    "- What should the next cycle focus on?"
+                ),
+                "required_output": "Cycle summary + next cycle focus",
+                "context": self.state.summary_for_agent("SYSTEM"),
+                "max_rounds": 1,
+            },
+        }
+        return specs[phase]
+
+    # --- Phase transitions ---
+    
+    def advance_phase(self, result: PhaseResult) -> Phase:
+        """
+        Record phase result and determine next phase.
+        Returns the next Phase.
+        """
+        self.phase_history.append(result)
+        
+        transition_map = {
+            Phase.COMMITMENT: Phase.DIVERGENCE_MAPPING,
+            Phase.DIVERGENCE_MAPPING: Phase.EXPERIMENT_PROPOSAL,
+            Phase.EXPERIMENT_PROPOSAL: Phase.ADVERSARIAL_CRITIQUE,
+            Phase.ADVERSARIAL_CRITIQUE: Phase.DESIGN_REVISION,
+            Phase.DESIGN_REVISION: Phase.HUMAN_ARBITRATION,
+            Phase.HUMAN_ARBITRATION: Phase.EXECUTION,
+            Phase.EXECUTION: Phase.INTERPRETATION,
+            Phase.INTERPRETATION: Phase.AUDIT,
+            Phase.AUDIT: Phase.DIVERGENCE_MAPPING,  # new cycle
+        }
+        
+        if self.current_phase == Phase.AUDIT:
+            self.state.advance_cycle()
+        
+        self.current_phase = transition_map[self.current_phase]
+        return self.current_phase
+    
+    # --- Divergence mapping computation ---
+    
+    def compute_divergence_map(
+        self,
+        structures: Optional[dict] = None,
+    ) -> dict:
+        """
+        Run all registered models on a set of category structures
+        and identify where predictions diverge most.
+        
+        This is the quantitative backbone of the debate — it ensures
+        that proposals are grounded in actual model behavior.
+        """
+        if structures is None:
+            # Default: Shepard types + 5-4 structure
+            structures = shepard_types()
+            structures["5-4"] = five_four_structure()
+        
+        results = {}
+        for struct_name, struct in structures.items():
+            struct_results = {}
+            for agent_config in self.agent_configs:
+                model = agent_config.model_class
+                # Get predictions for each item
+                item_probs = []
+                for item, label in zip(struct["stimuli"], struct["labels"]):
+                    call_params = {**agent_config.default_params}
+                    # Deterministic seed for stochastic models (e.g. RULEX)
+                    if isinstance(model, RULEX):
+                        call_params.setdefault("seed", 42)
+                    pred = model.predict(
+                        item, struct["stimuli"], struct["labels"],
+                        **call_params
+                    )
+                    item_probs.append(pred["probabilities"].get(0, 0.5))
+                
+                # Compute accuracy (proportion of items correctly classified)
+                correct = 0
+                for i, (item, label) in enumerate(zip(struct["stimuli"], struct["labels"])):
+                    pred_label = 0 if item_probs[i] > 0.5 else 1
+                    if pred_label == label:
+                        correct += 1
+                accuracy = correct / len(struct["labels"])
+                
+                struct_results[agent_config.name] = {
+                    "item_probabilities": item_probs,
+                    "accuracy": accuracy,
+                }
+            
+            # Compute pairwise divergence between agents
+            agent_names = list(struct_results.keys())
+            divergences = {}
+            for i in range(len(agent_names)):
+                for j in range(i + 1, len(agent_names)):
+                    a, b = agent_names[i], agent_names[j]
+                    probs_a = np.array(struct_results[a]["item_probabilities"])
+                    probs_b = np.array(struct_results[b]["item_probabilities"])
+                    divergences[f"{a}_vs_{b}"] = {
+                        "mean_abs_diff": float(np.mean(np.abs(probs_a - probs_b))),
+                        "max_diff_item": int(np.argmax(np.abs(probs_a - probs_b))),
+                        "max_diff_value": float(np.max(np.abs(probs_a - probs_b))),
+                    }
+            
+            results[struct_name] = {
+                "predictions": struct_results,
+                "divergences": divergences,
+            }
+        
+        return results
+    
+    # --- Context generators for each phase ---
+    
+    def _divergence_context(self, div_map=None) -> str:
+        """Context for the divergence mapping phase."""
+        if div_map is None:
+            div_map = self.compute_divergence_map()
+        lines = ["## Divergence Map (Auto-computed)\n"]
+        for struct_name, data in div_map.items():
+            lines.append(f"### {struct_name}")
+            for agent, preds in data["predictions"].items():
+                lines.append(f"  {agent}: accuracy = {preds['accuracy']:.3f}")
+            for pair, div in data["divergences"].items():
+                lines.append(
+                    f"  {pair}: mean divergence = {div['mean_abs_diff']:.3f}, "
+                    f"max at item {div['max_diff_item']} ({div['max_diff_value']:.3f})"
+                )
+            lines.append("")
+        return "\n".join(lines)
+    
+    def _proposals_context(self) -> str:
+        """Context for the adversarial critique phase."""
+        current_proposals = [
+            e for e in self.state.experiments 
+            if e.cycle == self.state.cycle and e.status == "proposed"
+        ]
+        lines = ["## Current Experiment Proposals\n"]
+        for p in current_proposals:
+            lines.append(f"### {p.title} (proposed by {p.proposed_by})")
+            lines.append(f"Rationale: {p.rationale}")
+            lines.append(f"Design spec: {json.dumps(p.design_spec, indent=2)}")
+            lines.append("")
+        return "\n".join(lines)
+    
+    def _critique_context(self) -> str:
+        """Context for the design revision phase."""
+        current_proposals = [
+            e for e in self.state.experiments 
+            if e.cycle == self.state.cycle
+        ]
+        lines = ["## Proposals and Critiques\n"]
+        for p in current_proposals:
+            lines.append(f"### {p.title} (proposed by {p.proposed_by})")
+            for critique in p.critique_log:
+                lines.append(f"  **{critique['agent']}**: {critique['critique']}")
+                if critique.get("evidence"):
+                    lines.append(f"  Evidence: {json.dumps(critique['evidence'])}")
+            lines.append("")
+        return "\n".join(lines)
+    
+    def _full_round_context(self) -> str:
+        """Full context for human arbitration."""
+        return (
+            self.state.summary_for_agent("MODERATOR") + "\n\n" +
+            self._critique_context()
+        )
+    
+    def _approved_experiment_context(self) -> str:
+        """Context for the execution phase."""
+        approved = [
+            e for e in self.state.experiments 
+            if e.cycle == self.state.cycle and e.status == "approved"
+        ]
+        if not approved:
+            return "No experiments approved this cycle."
+        exp = approved[0]
+        return (
+            f"## Approved Experiment: {exp.title}\n"
+            f"Design: {json.dumps(exp.design_spec, indent=2)}\n"
+            f"Moderator edits: {exp.moderator_edits or 'None'}\n\n"
+            "EACH AGENT MUST NOW REGISTER A QUANTITATIVE PREDICTION "
+            "before data is revealed."
+        )
+    
+    def _results_context(self) -> str:
+        """Context for the interpretation phase."""
+        executed = [
+            e for e in self.state.experiments 
+            if e.cycle == self.state.cycle and e.status == "executed"
+        ]
+        if not executed:
+            return "No experiments executed this cycle."
+        exp = executed[0]
+        
+        # Include prediction scores
+        preds = [
+            p for p in self.state.predictions 
+            if p.experiment_id == exp.experiment_id
+        ]
+        lines = [
+            f"## Experiment Results: {exp.title}\n",
+            f"Data: {json.dumps(exp.data, indent=2)}\n",
+            "### Prediction Scores:",
+        ]
+        for p in preds:
+            lines.append(
+                f"  {p.agent_name}: predicted {p.predicted_pattern}, "
+                f"score = {p.score}" 
+            )
+        return "\n".join(lines)
+
+    # --- Synthetic experiment runner ---
+    
+    def _synthetic_runner(
+        self, design_spec: dict, true_model: str = "GCM",
+    ) -> dict:
+        """
+        Generate synthetic data from a specified ground-truth model.
+        
+        For the first prototype, this replaces real data collection.
+        The 'true_model' parameter controls which theory generates the data —
+        this lets you test whether the debate converges correctly when 
+        one theory is objectively right.
+        """
+        # Parse the design spec to get a category structure
+        struct = design_spec.get("category_structure", None)
+        if not isinstance(struct, dict) or "stimuli" not in struct or "labels" not in struct:
+            # Default to Shepard Type II (interesting case)
+            struct = shepard_types()["II"]
+
+        stimuli = np.asarray(struct["stimuli"])
+        labels = np.asarray(struct["labels"])
+        
+        # Generate data from the true model
+        if true_model == "GCM":
+            model = GCM()
+            params = {"c": 4.0, "attention_weights": None, "r": 1, "gamma": 1.0}
+        elif true_model == "SUSTAIN":
+            model = SUSTAIN()
+            params = {"r": 9.01, "beta": 1.252, "d": 16.924, "eta": 0.092}
+        elif true_model == "RULEX":
+            model = RULEX()
+            params = {"p_single": 0.5, "p_conj": 0.3, "error_tolerance": 0.1}
+        else:
+            raise ValueError(f"Unknown model: {true_model}")
+        
+        # Get model predictions for each item
+        item_probs = {}
+        for i, (stim, label) in enumerate(zip(stimuli, labels)):
+            pred = model.predict(stim, stimuli, labels, **params)
+            item_probs[f"item_{i}"] = pred["probabilities"]
+        
+        # Add noise to simulate real behavioral data
+        rng = np.random.default_rng(42)
+        noisy_accuracy = {}
+        for item_key, probs in item_probs.items():
+            correct_cat = labels[int(item_key.split("_")[1])]
+            p_correct = probs.get(correct_cat, 0.5)
+            # Simulate 30 subjects
+            n_correct = rng.binomial(30, np.clip(p_correct, 0.01, 0.99))
+            noisy_accuracy[item_key] = n_correct / 30
+        
+        return {
+            "item_accuracies": noisy_accuracy,
+            "mean_accuracy": float(np.mean(list(noisy_accuracy.values()))),
+            "model_predictions": item_probs,
+            "n_subjects": 30,
+            "ground_truth_model": true_model,
+        }
