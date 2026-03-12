@@ -17,7 +17,7 @@ cumulative — it's just long. The epistemic state explicitly tracks:
 import json
 import hashlib
 from dataclasses import dataclass, field, asdict
-from typing import Optional, Any
+from typing import Optional
 from datetime import datetime
 import numpy as np
 
@@ -609,18 +609,27 @@ class EpistemicState:
 
     def to_json(self, path: str):
         """Save to JSON file."""
-        # Custom handler for numpy types
-        def handler(obj):
-            if isinstance(obj, (np.integer,)):
+        def _sanitize(obj):
+            """Recursively convert numpy types in both keys and values."""
+            if isinstance(obj, dict):
+                return {
+                    _sanitize_scalar(k): _sanitize(v) for k, v in obj.items()
+                }
+            if isinstance(obj, list):
+                return [_sanitize(v) for v in obj]
+            return _sanitize_scalar(obj)
+
+        def _sanitize_scalar(obj):
+            if isinstance(obj, np.integer):
                 return int(obj)
-            if isinstance(obj, (np.floating,)):
+            if isinstance(obj, np.floating):
                 return float(obj)
             if isinstance(obj, np.ndarray):
                 return obj.tolist()
-            raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
-        
+            return obj
+
         with open(path, "w") as f:
-            json.dump(self.to_dict(), f, indent=2, default=handler)
+            json.dump(_sanitize(self.to_dict()), f, indent=2, default=str)
 
     def _log(self, event_type: str, details: dict):
         self.log.append({

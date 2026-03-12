@@ -22,9 +22,7 @@ import os
 import sys
 import json
 import re
-import time
 from typing import Optional
-from dataclasses import asdict
 
 # Try to import anthropic; give clear error if missing
 try:
@@ -35,10 +33,8 @@ except ImportError:
 
 from .epistemic_state import EpistemicState, TheoryCommitment
 from .debate_protocol import (
-    DebateProtocol, Phase, PhaseResult, default_agent_configs, AgentConfig,
+    DebateProtocol, Phase, PhaseResult, default_agent_configs,
 )
-from .models import GCM, SUSTAIN, RULEX
-from .models.category_structures import shepard_types, five_four_structure
 
 
 # ---------------------------------------------------------------------------
@@ -429,7 +425,7 @@ def run_human_arbitration(protocol: DebateProtocol, transcript: list) -> PhaseRe
 def run_execution(protocol: DebateProtocol, client: anthropic.Anthropic,
                   transcript: list, true_model: str = "GCM") -> PhaseResult:
     """Phase 7: Register predictions, then run experiment."""
-    spec = protocol.phase_spec(Phase.EXECUTION)
+    protocol.phase_spec(Phase.EXECUTION)
     messages = []
     
     print("\n" + "=" * 70)
@@ -691,7 +687,6 @@ def save_transcript(transcript: list, protocol: DebateProtocol, output_dir: str 
 
 def _serialize_div_map(div_map: dict) -> dict:
     """Make divergence map JSON-serializable."""
-    import numpy as np
     result = {}
     for k, v in div_map.items():
         result[k] = {}

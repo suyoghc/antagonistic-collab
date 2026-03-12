@@ -13,15 +13,13 @@ Run this to verify the formal layer works before connecting LLM agents.
 
 import sys
 import os
-import json
-import numpy as np
 
 # Add parent to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from antagonistic_collab.models import (
     GCM, SUSTAIN, RULEX,
-    shepard_types, five_four_structure, rule_plus_exception,
+    shepard_types,
 )
 from antagonistic_collab.epistemic_state import (
     EpistemicState, TheoryCommitment,

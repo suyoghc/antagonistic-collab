@@ -20,7 +20,7 @@ from typing import Optional, Callable, Any
 import numpy as np
 
 from .epistemic_state import (
-    EpistemicState, TheoryCommitment, ExperimentRecord, Prediction
+    EpistemicState
 )
 from .models.gcm import GCM
 from .models.sustain import SUSTAIN
@@ -594,7 +594,10 @@ class DebateProtocol:
         item_probs = {}
         for i, (stim, label) in enumerate(zip(stimuli, labels)):
             pred = model.predict(stim, stimuli, labels, **params)
-            item_probs[f"item_{i}"] = pred["probabilities"]
+            # Convert numpy key types to native Python for JSON serialization
+            item_probs[f"item_{i}"] = {
+                int(k): float(v) for k, v in pred["probabilities"].items()
+            }
         
         # Add noise to simulate real behavioral data
         rng = np.random.default_rng(42)
