@@ -81,12 +81,41 @@ def extract_all_json(text: str) -> list[dict]:
             pass
     if results:
         return results
-    # Try raw { ... } blocks
-    for match in re.finditer(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', text, re.DOTALL):
-        try:
-            results.append(json.loads(match.group(0)))
-        except json.JSONDecodeError:
-            pass
+    # Find top-level JSON objects by brace-depth counting
+    i = 0
+    while i < len(text):
+        if text[i] == '{':
+            depth = 0
+            in_string = False
+            escape_next = False
+            for j in range(i, len(text)):
+                ch = text[j]
+                if escape_next:
+                    escape_next = False
+                    continue
+                if in_string:
+                    if ch == '\\':
+                        escape_next = True
+                    elif ch == '"':
+                        in_string = False
+                    continue
+                if ch == '"':
+                    in_string = True
+                elif ch == '{':
+                    depth += 1
+                elif ch == '}':
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            results.append(json.loads(text[i:j + 1]))
+                        except json.JSONDecodeError:
+                            pass
+                        i = j + 1
+                        break
+            else:
+                i += 1
+        else:
+            i += 1
     return results
 
 
@@ -324,7 +353,7 @@ def run_adversarial_critique(protocol: DebateProtocol, client: anthropic.Anthrop
             messages.append({
                 "agent": agent.name, "phase": "ADVERSARIAL_CRITIQUE",
                 "round": round_num + 1, "response": response,
-                "parsed_json": json_block,
+                "parsed_json": json_blocks,
             })
     
     transcript.extend(messages)
@@ -371,13 +400,20 @@ def run_human_arbitration(protocol: DebateProtocol, transcript: list) -> PhaseRe
     
     if choice.startswith("approve"):
         parts = choice.split(maxsplit=2)
-        idx = int(parts[1]) if len(parts) > 1 else 0
-        edits = parts[2] if len(parts) > 2 else None
-        
-        selected = current_proposals[idx]
-        protocol.state.approve_experiment(selected.experiment_id, moderator_edits=edits)
-        print(f"\n✓ Approved: {selected.title}" + (f" (edits: {edits})" if edits else ""))
-        messages[0]["approved"] = selected.experiment_id
+        try:
+            idx = int(parts[1]) if len(parts) > 1 else 0
+        except ValueError:
+            print(f"\n✗ Invalid index: '{parts[1]}'. Expected a number.")
+            idx = None
+        if idx is not None and not (0 <= idx < len(current_proposals)):
+            print(f"\n✗ Index {idx} out of range (0–{len(current_proposals) - 1}).")
+            idx = None
+        if idx is not None:
+            edits = parts[2] if len(parts) > 2 else None
+            selected = current_proposals[idx]
+            protocol.state.approve_experiment(selected.experiment_id, moderator_edits=edits)
+            print(f"\n✓ Approved: {selected.title}" + (f" (edits: {edits})" if edits else ""))
+            messages[0]["approved"] = selected.experiment_id
     elif choice == "skip":
         if current_proposals:
             protocol.state.approve_experiment(current_proposals[0].experiment_id)
@@ -751,8 +787,12 @@ def main():
         except (ValueError, KeyError):
             pass
     
-    print(f"\nFull transcript: debate_cycle_{protocol.state.cycle}.json")
-    print(f"Epistemic state: epistemic_state_cycle_{protocol.state.cycle}.json")
+    if args.cycles > 0:
+        last_cycle = protocol.state.cycle - 1
+        print(f"\nFull transcript: {os.path.join(output_dir, f'debate_cycle_{last_cycle}.json')}")
+        print(f"Epistemic state: {os.path.join(output_dir, f'epistemic_state_cycle_{last_cycle}.json')}")
+    else:
+        print("\nNo cycles were run.")
 
 
 # Module-level flags for batch mode and model selection
