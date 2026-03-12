@@ -5,8 +5,13 @@ No AutoGen, no frameworks. Raw API calls to Claude, a loop over phases,
 and you as the human moderator typing into a terminal.
 
 Usage:
+    # Anthropic (default)
     export ANTHROPIC_API_KEY=sk-ant-...
     python -m antagonistic_collab.runner
+
+    # Princeton AI Sandbox
+    export AI_SANDBOX_KEY=...
+    python -m antagonistic_collab.runner --backend princeton --model gpt-4o
 
 The runner walks through the 9-phase debate protocol. At each phase it:
 1. Shows you what's happening
@@ -25,12 +30,16 @@ import json
 import re
 from typing import Optional
 
-# Try to import anthropic; give clear error if missing
+# Lazy imports for LLM backends — at least one must be available.
 try:
     import anthropic
 except ImportError:
-    print("Install the anthropic SDK: pip install anthropic")
-    sys.exit(1)
+    anthropic = None  # type: ignore[assignment]
+
+try:
+    import openai
+except ImportError:
+    openai = None  # type: ignore[assignment]
 
 from .epistemic_state import EpistemicState, TheoryCommitment
 from .debate_protocol import (
@@ -46,28 +55,56 @@ from .debate_protocol import (
 # ---------------------------------------------------------------------------
 
 
+def _is_openai_client(client) -> bool:
+    """Return True if *client* quacks like an OpenAI / Azure OpenAI client."""
+    return type(client).__name__ in ("OpenAI", "AzureOpenAI")
+
+
 def call_agent(
-    client: anthropic.Anthropic,
+    client,
     system_prompt: str,
     user_message: str,
     model: str = None,
     max_tokens: int = 4096,
     temperature: float = 0.7,
 ) -> str:
-    """Single LLM call. Returns the text response."""
-    response = client.messages.create(
-        model=model or _LLM_MODEL,
-        max_tokens=max_tokens,
-        temperature=temperature,
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_message}],
-    )
-    if not response.content:
-        raise ValueError(
-            "Empty response from API — no content blocks returned. "
-            "This may indicate a content filter or an API error."
+    """Single LLM call. Returns the text response.
+
+    Dispatches automatically based on client type:
+    - anthropic.Anthropic  → client.messages.create (system= kwarg)
+    - openai.AzureOpenAI   → client.chat.completions.create (system message)
+    """
+    if _is_openai_client(client):
+        response = client.chat.completions.create(
+            model=model or _LLM_MODEL,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message},
+            ],
         )
-    return response.content[0].text
+        if not response.choices or not response.choices[0].message.content:
+            raise ValueError(
+                "Empty response from API — no choices returned. "
+                "This may indicate a content filter or an API error."
+            )
+        return response.choices[0].message.content
+    else:
+        # Anthropic path (original)
+        response = client.messages.create(
+            model=model or _LLM_MODEL,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_message}],
+        )
+        if not response.content:
+            raise ValueError(
+                "Empty response from API — no content blocks returned. "
+                "This may indicate a content filter or an API error."
+            )
+        return response.content[0].text
 
 
 def extract_json(text: str) -> Optional[dict]:
@@ -130,9 +167,7 @@ def extract_all_json(text: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def run_commitment(
-    protocol: DebateProtocol, client: anthropic.Anthropic, transcript: list
-) -> PhaseResult:
+def run_commitment(protocol: DebateProtocol, client, transcript: list) -> PhaseResult:
     """Phase 1: Each agent registers its theory."""
     spec = protocol.phase_spec(Phase.COMMITMENT)
     messages = []
@@ -199,7 +234,7 @@ def run_commitment(
 
 
 def run_divergence_mapping(
-    protocol: DebateProtocol, client: anthropic.Anthropic, transcript: list
+    protocol: DebateProtocol, client, transcript: list
 ) -> PhaseResult:
     """Phase 2: Compute and discuss where models disagree."""
     print("\n" + "=" * 70)
@@ -244,7 +279,7 @@ def run_divergence_mapping(
 
 
 def run_experiment_proposal(
-    protocol: DebateProtocol, client: anthropic.Anthropic, transcript: list
+    protocol: DebateProtocol, client, transcript: list
 ) -> PhaseResult:
     """Phase 3: Each agent proposes an experiment."""
     spec = protocol.phase_spec(Phase.EXPERIMENT_PROPOSAL)
@@ -303,7 +338,7 @@ def run_experiment_proposal(
 
 def run_adversarial_critique(
     protocol: DebateProtocol,
-    client: anthropic.Anthropic,
+    client,
     transcript: list,
     n_rounds: int = 2,
 ) -> PhaseResult:
@@ -490,7 +525,7 @@ def run_human_arbitration(protocol: DebateProtocol, transcript: list) -> PhaseRe
 
 def run_execution(
     protocol: DebateProtocol,
-    client: anthropic.Anthropic,
+    client,
     transcript: list,
     true_model: str = "GCM",
 ) -> PhaseResult:
@@ -597,7 +632,7 @@ def run_execution(
 
 
 def run_interpretation(
-    protocol: DebateProtocol, client: anthropic.Anthropic, transcript: list
+    protocol: DebateProtocol, client, transcript: list
 ) -> PhaseResult:
     """Phase 8: Agents interpret results."""
     spec = protocol.phase_spec(Phase.INTERPRETATION)
@@ -677,9 +712,7 @@ def run_interpretation(
     )
 
 
-def run_audit(
-    protocol: DebateProtocol, client: anthropic.Anthropic, transcript: list
-) -> PhaseResult:
+def run_audit(protocol: DebateProtocol, client, transcript: list) -> PhaseResult:
     """Phase 9: Summarize what was learned."""
     print("\n" + "=" * 70)
     print("PHASE: AUDIT — Cycle summary")
@@ -726,7 +759,7 @@ def run_audit(
 
 def run_cycle(
     protocol: DebateProtocol,
-    client: anthropic.Anthropic,
+    client,
     transcript: list,
     true_model: str = "GCM",
     critique_rounds: int = 2,
@@ -824,6 +857,51 @@ def _serialize_div_map(div_map: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _create_client(backend: str = "anthropic"):
+    """Create the LLM client for the chosen backend.
+
+    Args:
+        backend: ``"anthropic"`` or ``"princeton"``.
+
+    Returns:
+        An ``anthropic.Anthropic`` or ``openai.AzureOpenAI`` instance.
+
+    Raises:
+        SystemExit: if the required SDK is not installed or the env var is
+            missing.
+    """
+    if backend == "princeton":
+        if openai is None:
+            print("Install the openai SDK: pip install openai")
+            sys.exit(1)
+        api_key = os.environ.get("AI_SANDBOX_KEY")
+        if not api_key:
+            print("Set AI_SANDBOX_KEY environment variable.")
+            print("  export AI_SANDBOX_KEY=<your Princeton AI Sandbox key>")
+            sys.exit(1)
+        return openai.AzureOpenAI(
+            api_key=api_key,
+            azure_endpoint="https://api-ai-sandbox.princeton.edu/",
+            api_version="2025-03-01-preview",
+        )
+    else:
+        if anthropic is None:
+            print("Install the anthropic SDK: pip install anthropic")
+            sys.exit(1)
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            print("Set ANTHROPIC_API_KEY environment variable.")
+            print("  export ANTHROPIC_API_KEY=sk-ant-...")
+            sys.exit(1)
+        return anthropic.Anthropic(api_key=api_key)
+
+
+_DEFAULT_MODELS = {
+    "anthropic": "claude-sonnet-4-20250514",
+    "princeton": "gpt-4o",
+}
+
+
 def main():
     import argparse
 
@@ -843,8 +921,12 @@ def main():
         help="Non-interactive mode: auto-approve first proposal (for Della/SLURM)",
     )
     parser.add_argument(
-        "--model", default="claude-sonnet-4-20250514", help="LLM model to use"
+        "--backend",
+        choices=["anthropic", "princeton"],
+        default="anthropic",
+        help="LLM backend: anthropic (default) or princeton (Azure OpenAI sandbox)",
     )
+    parser.add_argument("--model", default=None, help="LLM model to use")
     parser.add_argument("--output-dir", default=".", help="Directory for output files")
     parser.add_argument(
         "--critique-rounds",
@@ -854,13 +936,11 @@ def main():
     )
     args = parser.parse_args()
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        print("Set ANTHROPIC_API_KEY environment variable.")
-        print("  export ANTHROPIC_API_KEY=sk-ant-...")
-        sys.exit(1)
+    # Resolve model default based on backend
+    if args.model is None:
+        args.model = _DEFAULT_MODELS[args.backend]
 
-    client = anthropic.Anthropic(api_key=api_key)
+    client = _create_client(backend=args.backend)
 
     # Initialize
     state = EpistemicState(domain="Human Categorization")
@@ -874,6 +954,7 @@ def main():
     print(f"Agents: {', '.join(a.name for a in agents)}")
     print(f"Models: {', '.join(a.model_class.name for a in agents)}")
     print(f"Mode: {'batch' if args.batch else 'interactive'}")
+    print(f"Backend: {args.backend}")
     print(f"LLM: {args.model}")
     print(f"Cycles: {args.cycles}, True model: {args.true_model}\n")
 

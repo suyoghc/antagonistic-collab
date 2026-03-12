@@ -1205,3 +1205,160 @@ class TestSkipToPhase:
         protocol = DebateProtocol(state, agents)
         with pytest.raises((ValueError, TypeError)):
             protocol.skip_to_phase("not_a_phase")
+
+
+# =========================================================================
+# Princeton AI Sandbox backend support  (runner.py)
+# =========================================================================
+
+
+class TestOpenAIBackend:
+    """
+    Tests for the Princeton AI Sandbox (Azure OpenAI) backend.
+
+    The codebase was originally hard-wired to the Anthropic SDK. Adding the
+    Princeton sandbox as an alternative backend requires call_agent() to
+    dispatch on client type, and main() to create the right client.
+    """
+
+    def test_call_agent_with_openai_client(self):
+        """call_agent() should work with an OpenAI-style client.
+
+        When passed an openai.AzureOpenAI (or compatible) client, call_agent()
+        should use chat.completions.create and read choices[0].message.content.
+        """
+        from unittest.mock import MagicMock
+
+        # Build a mock that quacks like openai.AzureOpenAI
+        mock_client = MagicMock()
+        mock_client.__class__.__name__ = "AzureOpenAI"
+        # Simulate: response.choices[0].message.content
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "Hello from GPT-4o"
+        mock_client.chat.completions.create.return_value = mock_response
+
+        result = call_agent(
+            client=mock_client,
+            system_prompt="You are a test agent.",
+            user_message="Say hello.",
+            model="gpt-4o",
+        )
+
+        assert result == "Hello from GPT-4o"
+        # Verify the system prompt was passed as a message, not a kwarg
+        call_kwargs = mock_client.chat.completions.create.call_args
+        messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
+        assert messages[0]["role"] == "system"
+        assert messages[0]["content"] == "You are a test agent."
+        assert messages[1]["role"] == "user"
+
+    def test_call_agent_openai_empty_response_raises(self):
+        """call_agent() should raise ValueError when OpenAI returns empty content."""
+        from unittest.mock import MagicMock
+
+        mock_client = MagicMock()
+        mock_client.__class__.__name__ = "AzureOpenAI"
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = None
+        mock_client.chat.completions.create.return_value = mock_response
+
+        with pytest.raises(ValueError, match="Empty response"):
+            call_agent(
+                client=mock_client,
+                system_prompt="test",
+                user_message="test",
+                model="gpt-4o",
+            )
+
+    def test_call_agent_openai_no_choices_raises(self):
+        """call_agent() should raise ValueError when OpenAI returns no choices."""
+        from unittest.mock import MagicMock
+
+        mock_client = MagicMock()
+        mock_client.__class__.__name__ = "AzureOpenAI"
+        mock_response = MagicMock()
+        mock_response.choices = []
+        mock_client.chat.completions.create.return_value = mock_response
+
+        with pytest.raises(ValueError, match="Empty response"):
+            call_agent(
+                client=mock_client,
+                system_prompt="test",
+                user_message="test",
+                model="gpt-4o",
+            )
+
+    def test_call_agent_anthropic_still_works(self):
+        """Existing Anthropic path must not regress."""
+        from unittest.mock import MagicMock
+
+        mock_client = MagicMock(spec=["messages"])
+        mock_client.__class__ = type("Anthropic", (), {})
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock()]
+        mock_response.content[0].text = "Hello from Claude"
+        mock_client.messages.create.return_value = mock_response
+
+        result = call_agent(
+            client=mock_client,
+            system_prompt="You are a test agent.",
+            user_message="Say hello.",
+            model="claude-sonnet-4-20250514",
+        )
+
+        assert result == "Hello from Claude"
+        call_kwargs = mock_client.messages.create.call_args
+        assert call_kwargs.kwargs.get("system") == "You are a test agent."
+
+    def test_backend_arg_creates_openai_client(self):
+        """--backend princeton should produce an AzureOpenAI client.
+
+        We mock the AzureOpenAI constructor to verify it gets called with
+        the right endpoint and api_version.
+        """
+        from unittest.mock import MagicMock, patch as mock_patch
+        from antagonistic_collab.runner import _create_client
+
+        fake_client = MagicMock()
+        with mock_patch.dict(os.environ, {"AI_SANDBOX_KEY": "test-key-123"}):
+            with mock_patch(
+                "antagonistic_collab.runner.openai.AzureOpenAI",
+                return_value=fake_client,
+            ) as mock_ctor:
+                client = _create_client(backend="princeton")
+
+        assert client is fake_client
+        mock_ctor.assert_called_once()
+        call_kwargs = mock_ctor.call_args.kwargs
+        assert "api-ai-sandbox.princeton.edu" in call_kwargs["azure_endpoint"]
+        assert call_kwargs["api_key"] == "test-key-123"
+
+    def test_backend_arg_creates_anthropic_client(self):
+        """--backend anthropic should produce an Anthropic client (default)."""
+        from unittest.mock import MagicMock, patch as mock_patch
+        from antagonistic_collab.runner import _create_client
+
+        fake_client = MagicMock()
+        with mock_patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-ant-test"}):
+            with mock_patch(
+                "antagonistic_collab.runner.anthropic.Anthropic",
+                return_value=fake_client,
+            ) as mock_ctor:
+                client = _create_client(backend="anthropic")
+
+        assert client is fake_client
+        mock_ctor.assert_called_once_with(api_key="sk-ant-test")
+
+    def test_princeton_backend_missing_key_raises(self):
+        """--backend princeton without AI_SANDBOX_KEY should raise SystemExit."""
+        from unittest.mock import patch as mock_patch
+        from antagonistic_collab.runner import _create_client
+
+        with mock_patch.dict(os.environ, {}, clear=True):
+            # Also ensure ANTHROPIC_API_KEY is gone
+            env = {k: v for k, v in os.environ.items() if k != "AI_SANDBOX_KEY"}
+            with mock_patch.dict(os.environ, env, clear=True):
+                with pytest.raises(SystemExit):
+                    _create_client(backend="princeton")
