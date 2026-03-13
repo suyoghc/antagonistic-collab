@@ -340,26 +340,49 @@ class SUSTAIN:
         """
         Predict learning curve by simulating incremental learning.
         Unlike GCM, SUSTAIN is inherently sequential — order matters.
+
+        At each block boundary, the model is tested on test_items/test_labels
+        to produce held-out accuracy (matching GCM's contract).
         """
         p = {**self.default_params, **params}
+        sim_params = {
+            k: p[k] for k in ["r", "beta", "d", "eta", "tau", "initial_lambdas"]
+        }
 
-        # Simulate full learning
-        result = self.simulate_learning(
-            training_sequence,
-            **{k: p[k] for k in ["r", "beta", "d", "eta", "tau", "initial_lambdas"]},
-        )
+        test_items = np.asarray(test_items)
+        test_labels = np.asarray(test_labels)
 
-        # Extract block-level accuracy from trial log
-        log = result["trial_log"]
         curve = []
-        for block_start in range(0, len(log), block_size):
-            block = log[block_start : block_start + block_size]
-            acc = sum(1 for t in block if t["correct"]) / len(block) if block else 0
+        for block_end in range(block_size, len(training_sequence) + 1, block_size):
+            # Train on items up to this block
+            partial_seq = training_sequence[:block_end]
+            result = self.simulate_learning(partial_seq, **sim_params)
+            clusters = result["clusters"]
+            n_clusters = len(clusters)
+
+            # Test on held-out items
+            if len(test_items) == 0 or not clusters:
+                continue
+
+            correct = 0
+            for test_item, true_label in zip(test_items, test_labels):
+                activations = np.array(
+                    [
+                        self._activation(np.asarray(test_item), c, p["r"])
+                        for c in clusters
+                    ]
+                )
+                cat_output = self._output(activations, clusters, p["beta"])
+                if cat_output:
+                    pred_label = max(cat_output, key=cat_output.get)
+                    if pred_label == true_label:
+                        correct += 1
+
             curve.append(
                 {
-                    "block": block_start // block_size,
-                    "accuracy": acc,
-                    "n_clusters": block[-1]["n_clusters"] if block else 0,
+                    "block": (block_end // block_size) - 1,
+                    "accuracy": float(correct / len(test_items)),
+                    "n_clusters": n_clusters,
                 }
             )
 

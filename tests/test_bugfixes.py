@@ -2465,3 +2465,109 @@ class TestCallAgentErrorHandling:
 
         with pytest.raises(ValueError, match="Empty response"):
             call_agent(mock_client, "system", "user")
+
+
+class TestSUSTAINPredictLearningCurve:
+    """
+    Bug (P2): SUSTAIN.predict_learning_curve() accepts test_items and
+    test_labels parameters but ignores them entirely. It reports training
+    accuracy from trial_log instead of testing the learned model on
+    held-out items at each block boundary.
+
+    GCM.predict_learning_curve() correctly tests on held-out items.
+    SUSTAIN should follow the same contract.
+    """
+
+    def test_uses_test_items_not_training_log(self):
+        """Learning curve accuracy must reflect test-item performance."""
+        sustain = SUSTAIN()
+        # Train on Type I (simple rule): dim0 determines category
+        train_items = np.array(
+            [[0, 0, 0], [0, 1, 0], [1, 0, 1], [1, 1, 1]], dtype=float
+        )
+        train_labels = np.array([0, 0, 1, 1])
+        training_seq = list(zip(train_items, train_labels))
+
+        # Test items: same structure but different instances
+        test_items = np.array([[0, 0, 1], [1, 1, 0]], dtype=float)
+        test_labels = np.array([0, 1])
+
+        curve = sustain.predict_learning_curve(
+            training_seq, test_items, test_labels, block_size=2
+        )
+        assert len(curve) > 0
+        # Each block should have an 'accuracy' computed from test items
+        for block in curve:
+            assert "accuracy" in block
+            assert isinstance(block["accuracy"], float)
+
+    def test_test_accuracy_differs_from_training_accuracy(self):
+        """
+        If test items are hard (novel), accuracy should differ from training.
+        This confirms test_items are actually being evaluated.
+        """
+        sustain = SUSTAIN()
+        # Train on easy rule
+        train_items = np.array(
+            [[0, 0, 0], [0, 1, 0], [0, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]],
+            dtype=float,
+        )
+        train_labels = np.array([0, 0, 0, 1, 1, 1])
+        training_seq = list(zip(train_items, train_labels))
+
+        # Test on same items (should get similar accuracy to training)
+        curve_same = sustain.predict_learning_curve(
+            training_seq, train_items, train_labels, block_size=3
+        )
+        # Test on novel items with reversed labels (should get low accuracy)
+        novel_items = np.array([[0, 0, 0], [1, 1, 1]], dtype=float)
+        reversed_labels = np.array([1, 0])  # Opposite of training
+        curve_reversed = sustain.predict_learning_curve(
+            training_seq, novel_items, reversed_labels, block_size=3
+        )
+
+        # The two curves should have different final accuracies
+        final_same = curve_same[-1]["accuracy"]
+        final_reversed = curve_reversed[-1]["accuracy"]
+        assert final_same != final_reversed, (
+            f"Same ({final_same}) vs reversed ({final_reversed}) test labels "
+            "produced identical accuracy — test_items/labels are being ignored"
+        )
+
+
+class TestCallAgentRetry:
+    """
+    Bug: A single API failure (network error, content filter, rate limit)
+    crashes the entire multi-cycle debate. call_agent should retry on
+    transient failures.
+    """
+
+    def test_retries_on_transient_error(self):
+        """call_agent should retry and succeed after transient failures."""
+        from unittest.mock import MagicMock
+
+        mock_client = MagicMock()
+        mock_client.messages = MagicMock()
+
+        # First call raises, second succeeds
+        good_response = MagicMock()
+        good_response.content = [MagicMock(text="success")]
+        mock_client.messages.create.side_effect = [
+            Exception("Connection reset"),
+            good_response,
+        ]
+
+        result = call_agent(mock_client, "system", "user")
+        assert result == "success"
+        assert mock_client.messages.create.call_count == 2
+
+    def test_raises_after_max_retries(self):
+        """call_agent should raise after exhausting retries."""
+        from unittest.mock import MagicMock
+
+        mock_client = MagicMock()
+        mock_client.messages = MagicMock()
+        mock_client.messages.create.side_effect = Exception("Persistent failure")
+
+        with pytest.raises(Exception, match="Persistent failure"):
+            call_agent(mock_client, "system", "user")

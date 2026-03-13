@@ -22,7 +22,7 @@
 ### Queued (from Codex review, 2026-03-13)
 - [ ] **[P1] Implement Phase 5 (Design Revision)** — currently a placeholder (runner.py ~line 862); critiques never lead to revised proposals
 - [ ] **[P2] Fix moderator reject path** — "reject all" prints a message but doesn't loop back to proposals; burns the cycle instead
-- [ ] **[P2] SUSTAIN.predict_learning_curve() ignores test_items/test_labels** — only uses training log accuracy; held-out data is accepted but unused
+- [x] **[P2] SUSTAIN.predict_learning_curve() ignores test_items/test_labels** — fixed: now evaluates test items at each block boundary (matches GCM contract)
 - [ ] **[P3] Fix --demo order-sensitivity** — `sys.argv[1] == "--demo"` fails when other flags precede it
 - [ ] **Show concrete model predictions in divergence ranking** — instead of abstract divergence scores, show each model's predicted accuracy per structure (e.g., "GCM: 0.85, RULEX: 0.40, SUSTAIN: 0.44") so agents can see what the divergence actually means for their model
 
@@ -35,6 +35,8 @@
 - [x] EpistemicState.to_json() creates parent directories (epistemic_state.py:717)
 - [x] NaN guard in divergence map computation (debate_protocol.py:530)
 - [x] Warning for unknown condition names in compute_model_predictions
+- [x] SUSTAIN.predict_learning_curve() now evaluates test_items at block boundaries (P2 fix)
+- [x] call_agent() retries up to 3 times on transient API errors (exponential backoff)
 
 ### Done
 - [x] Fix P1 crashes and data-integrity bugs — 2026-03-11 → 2026-03-12

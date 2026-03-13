@@ -28,6 +28,7 @@ import os
 import sys
 import json
 import re
+import time
 from typing import Optional
 
 # Lazy imports for LLM backends — at least one must be available.
@@ -70,44 +71,61 @@ def call_agent(
     model: str = None,
     max_tokens: int = 4096,
     temperature: float = 0.7,
+    max_retries: int = 3,
 ) -> str:
-    """Single LLM call. Returns the text response.
+    """Single LLM call with retry logic. Returns the text response.
 
     Dispatches automatically based on client type:
     - anthropic.Anthropic  → client.messages.create (system= kwarg)
     - openai.AzureOpenAI   → client.chat.completions.create (system message)
+
+    Retries up to max_retries times on transient errors (network, rate limit).
+    Empty-response errors (content filter) are NOT retried.
     """
-    if _is_openai_client(client):
-        response = client.chat.completions.create(
-            model=model or _LLM_MODEL,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
-            ],
-        )
-        if not response.choices or not response.choices[0].message.content:
-            raise ValueError(
-                "Empty response from API — no choices returned. "
-                "This may indicate a content filter or an API error."
-            )
-        return response.choices[0].message.content
-    else:
-        # Anthropic path (original)
-        response = client.messages.create(
-            model=model or _LLM_MODEL,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_message}],
-        )
-        if not response.content:
-            raise ValueError(
-                "Empty response from API — no content blocks returned. "
-                "This may indicate a content filter or an API error."
-            )
-        return response.content[0].text
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            if _is_openai_client(client):
+                response = client.chat.completions.create(
+                    model=model or _LLM_MODEL,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_message},
+                    ],
+                )
+                if not response.choices or not response.choices[0].message.content:
+                    raise ValueError(
+                        "Empty response from API — no choices returned. "
+                        "This may indicate a content filter or an API error."
+                    )
+                return response.choices[0].message.content
+            else:
+                # Anthropic path (original)
+                response = client.messages.create(
+                    model=model or _LLM_MODEL,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    system=system_prompt,
+                    messages=[{"role": "user", "content": user_message}],
+                )
+                if not response.content:
+                    raise ValueError(
+                        "Empty response from API — no content blocks returned. "
+                        "This may indicate a content filter or an API error."
+                    )
+                return response.content[0].text
+        except ValueError:
+            raise  # Don't retry empty responses (content filter)
+        except Exception as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                wait = 2**attempt  # 1s, 2s, 4s
+                print(f"  ⚠ API error (attempt {attempt + 1}/{max_retries}): {e}")
+                print(f"    Retrying in {wait}s...")
+                time.sleep(wait)
+    raise last_error
 
 
 def extract_json(text: str) -> Optional[dict]:
