@@ -542,6 +542,56 @@ class DebateProtocol:
 
         return results
 
+    # --- Model-based predictions for agents ---
+
+    def compute_model_predictions(
+        self,
+        agent_config: AgentConfig,
+        structure_name: str,
+        condition: str = "baseline",
+    ) -> dict:
+        """
+        Run an agent's model on a category structure and return per-item
+        predictions as P(correct label) for each item.
+
+        Returns dict with "mean_accuracy" and "item_0" through "item_N",
+        all floats in [0, 1].
+        """
+        # Resolve structure (fallback to Type_II)
+        if structure_name in STRUCTURE_REGISTRY:
+            struct = STRUCTURE_REGISTRY[structure_name]
+        else:
+            struct = STRUCTURE_REGISTRY["Type_II"]
+
+        stimuli = np.asarray(struct["stimuli"])
+        labels = np.asarray(struct["labels"])
+
+        # Build params: start from agent defaults, apply condition overrides
+        params = dict(agent_config.default_params)
+        if condition in CONDITION_EFFECTS:
+            model_key = agent_config.model_class.name.split()[0]
+            overrides = CONDITION_EFFECTS[condition].get(model_key, {})
+            params.update(overrides)
+
+        model = agent_config.model_class
+
+        # Deterministic seed for RULEX
+        if isinstance(model, RULEX):
+            params.setdefault("seed", 42)
+
+        # Get per-item P(correct label)
+        item_accuracies = {}
+        for i, (stim, label) in enumerate(zip(stimuli, labels)):
+            pred = model.predict(stim, stimuli, labels, **params)
+            p_correct = pred["probabilities"].get(int(label), 0.5)
+            item_accuracies[f"item_{i}"] = float(p_correct)
+
+        mean_acc = float(np.mean(list(item_accuracies.values())))
+
+        result = {"mean_accuracy": mean_acc}
+        result.update(item_accuracies)
+        return result
+
     # --- Context generators for each phase ---
 
     def _divergence_context(self, div_map=None) -> str:

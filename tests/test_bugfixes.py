@@ -2060,3 +2060,161 @@ class TestSyntheticDataVariation:
         assert "mean_accuracy" in data2
         data3 = protocol._synthetic_runner({}, true_model="RULEX")
         assert "mean_accuracy" in data3
+
+
+# =========================================================================
+# Model-based predictions  (Phase 3: agents call their models — D8)
+# =========================================================================
+
+
+class TestModelBasedPredictions:
+    """
+    Bug: Agents guessed item-level predictions via LLM reasoning instead of
+    running model.predict(). RMSE leaderboard measured LLM calibration quality,
+    not model fit. This class tests compute_model_predictions() which runs
+    each agent's actual model on the approved experiment structure.
+    """
+
+    def _make_protocol(self):
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        return DebateProtocol(state, agents)
+
+    def _get_agent(self, protocol, name_prefix):
+        """Get an agent config by name prefix (e.g. 'Exemplar')."""
+        for agent in protocol.agent_configs:
+            if agent.name.startswith(name_prefix):
+                return agent
+        raise ValueError(f"No agent starting with {name_prefix}")
+
+    # --- Test 1: GCM predictions ---
+
+    def test_compute_model_predictions_gcm(self):
+        """
+        compute_model_predictions() on Type_I with GCM agent should return
+        a dict with mean_accuracy and item_0..item_7, all floats in [0,1].
+        """
+        protocol = self._make_protocol()
+        agent = self._get_agent(protocol, "Exemplar")
+        result = protocol.compute_model_predictions(agent, "Type_I")
+
+        assert "mean_accuracy" in result
+        assert isinstance(result["mean_accuracy"], float)
+        assert 0.0 <= result["mean_accuracy"] <= 1.0
+
+        # Type_I has 8 items (Shepard type)
+        for i in range(8):
+            key = f"item_{i}"
+            assert key in result, f"Missing {key}"
+            assert isinstance(result[key], float), f"{key} not float"
+            assert 0.0 <= result[key] <= 1.0, f"{key} out of range: {result[key]}"
+
+    # --- Test 2: RULEX determinism ---
+
+    def test_compute_model_predictions_rulex(self):
+        """
+        RULEX with a fixed seed should produce deterministic results.
+        Two calls should return the same predictions.
+        """
+        protocol = self._make_protocol()
+        agent = self._get_agent(protocol, "Rule")
+        result1 = protocol.compute_model_predictions(agent, "Type_I")
+        result2 = protocol.compute_model_predictions(agent, "Type_I")
+
+        assert result1 == result2, (
+            f"RULEX predictions not deterministic:\n"
+            f"  run1: {result1}\n  run2: {result2}"
+        )
+
+    # --- Test 3: SUSTAIN returns valid dict ---
+
+    def test_compute_model_predictions_sustain(self):
+        """
+        SUSTAIN agent should return a valid dict with mean_accuracy and item keys.
+        """
+        protocol = self._make_protocol()
+        agent = self._get_agent(protocol, "Clustering")
+        result = protocol.compute_model_predictions(agent, "Type_II")
+
+        assert "mean_accuracy" in result
+        assert isinstance(result["mean_accuracy"], float)
+        assert 0.0 <= result["mean_accuracy"] <= 1.0
+
+        # Type_II has 8 items
+        for i in range(8):
+            key = f"item_{i}"
+            assert key in result, f"Missing {key}"
+
+    # --- Test 4: Different models produce different predictions ---
+
+    def test_model_predictions_differ_across_models(self):
+        """
+        GCM, RULEX, SUSTAIN on Type_II should produce at least 2 distinct
+        mean_accuracy values. If all three match, the method isn't using
+        each agent's actual model.
+        """
+        protocol = self._make_protocol()
+        accuracies = []
+        for prefix in ["Exemplar", "Rule", "Clustering"]:
+            agent = self._get_agent(protocol, prefix)
+            result = protocol.compute_model_predictions(agent, "Type_II")
+            accuracies.append(round(result["mean_accuracy"], 6))
+
+        distinct = len(set(accuracies))
+        assert distinct >= 2, (
+            f"Expected >=2 distinct mean_accuracy across 3 models, "
+            f"got {distinct}: {accuracies}"
+        )
+
+    # --- Test 5: Condition overrides change predictions ---
+
+    def test_model_predictions_condition_override(self):
+        """
+        baseline vs low_attention should produce different GCM predictions
+        on Type_II because low_attention sets c=1.5 vs default c=3.0.
+        """
+        protocol = self._make_protocol()
+        agent = self._get_agent(protocol, "Exemplar")
+
+        result_base = protocol.compute_model_predictions(agent, "Type_II", "baseline")
+        result_low = protocol.compute_model_predictions(
+            agent, "Type_II", "low_attention"
+        )
+
+        assert result_base != result_low, (
+            "baseline and low_attention produced identical predictions "
+            "for GCM on Type_II — condition override not applied"
+        )
+
+    # --- Test 6: Predictions match structure ---
+
+    def test_model_predictions_match_structure(self):
+        """
+        GCM predictions on Type_I vs Type_VI should differ — Type_I is
+        perfectly separable by one dimension, Type_VI has no simple rule.
+        """
+        protocol = self._make_protocol()
+        agent = self._get_agent(protocol, "Exemplar")
+
+        result_i = protocol.compute_model_predictions(agent, "Type_I")
+        result_vi = protocol.compute_model_predictions(agent, "Type_VI")
+
+        assert result_i["mean_accuracy"] != result_vi["mean_accuracy"], (
+            f"Type_I and Type_VI produced same mean_accuracy: "
+            f"{result_i['mean_accuracy']}"
+        )
+
+    # --- Test 7: Missing structure fallback ---
+
+    def test_model_predictions_fallback_missing_structure(self):
+        """
+        A missing structure_name should not crash — should fall back to
+        Type_II and return valid predictions.
+        """
+        protocol = self._make_protocol()
+        agent = self._get_agent(protocol, "Exemplar")
+
+        result = protocol.compute_model_predictions(agent, "nonexistent_structure")
+        assert "mean_accuracy" in result
+        assert isinstance(result["mean_accuracy"], float)
+        assert 0.0 <= result["mean_accuracy"] <= 1.0

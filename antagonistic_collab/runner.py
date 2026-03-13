@@ -589,33 +589,32 @@ def run_execution(
     exp = approved[0]
     context = protocol._approved_experiment_context()
 
-    # Determine item count from the structure for item-level guidance
+    # Resolve structure name and condition for model predictions
     struct_name = exp.design_spec.get("structure_name", "")
-    struct = STRUCTURE_REGISTRY.get(struct_name)
-    n_items = len(struct["labels"]) if struct else 8
-    item_keys = ", ".join(f'"item_{i}"' for i in range(n_items))
+    condition = exp.design_spec.get("condition", "baseline")
 
     # Each agent registers predictions BEFORE seeing data
-    print("\n--- Agents register predictions ---")
+    # The system runs each agent's model automatically; the LLM provides
+    # reasoning and confidence only.
+    print("\n--- Agents register predictions (model-computed) ---")
     for agent in protocol.agent_configs:
         prompt = (
             f"PHASE: Pre-data Prediction Registration\n\n"
             f"{context}\n\n"
-            f"You MUST register a quantitative prediction for the approved "
-            f"experiment BEFORE seeing any data. This prediction will be "
-            f"scored against the actual results.\n\n"
-            f"IMPORTANT: Your predicted_pattern MUST include:\n"
-            f"  - 'mean_accuracy' (float 0–1): overall accuracy\n"
-            f"  - Item-level predictions: the experiment has {n_items} items "
-            f"with keys {item_keys}. Each value is accuracy (0–1) for "
-            f"that item.\n\n"
-            f"Item-level predictions are MORE diagnostic than mean_accuracy "
-            f"alone — they reveal where models actually disagree.\n\n"
+            f"The system will automatically run your model ({agent.model_class.name}) "
+            f"on the approved experiment structure to generate quantitative predictions. "
+            f"You do NOT need to write out item-level numbers.\n\n"
+            f"Your job is to provide:\n"
+            f"  1. 'reasoning': Explain WHY your model predicts the pattern it does "
+            f"for this structure and condition. What mechanisms drive the prediction?\n"
+            f"  2. 'confidence': high / medium / low — how confident are you that "
+            f"your model will fit this data well?\n"
+            f"  3. 'param_overrides' (optional): Non-default parameters you want "
+            f"to use (e.g., higher attention weight). If omitted, defaults are used.\n\n"
             f"Output a JSON block:\n"
-            f'{{"predicted_pattern": {{"mean_accuracy": 0.75, '
-            f'"item_0": 0.9, "item_1": 0.6, ...}}, '
+            f'{{"reasoning": "...", '
             f'"confidence": "high|medium|low", '
-            f'"reasoning": "..."}}'
+            f'"param_overrides": {{}}}}'
         )
 
         print(f"\n  {agent.name} predicts:")
@@ -623,7 +622,11 @@ def run_execution(
         print(response[:400] + "..." if len(response) > 400 else response)
 
         json_block = extract_json(response) or {}
-        predicted = json_block.get("predicted_pattern", {})
+        llm_reasoning = json_block.get("reasoning", "")
+        llm_confidence = json_block.get("confidence", "medium")
+
+        # Compute predictions by running the agent's actual model
+        predicted = protocol.compute_model_predictions(agent, struct_name, condition)
 
         protocol.state.register_prediction(
             experiment_id=exp.experiment_id,
@@ -633,11 +636,18 @@ def run_execution(
             predicted_pattern=predicted,
         )
 
+        print(
+            f"    Model-computed: mean_accuracy={predicted.get('mean_accuracy', 'N/A'):.3f}"
+        )
+
         messages.append(
             {
                 "agent": agent.name,
                 "phase": "EXECUTION_PREDICT",
                 "response": response,
+                "llm_reasoning": llm_reasoning,
+                "llm_confidence": llm_confidence,
+                "model_predicted": predicted,
                 "predicted": predicted,
             }
         )

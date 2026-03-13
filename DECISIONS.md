@@ -97,4 +97,10 @@ Tracks what was changed, why, what alternatives were considered, and what's stil
 
 **Decision:** Agents should call their actual models during the prediction phase. The runner should run `model.predict()` with the agent's stated params on the approved structure and use those outputs as the predicted pattern.
 
-**Status:** Next up.
+**Decision:** Added `compute_model_predictions()` to `DebateProtocol` — takes an agent config, structure name, and condition, runs the agent's model on the structure with condition overrides, returns per-item P(correct label) and mean_accuracy. Modified `run_execution()` so the LLM provides reasoning and confidence while the system computes predictions via `model.predict()`. RULEX uses seed=42 for determinism. Model name mapping: `model_class.name.split()[0]` → CONDITION_EFFECTS key.
+
+**Files changed:** `debate_protocol.py` (new method), `runner.py` (prediction loop + prompt), `tests/test_bugfixes.py` (7 new tests).
+
+**Result:** 89 tests pass. Predictions are now model-computed, not LLM-guessed. RMSE leaderboard will reflect model fit, not LLM calibration.
+
+**Status:** Done.
