@@ -9,8 +9,8 @@ Usage:
     export ANTHROPIC_API_KEY=sk-ant-...
     python -m antagonistic_collab.runner
 
-    # Princeton AI Sandbox
-    export AI_SANDBOX_KEY=...
+    # Princeton AI Sandbox (via Portkey gateway)
+    export AI_SANDBOX_KEY=<your Portkey API key>
     python -m antagonistic_collab.runner --backend princeton --model gpt-4o
 
 The runner walks through the 9-phase debate protocol. At each phase it:
@@ -864,7 +864,7 @@ def _create_client(backend: str = "anthropic"):
         backend: ``"anthropic"`` or ``"princeton"``.
 
     Returns:
-        An ``anthropic.Anthropic`` or ``openai.AzureOpenAI`` instance.
+        An ``anthropic.Anthropic`` or ``openai.OpenAI`` instance.
 
     Raises:
         SystemExit: if the required SDK is not installed or the env var is
@@ -879,10 +879,9 @@ def _create_client(backend: str = "anthropic"):
             print("Set AI_SANDBOX_KEY environment variable.")
             print("  export AI_SANDBOX_KEY=<your Princeton AI Sandbox key>")
             sys.exit(1)
-        return openai.AzureOpenAI(
+        return openai.OpenAI(
             api_key=api_key,
-            azure_endpoint="https://api-ai-sandbox.princeton.edu/",
-            api_version="2025-03-01-preview",
+            base_url="https://api.portkey.ai/v1",
         )
     else:
         if anthropic is None:

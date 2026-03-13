@@ -1313,10 +1313,10 @@ class TestOpenAIBackend:
         assert call_kwargs.kwargs.get("system") == "You are a test agent."
 
     def test_backend_arg_creates_openai_client(self):
-        """--backend princeton should produce an AzureOpenAI client.
+        """--backend princeton should produce an OpenAI client via Portkey gateway.
 
-        We mock the AzureOpenAI constructor to verify it gets called with
-        the right endpoint and api_version.
+        We mock the OpenAI constructor to verify it gets called with
+        the Portkey base_url and the sandbox API key.
         """
         from unittest.mock import MagicMock, patch as mock_patch
         from antagonistic_collab.runner import _create_client
@@ -1324,7 +1324,7 @@ class TestOpenAIBackend:
         fake_client = MagicMock()
         with mock_patch.dict(os.environ, {"AI_SANDBOX_KEY": "test-key-123"}):
             with mock_patch(
-                "antagonistic_collab.runner.openai.AzureOpenAI",
+                "antagonistic_collab.runner.openai.OpenAI",
                 return_value=fake_client,
             ) as mock_ctor:
                 client = _create_client(backend="princeton")
@@ -1332,7 +1332,7 @@ class TestOpenAIBackend:
         assert client is fake_client
         mock_ctor.assert_called_once()
         call_kwargs = mock_ctor.call_args.kwargs
-        assert "api-ai-sandbox.princeton.edu" in call_kwargs["azure_endpoint"]
+        assert "api.portkey.ai" in call_kwargs["base_url"]
         assert call_kwargs["api_key"] == "test-key-123"
 
     def test_backend_arg_creates_anthropic_client(self):
