@@ -106,15 +106,48 @@ Clustering_Agent beat Exemplar_Agent despite GCM being the ground truth. The rea
 
 **Implication:** There is a critical gap between "the model that generated the data" and "the agent that best predicts the data." The LLM's numerical intuition about its model is not the same as running the model. This means prediction accuracy is confounded by the LLM's calibration — a well-calibrated guesser can beat the theoretically correct model. The fix is to have agents actually call `model.predict()` with their stated parameters and use those outputs as predictions, removing the LLM's numerical guessing from the scoring loop entirely.
 
-### 2.2 Agents underuse the divergence ranking
+### 2.2 More cycles don't fix LLM-guessed predictions
+
+**Expected:** A 4-cycle run (vs 3) would give the true model's agent more opportunities to separate from competitors.
+
+**Actual:** 4-cycle run with GCM as ground truth:
+
+| Cycle | mean_accuracy |
+|-------|---------------|
+| 0 | 0.666 |
+| 1 | 0.667 |
+| 2 | 0.537 |
+| 3 | 0.806 |
+
+Final leaderboard comparison:
+
+| Agent | 3-cycle RMSE | 4-cycle RMSE |
+|-------|-------------|-------------|
+| Clustering_Agent | 0.1135 | 0.1626 |
+| Exemplar_Agent | 0.1483 | 0.1662 |
+| Rule_Agent | 0.2021 | 0.1829 |
+
+The gap between Clustering and Exemplar shrank from 0.035 to 0.004 — essentially a tie at 4 cycles. Rule_Agent is consistently worst in both runs, which is correct (RULEX should lose when GCM generates the data). But Exemplar_Agent never overtakes Clustering_Agent.
+
+**Implication:** Adding cycles produces diminishing returns when predictions are LLM-guessed. The noise floor is set by how well the LLM approximates each model's numerical behavior, not by the underlying model's fit to data. Conservative, closer-to-mean guesses will always compete with (or beat) the theoretically correct model's agent. More data can't overcome the fact that the scoring mechanism isn't measuring model fit — it's measuring LLM calibration. The fix must be structural: wire agents to call `model.predict()` so RMSE reflects actual model behavior.
+
+### 2.3 Rule_Agent separates correctly even with LLM guessing
+
+**Expected:** All three agents would be similarly confounded by LLM guessing noise.
+
+**Actual:** Rule_Agent consistently ranked worst across both runs (0.2021 at 3 cycles, 0.1829 at 4 cycles). The ordering Rule_Agent > Exemplar_Agent > Clustering_Agent held in both runs (worst to best RMSE).
+
+**Implication:** The system *partially* works even with LLM-guessed predictions. The wrong model (RULEX) does lose. The problem is specifically at the top of the leaderboard — the true model's agent can't separate from a close competitor (SUSTAIN) because the LLM's guesses are too similar. This suggests that model-calling will help most for distinguishing between models that make similar-but-not-identical predictions. The coarse signal (rule models are wrong for GCM-generated data) already comes through.
+
+### 2.4 Agents underuse the divergence ranking
 
 **Expected:** Agents would pick structures from the top of the divergence ranking (5-4 had the highest divergence at 0.556).
 
-**Actual:** No agent picked 5-4. Two out of three experiments used Type_VI, one used Type_II. Agents appeared to pick structures based on their narrative about what's theoretically interesting rather than by consulting the quantitative divergence ranking.
+**Actual:** Across both runs (7 total experiments), no agent ever picked 5-4. Agents overwhelmingly chose Type_VI and Type_II. They appeared to pick structures based on narrative familiarity rather than consulting the quantitative divergence ranking.
 
 **Implication:** Providing information is not the same as influencing behavior. The divergence ranking was in the prompt, but agents defaulted to structures they could argue about most fluently. Stronger nudging — e.g., requiring agents to justify why they didn't pick the highest-divergence structure, or defaulting to the top-ranked structure — may be needed.
 
-### 2.3 Conditions are being used but not strategically
+### 2.5 Conditions are being used but not strategically
 
 **Expected:** Agents would use conditions (low_attention, high_noise, etc.) to create maximally diagnostic experiments.
 
