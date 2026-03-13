@@ -141,6 +141,9 @@ Human-readable summary of each Claude Code session on this project.
 - LLM reasoning is still valuable for interpretation; the fix was separating semantics (LLM) from numerics (model)
 - 5-4 structure still never selected despite highest divergence ranking
 - Milestone M3 core hypothesis confirmed; ready for multi-model validation (SUSTAIN, RULEX as ground truth)
+- Reviewed 5 findings from Codex review: fixed P1 param_overrides bug, queued remaining 4 (P1–P3)
+- Created FEATURES.md cataloging 23 scientifically meaningful design choices across 6 categories
+- Discussed implications of agents ignoring divergence ranking; queued concrete prediction display feature
 
 ---
 
