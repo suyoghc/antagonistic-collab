@@ -1,6 +1,6 @@
 # Tasks
 
-## Current Milestone: M2 — Make data meaningful
+## Current Milestone: M3 — Validate convergence
 
 ### Blocking
 - [x] **Fix synthetic data generator** — experiments now produce different data depending on category structure and conditions (D6 → D7)
@@ -14,9 +14,10 @@
 - [x] **Agents call their models for predictions** — run `model.predict()` during execution phase instead of LLM-guessed numbers (D8)
 
 ### Up Next (M3)
-- [ ] Validate convergence: run 3+ cycle debates where the true model's agent should accumulate best RMSE over cycles
+- [x] Validate convergence: run 3-cycle debate where the true model's agent accumulates best RMSE — **confirmed** (Exemplar_Agent RMSE=0.0776, 3.6x gap)
 - [ ] Assess whether critique quality degrades over cycles (circular "my model can also predict that" pattern)
 - [ ] Run with each model as ground truth (GCM, SUSTAIN, RULEX) and compare
+- [ ] Run longer debates (5+ cycles) to check whether RMSE gap widens monotonically
 
 ### Queued (from Codex review, 2026-03-13)
 - [ ] **[P1] Implement Phase 5 (Design Revision)** — currently a placeholder (runner.py ~line 862); critiques never lead to revised proposals

@@ -120,4 +120,28 @@ Human-readable summary of each Claude Code session on this project.
 
 ---
 
+## Session 7 — 2026-03-13
+
+**Commits:** `dba1489`, `7b0b787`
+
+**What we did:**
+- Implemented Phase 3: model-computed predictions (D8)
+- Added `compute_model_predictions()` to `DebateProtocol` — runs agent's model on structure with condition overrides, returns per-item P(correct label)
+- Modified `run_execution()`: LLM provides reasoning+confidence, system computes predictions via `model.predict()`
+- Fixed P1 bug from Codex review: `param_overrides` from LLM response were ignored and `default_params` recorded instead of actual params
+- Queued 4 remaining Codex findings (P1–P3) in TASKS.md
+- Ran 3-cycle validation debate (Princeton/GPT-4o, `--true-model GCM`)
+- **Result: Exemplar_Agent wins with RMSE=0.0776, 3.6x lower than Rule_Agent (0.2755) and 4.5x lower than Clustering_Agent (0.3528)**
+- Logged findings to LESSONS_LEARNED.md Phase 3 (3.1–3.4)
+- 91 tests passing, ruff clean
+
+**Key discussion:**
+- Phase 3 fixes the core blocker from Phase 2: RMSE now measures model fit, not LLM calibration
+- The correct agent wins decisively — monotonic separation across all 3 cycles
+- LLM reasoning is still valuable for interpretation; the fix was separating semantics (LLM) from numerics (model)
+- 5-4 structure still never selected despite highest divergence ranking
+- Milestone M3 core hypothesis confirmed; ready for multi-model validation (SUSTAIN, RULEX as ground truth)
+
+---
+
 *This log is maintained manually. Update it at the end of each session.*

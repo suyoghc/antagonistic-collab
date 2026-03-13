@@ -39,12 +39,13 @@ models/
 - Add Princeton backend
 - Add reporting (markdown + summary)
 
-### M2: Make data meaningful (CURRENT)
+### M2: Make data meaningful (DONE)
 - Fix synthetic data generator to produce experiment-sensitive results
 - Constrain agent proposals to executable structures
 - Expand scoring beyond mean_accuracy
+- Agents call their models for predictions (not LLM-guessed)
 
-### M3: Validate convergence
+### M3: Validate convergence (CURRENT)
 - Run debates where true model's agent should win
 - Measure whether RMSE gap grows over cycles
 - Check whether critique quality improves or degrades

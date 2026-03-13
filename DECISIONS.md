@@ -101,6 +101,6 @@ Tracks what was changed, why, what alternatives were considered, and what's stil
 
 **Files changed:** `debate_protocol.py` (new method), `runner.py` (prediction loop + prompt), `tests/test_bugfixes.py` (7 new tests).
 
-**Result:** 89 tests pass. Predictions are now model-computed, not LLM-guessed. RMSE leaderboard will reflect model fit, not LLM calibration.
+**Result:** 91 tests pass (including param_overrides fix from Codex review). Predictions are now model-computed, not LLM-guessed. Validated with 3-cycle run: Exemplar_Agent wins with RMSE=0.0776, 3.6x lower than nearest competitor (Rule_Agent=0.2755, Clustering_Agent=0.3528). See LESSONS_LEARNED.md 3.1–3.4.
 
 **Status:** Done.

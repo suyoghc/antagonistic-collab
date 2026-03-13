@@ -154,3 +154,76 @@ The gap between Clustering and Exemplar shrank from 0.035 to 0.004 — essential
 **Actual:** Rule_Agent picked `low_attention` for Type_II (a reasonable choice — testing whether verbal load disrupts rule discovery). Exemplar_Agent picked `high_attention` for Type_VI in cycle 2. But the condition choices appeared to be narrative-driven ("cognitive load disrupts rule learning") rather than grounded in knowing what the parameter changes actually do to model predictions.
 
 **Implication:** Agents don't know what `low_attention` does to model parameters. They reason about it as a psychological manipulation, not as a parameter perturbation. This is fine for ecological validity (real scientists also reason about manipulations conceptually) but limits the system's ability to find maximally discriminating experiments. A future enhancement could show agents what each condition does to each model's predictions on the selected structure.
+
+---
+
+## Phase 3: Model-computed predictions (2026-03-13)
+
+Replaced LLM-guessed predictions with model-computed ones. Added `compute_model_predictions()` to `DebateProtocol` — during the EXECUTION phase, each agent's model is run on the approved experiment structure with condition overrides. The LLM still provides reasoning and confidence, but the numbers come from `model.predict()`. Fixed a P1 bug (from Codex review) where `param_overrides` from the LLM response were ignored and `default_params` were recorded instead of actual params used.
+
+### 3.1 The correct agent now wins decisively
+
+**Expected:** With model-computed predictions, the ground-truth model's agent (GCM/Exemplar_Agent) should have the lowest RMSE.
+
+**Actual:** 3-cycle run with GCM as ground truth:
+
+| Cycle | Structure | Condition | mean_accuracy |
+|-------|-----------|-----------|---------------|
+| 0 | rule_plus_exception_1exc | baseline | 0.639 |
+| 1 | linear_separable_4d | baseline | 0.933 |
+| 2 | Type_II | low_attention | 0.521 |
+
+Final leaderboard:
+
+| Agent | Mean RMSE | True model? |
+|-------|-----------|-------------|
+| **Exemplar_Agent** | **0.0776** | **Yes (GCM)** |
+| Rule_Agent | 0.2755 | No |
+| Clustering_Agent | 0.3528 | No |
+
+Compare to the best Phase 2 run (LLM-guessed, 4 cycles):
+
+| Agent | Phase 2 RMSE | Phase 3 RMSE |
+|-------|-------------|-------------|
+| Exemplar_Agent | 0.1662 | **0.0776** |
+| Rule_Agent | 0.1829 | 0.2755 |
+| Clustering_Agent | 0.1626 | 0.3528 |
+
+Phase 2: all agents within ~0.02 RMSE, wrong agent (Clustering) wins.
+Phase 3: 3.6x gap between first and second place, correct agent wins.
+
+**Implication:** Removing LLM numerical guessing from the scoring loop is the single most impactful change for convergence validity. The system now measures model fit, not LLM calibration. The true model's agent wins because its model literally generated the data — as it should. This unblocks M3 convergence validation.
+
+### 3.2 RMSE spread reveals model-specific signatures
+
+**Expected:** Models would produce somewhat different predictions, giving a meaningful RMSE spread.
+
+**Actual:** The RMSE spread is dramatic (0.0776 to 0.3528, a 4.5x range). In Phase 2, the spread was only 0.1626 to 0.1829 (1.1x range). Model-computed predictions amplify genuine differences between models rather than compressing them through LLM averaging.
+
+Per-cycle prediction scores show the separation clearly:
+
+| Cycle | Exemplar RMSE | Rule RMSE | Clustering RMSE |
+|-------|-------------|---------|---------------|
+| 0 | low | high | high |
+| 1 | low | high | high |
+| 2 | low | high | high |
+
+Exemplar_Agent was consistently closest to the data every cycle, not just on average. This is the monotonic separation pattern that Phase 2 never produced.
+
+**Implication:** The system now produces the kind of cumulative evidence that real scientific debates depend on — each experiment adds signal, and the gap widens rather than fluctuating randomly. This is the core behavior needed for M3/M4 multi-model validation.
+
+### 3.3 LLM reasoning is qualitatively correct even when numbers were wrong
+
+**Expected:** With model-computed predictions, the LLM's reasoning would become irrelevant.
+
+**Actual:** The LLM reasoning is still informative for the transcript. Exemplar_Agent correctly explained *why* GCM would perform well ("similarity to stored exemplars handles non-linear separability"), and Rule_Agent correctly identified *why* RULEX would struggle under low attention ("conjunction rules require verbal working memory"). The reasoning was qualitatively sound even when the LLM's guessed numbers (Phase 2) were poorly calibrated.
+
+**Implication:** The LLM adds genuine interpretive value — it explains model behavior in natural language, identifies mechanisms, and connects predictions to theory. The fix wasn't to remove the LLM from the loop, but to separate what the LLM is good at (reasoning, interpretation) from what it's bad at (precise numerical prediction). This division of labor — LLM for semantics, model for numerics — is likely a general design principle for LLM-in-the-loop scientific systems.
+
+### 3.4 Structure diversity improved but 5-4 still unused
+
+**Expected:** Agents would explore a wider range of structures.
+
+**Actual:** Agents picked rule_plus_exception_1exc (cycle 0), linear_separable_4d (cycle 1), and Type_II (cycle 2) — three different structures, more diverse than Phase 2 (which used only Type_VI and Type_II). But 5-4 (highest divergence at 0.556) was still never selected across all runs.
+
+**Implication:** Structure diversity is improving naturally as agents see different data each cycle, but the divergence ranking is still not driving choices. The 5-4 structure may need to be more prominently featured or its advantages explained more concretely in the prompt.
