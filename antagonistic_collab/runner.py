@@ -764,8 +764,10 @@ def run_cycle(
     true_model: str = "GCM",
     critique_rounds: int = 2,
     output_dir: str = ".",
+    metadata: Optional[dict] = None,
 ):
     """Run one full debate cycle through all 9 phases."""
+    cycle_start = len(transcript)
 
     print(f"\n{'#' * 70}")
     print(f"# CYCLE {protocol.state.cycle}")
@@ -813,7 +815,15 @@ def run_cycle(
     result = run_audit(protocol, client, transcript)
 
     # Save transcript BEFORE advancing (advance_phase increments the cycle counter)
-    save_transcript(transcript, protocol, output_dir=output_dir)
+    cycle_messages = transcript[cycle_start:]
+    save_transcript(cycle_messages, protocol, output_dir=output_dir)
+    save_cycle_markdown(
+        cycle_messages,
+        protocol,
+        cycle_num=protocol.state.cycle,
+        metadata=metadata or {},
+        output_dir=output_dir,
+    )
     protocol.advance_phase(result)
 
 
@@ -834,6 +844,279 @@ def save_transcript(transcript: list, protocol: DebateProtocol, output_dir: str 
     )
     protocol.state.to_json(state_path)
     print(f"Epistemic state saved to {state_path}")
+
+
+def save_cycle_markdown(
+    cycle_messages: list,
+    protocol: DebateProtocol,
+    cycle_num: int,
+    metadata: dict,
+    output_dir: str = ".",
+):
+    """Write a human-readable Markdown transcript for a single cycle."""
+    os.makedirs(output_dir, exist_ok=True)
+
+    true_model = metadata.get("true_model", "unknown")
+    llm_model = metadata.get("llm_model", "unknown")
+    backend = metadata.get("backend", "unknown")
+
+    lines = [
+        f"# Cycle {cycle_num} Transcript",
+        "",
+        f"**True model**: {true_model} | **LLM**: {llm_model} | **Backend**: {backend}",
+        "",
+    ]
+
+    # Map internal phase names to display names
+    phase_display = {
+        "COMMITMENT": "Commitment",
+        "DIVERGENCE_MAPPING": "Divergence Mapping",
+        "EXPERIMENT_PROPOSAL": "Experiment Proposal",
+        "ADVERSARIAL_CRITIQUE": "Adversarial Critique",
+        "HUMAN_ARBITRATION": "Human Arbitration",
+        "EXECUTION_PREDICT": "Execution",
+        "EXECUTION_DATA": "Execution",
+        "INTERPRETATION": "Interpretation",
+        "AUDIT": "Audit",
+    }
+
+    current_phase = None
+    current_round = None
+
+    for msg in cycle_messages:
+        phase = msg.get("phase", "")
+        display_phase = phase_display.get(phase, phase)
+        agent = msg.get("agent", "")
+
+        # Emit phase header on change (merge EXECUTION_PREDICT and EXECUTION_DATA)
+        if display_phase != current_phase:
+            current_phase = display_phase
+            current_round = None
+            lines.append(f"## Phase: {current_phase}")
+            lines.append("")
+
+        # Adversarial critique: show round sub-headers
+        if phase == "ADVERSARIAL_CRITIQUE":
+            round_num = msg.get("round")
+            if round_num and round_num != current_round:
+                current_round = round_num
+                lines.append(f"### Round {round_num}")
+                lines.append("")
+            lines.append(f"#### {agent} critiques:")
+            lines.append(msg.get("response", ""))
+            lines.append("")
+            continue
+
+        # Human arbitration
+        if phase == "HUMAN_ARBITRATION":
+            choice = msg.get("input", "")
+            lines.append(f"Moderator choice: {choice}")
+            if msg.get("approved"):
+                lines.append(f"Approved experiment: {msg['approved']}")
+            lines.append("")
+            continue
+
+        # Execution predictions sub-section
+        if phase == "EXECUTION_PREDICT":
+            if not any("### Predictions" in line for line in lines):
+                lines.append("### Predictions")
+                lines.append("")
+            lines.append(f"#### {agent}")
+            predicted = msg.get("predicted", {})
+            if predicted:
+                lines.append(f"Predicted: {predicted}")
+            lines.append(msg.get("response", ""))
+            lines.append("")
+            continue
+
+        # Execution data sub-section
+        if phase == "EXECUTION_DATA":
+            lines.append("### Results")
+            data_summary = msg.get("data_summary", {})
+            for k, v in data_summary.items():
+                if isinstance(v, (int, float)):
+                    lines.append(
+                        f"{k}: {v:.3f}" if isinstance(v, float) else f"{k}: {v}"
+                    )
+            lines.append("")
+            continue
+
+        # Default: agent header + response
+        lines.append(f"### {agent}")
+
+        # Include parsed JSON as a code block if present
+        parsed = msg.get("parsed_json")
+        if parsed:
+            lines.append("")
+            lines.append("```json")
+            lines.append(json.dumps(parsed, indent=2, default=str))
+            lines.append("```")
+            lines.append("")
+
+        lines.append(msg.get("response", ""))
+        lines.append("")
+
+    path = os.path.join(output_dir, f"debate_cycle_{cycle_num}.md")
+    with open(path, "w") as f:
+        f.write("\n".join(lines))
+    print(f"Markdown transcript saved to {path}")
+
+
+def save_summary_report(
+    transcript: list,
+    protocol: DebateProtocol,
+    n_cycles: int,
+    metadata: dict,
+    output_dir: str = ".",
+):
+    """Write an end-of-run summary.md with leaderboard, trajectories, and per-cycle highlights."""
+    os.makedirs(output_dir, exist_ok=True)
+
+    true_model = metadata.get("true_model", "unknown")
+    llm_model = metadata.get("llm_model", "unknown")
+    backend = metadata.get("backend", "unknown")
+    agent_names = ", ".join(a.name for a in protocol.agent_configs)
+
+    lines = [
+        "# Debate Summary",
+        "",
+        f"**Domain**: {protocol.state.domain}",
+        f"**True model**: {true_model}",
+        f"**LLM**: {llm_model} ({backend})",
+        f"**Cycles**: {n_cycles}",
+        f"**Agents**: {agent_names}",
+        "",
+    ]
+
+    # Prediction leaderboard
+    lines.append("## Prediction Leaderboard")
+    lines.append("")
+    board = protocol.state.prediction_leaderboard()
+    if board:
+        lines.append("| Agent | Mean RMSE | N Predictions |")
+        lines.append("|-------|-----------|---------------|")
+        for agent, stats in sorted(
+            board.items(), key=lambda x: x[1].get("mean_score", 999)
+        ):
+            mean = stats.get("mean_score")
+            mean_str = (
+                f"{mean:.4f}"
+                if isinstance(mean, (int, float)) and not math.isnan(mean)
+                else "N/A"
+            )
+            lines.append(f"| {agent} | {mean_str} | {stats['n_predictions']} |")
+    else:
+        lines.append("No predictions recorded.")
+    lines.append("")
+
+    # Theory trajectories
+    lines.append("## Theory Trajectories")
+    lines.append("")
+    lines.append(
+        "| Theory | Status | Revisions | Progressive | Degenerative | Trajectory |"
+    )
+    lines.append(
+        "|--------|--------|-----------|-------------|--------------|------------|"
+    )
+    for t in protocol.state.active_theories():
+        try:
+            traj = protocol.state.theory_trajectory(t.name)
+            lines.append(
+                f"| {t.name} | {t.status} | {traj['n_revisions']} | "
+                f"{traj['n_progressive']} | {traj['n_degenerative']} | "
+                f"{traj['trajectory']} |"
+            )
+        except (ValueError, KeyError):
+            lines.append(f"| {t.name} | {t.status} | - | - | - | - |")
+    lines.append("")
+
+    # Per-cycle summary
+    lines.append("## Per-Cycle Summary")
+    lines.append("")
+    for cycle in range(n_cycles):
+        lines.append(f"### Cycle {cycle}")
+        # Find experiments for this cycle
+        cycle_exps = [e for e in protocol.state.experiments if e.cycle == cycle]
+        for exp in cycle_exps:
+            if exp.status in ("approved", "executed"):
+                lines.append(
+                    f"- **Experiment approved**: {exp.title} (proposed by {exp.proposed_by})"
+                )
+                if exp.data:
+                    mean_acc = exp.data.get("mean_accuracy")
+                    if isinstance(mean_acc, (int, float)):
+                        lines.append(f"- **Mean accuracy**: {mean_acc:.3f}")
+        # Theory revisions this cycle
+        for t in protocol.state.active_theories():
+            for rev in t.revision_log:
+                triggered = rev.get("triggered_by", "")
+                if any(triggered == exp.experiment_id for exp in cycle_exps):
+                    rev_type = rev.get("revision_type", "unknown")
+                    lines.append(
+                        f"- **Theory revision**: {t.name} revised ({rev_type})"
+                    )
+        lines.append("")
+
+    # Experiments conducted
+    executed_exps = [e for e in protocol.state.experiments if e.status == "executed"]
+    if executed_exps:
+        lines.append("## Experiments Conducted")
+        lines.append("")
+        for exp in executed_exps:
+            lines.append(f"### {exp.title} (Cycle {exp.cycle})")
+            lines.append(f"- Proposed by: {exp.proposed_by}")
+            lines.append(f"- Critiques: {len(exp.critique_log)}")
+            if exp.data:
+                for k, v in exp.data.items():
+                    if isinstance(v, (int, float)):
+                        lines.append(
+                            f"- {k}: {v:.3f}" if isinstance(v, float) else f"- {k}: {v}"
+                        )
+            lines.append("")
+
+    path = os.path.join(output_dir, "summary.md")
+    with open(path, "w") as f:
+        f.write("\n".join(lines))
+    print(f"Summary report saved to {path}")
+
+
+def auto_output_dir(
+    true_model: str,
+    llm_model: str,
+    agent_configs: list,
+    base_dir: str = ".",
+) -> str:
+    """Generate an auto-incremented output directory path.
+
+    Format: {base_dir}/runs/True_{true_model}_LLM_{llm_model}_COLLAB_{agents}_{NN}/
+    """
+    # Build agent shortnames: "Exemplar_Agent" -> "Exemplar", etc.
+    short_names = []
+    for a in agent_configs:
+        # Take everything before "_Agent" if that suffix exists
+        name = a.name
+        if name.endswith("_Agent"):
+            name = name[: -len("_Agent")]
+        short_names.append(name)
+    agents_str = "-".join(short_names)
+
+    prefix = f"True_{true_model}_LLM_{llm_model}_COLLAB_{agents_str}"
+    runs_dir = os.path.join(base_dir, "runs")
+    os.makedirs(runs_dir, exist_ok=True)
+
+    # Find next run number
+    existing = []
+    if os.path.isdir(runs_dir):
+        for d in os.listdir(runs_dir):
+            if d.startswith(prefix + "_"):
+                suffix = d[len(prefix) + 1 :]
+                try:
+                    existing.append(int(suffix))
+                except ValueError:
+                    pass
+    next_num = max(existing, default=0) + 1
+    dir_name = f"{prefix}_{next_num:02d}"
+    return os.path.join(runs_dir, dir_name)
 
 
 def _serialize_div_map(div_map: dict) -> dict:
@@ -966,7 +1249,23 @@ def main():
         global _BATCH_MODE
         _BATCH_MODE = True
 
-    output_dir = args.output_dir
+    # Auto-generate output directory if not explicitly set
+    if args.output_dir == ".":
+        output_dir = auto_output_dir(
+            true_model=args.true_model,
+            llm_model=args.model,
+            agent_configs=agents,
+        )
+    else:
+        output_dir = args.output_dir
+    os.makedirs(output_dir, exist_ok=True)
+    print(f"Output directory: {output_dir}\n")
+
+    metadata = {
+        "true_model": args.true_model,
+        "llm_model": args.model,
+        "backend": args.backend,
+    }
 
     for cycle in range(args.cycles):
         run_cycle(
@@ -975,6 +1274,17 @@ def main():
             transcript,
             true_model=args.true_model,
             critique_rounds=args.critique_rounds,
+            output_dir=output_dir,
+            metadata=metadata,
+        )
+
+    # End-of-run summary report
+    if args.cycles > 0:
+        save_summary_report(
+            transcript,
+            protocol,
+            n_cycles=args.cycles,
+            metadata=metadata,
             output_dir=output_dir,
         )
 

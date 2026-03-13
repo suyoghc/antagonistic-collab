@@ -24,6 +24,9 @@ from antagonistic_collab.runner import (
     extract_all_json,
     run_human_arbitration,
     save_transcript,
+    save_cycle_markdown,
+    save_summary_report,
+    auto_output_dir,
 )
 from antagonistic_collab.epistemic_state import (
     EpistemicState,
@@ -1362,3 +1365,255 @@ class TestOpenAIBackend:
             with mock_patch.dict(os.environ, env, clear=True):
                 with pytest.raises(SystemExit):
                     _create_client(backend="princeton")
+
+
+# =========================================================================
+# Markdown reports and per-cycle transcript slicing (runner.py)
+# =========================================================================
+
+
+class TestMarkdownReports:
+    """
+    Tests for per-cycle Markdown transcripts, end-of-run summary reports,
+    and the fix for cumulative transcript saving.
+    """
+
+    def _make_protocol_with_data(self):
+        """Helper: create a protocol with theories, an experiment, and predictions."""
+        state = EpistemicState(domain="Human Categorization")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        # Register theories
+        for agent in agents:
+            state.register_theory(
+                TheoryCommitment(
+                    name=agent.theory_name,
+                    agent_name=agent.name,
+                    core_claims=agent.model_class.core_claims,
+                    model_name=agent.model_class.name,
+                    model_params=agent.default_params,
+                )
+            )
+
+        # Propose and approve an experiment
+        exp = state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Type II vs Type IV",
+            design_spec={"design": "between"},
+            rationale="Test exemplar advantage",
+        )
+        state.approve_experiment(exp.experiment_id)
+
+        # Register predictions
+        for agent in agents:
+            state.register_prediction(
+                experiment_id=exp.experiment_id,
+                agent_name=agent.name,
+                model_name=agent.model_class.name,
+                model_params=agent.default_params,
+                predicted_pattern={"mean_accuracy": 0.75},
+            )
+
+        # Record data and score
+        state.record_data(exp.experiment_id, {"mean_accuracy": 0.55})
+        state.score_predictions(exp.experiment_id, {"mean_accuracy": 0.55})
+
+        # Revise one theory (progressive)
+        state.revise_theory(
+            "Clustering Theory (SUSTAIN)",
+            description="Adjusted learning rate after data",
+            triggered_by_experiment=exp.experiment_id,
+            new_predictions=["SUSTAIN predicts faster learning on Type IV"],
+        )
+
+        return protocol
+
+    def test_per_cycle_transcript_not_cumulative(self):
+        """
+        Bug: save_transcript() was called with the full cumulative transcript
+        list, so cycle 1's JSON contained cycle 0's messages too.
+
+        Fix: pass only transcript[cycle_start:] to save_transcript().
+
+        Verify: save two cycle slices, each JSON only has its own messages.
+        """
+        state = EpistemicState(domain="Test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        # Simulate a cumulative transcript with messages from two cycles
+        transcript = [
+            {"agent": "A", "phase": "COMMITMENT", "response": "cycle 0 msg 1"},
+            {"agent": "B", "phase": "COMMITMENT", "response": "cycle 0 msg 2"},
+            {"agent": "A", "phase": "INTERPRETATION", "response": "cycle 1 msg 1"},
+            {"agent": "B", "phase": "INTERPRETATION", "response": "cycle 1 msg 2"},
+        ]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Save cycle 0 (first 2 messages)
+            protocol.state.cycle = 0
+            save_transcript(transcript[:2], protocol, output_dir=tmpdir)
+
+            # Save cycle 1 (last 2 messages)
+            protocol.state.cycle = 1
+            save_transcript(transcript[2:], protocol, output_dir=tmpdir)
+
+            # Verify cycle 0 JSON only has 2 messages
+            with open(os.path.join(tmpdir, "debate_cycle_0.json")) as f:
+                c0 = json.load(f)
+            assert len(c0["transcript"]) == 2
+            assert c0["transcript"][0]["response"] == "cycle 0 msg 1"
+
+            # Verify cycle 1 JSON only has 2 messages
+            with open(os.path.join(tmpdir, "debate_cycle_1.json")) as f:
+                c1 = json.load(f)
+            assert len(c1["transcript"]) == 2
+            assert c1["transcript"][0]["response"] == "cycle 1 msg 1"
+
+    def test_save_cycle_markdown_creates_file(self):
+        """
+        save_cycle_markdown() should create a .md file containing phase
+        headers and agent response text from the cycle's transcript.
+        """
+        protocol = self._make_protocol_with_data()
+        cycle_messages = [
+            {
+                "agent": "Exemplar_Agent",
+                "phase": "COMMITMENT",
+                "response": "I commit to GCM.",
+            },
+            {
+                "agent": "Rule_Agent",
+                "phase": "COMMITMENT",
+                "response": "I commit to RULEX.",
+            },
+            {
+                "agent": "Exemplar_Agent",
+                "phase": "DIVERGENCE_MAPPING",
+                "response": "Divergence seen.",
+            },
+            {
+                "agent": "Exemplar_Agent",
+                "phase": "EXPERIMENT_PROPOSAL",
+                "response": "Propose exp.",
+                "parsed_json": {"title": "Test exp", "design": "between"},
+            },
+            {
+                "agent": "Rule_Agent",
+                "phase": "ADVERSARIAL_CRITIQUE",
+                "round": 1,
+                "response": "I critique this.",
+            },
+            {"agent": "MODERATOR", "phase": "HUMAN_ARBITRATION", "input": "approve 0"},
+            {
+                "agent": "Exemplar_Agent",
+                "phase": "EXECUTION_PREDICT",
+                "response": "I predict 0.8",
+                "predicted": {"mean_accuracy": 0.8},
+            },
+            {
+                "agent": "SYSTEM",
+                "phase": "EXECUTION_DATA",
+                "data_summary": {"mean_accuracy": 0.55},
+            },
+            {
+                "agent": "Exemplar_Agent",
+                "phase": "INTERPRETATION",
+                "response": "Data supports GCM.",
+                "parsed_json": {"revision": False},
+            },
+            {"agent": "AUDITOR", "phase": "AUDIT", "response": "Cycle summary here."},
+        ]
+
+        metadata = {"true_model": "GCM", "llm_model": "gpt-4o", "backend": "princeton"}
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            save_cycle_markdown(
+                cycle_messages,
+                protocol,
+                cycle_num=0,
+                metadata=metadata,
+                output_dir=tmpdir,
+            )
+            md_path = os.path.join(tmpdir, "debate_cycle_0.md")
+            assert os.path.exists(md_path)
+
+            content = open(md_path).read()
+            # Check structure
+            assert "# Cycle 0 Transcript" in content
+            assert "GCM" in content
+            assert "gpt-4o" in content
+            assert "## Phase: Commitment" in content
+            assert "## Phase: Divergence Mapping" in content
+            assert "## Phase: Experiment Proposal" in content
+            assert "## Phase: Adversarial Critique" in content
+            assert "## Phase: Human Arbitration" in content
+            assert "## Phase: Execution" in content
+            assert "## Phase: Interpretation" in content
+            assert "## Phase: Audit" in content
+            assert "Exemplar_Agent" in content
+            assert "I commit to GCM." in content
+
+    def test_save_summary_report_creates_file(self):
+        """
+        save_summary_report() should create summary.md with leaderboard
+        and theory trajectory tables.
+        """
+        protocol = self._make_protocol_with_data()
+        transcript = [
+            {"agent": "Exemplar_Agent", "phase": "COMMITMENT", "response": "committed"},
+        ]
+        metadata = {"true_model": "GCM", "llm_model": "gpt-4o", "backend": "princeton"}
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            save_summary_report(
+                transcript,
+                protocol,
+                n_cycles=1,
+                metadata=metadata,
+                output_dir=tmpdir,
+            )
+            md_path = os.path.join(tmpdir, "summary.md")
+            assert os.path.exists(md_path)
+
+            content = open(md_path).read()
+            assert "# Debate Summary" in content
+            assert "GCM" in content
+            assert "gpt-4o" in content
+            assert "## Prediction Leaderboard" in content
+            assert "Mean RMSE" in content
+            assert "## Theory Trajectories" in content
+            assert "Trajectory" in content
+            # Should have at least one agent row
+            assert "Exemplar_Agent" in content
+
+    def test_auto_output_dir_naming(self):
+        """
+        auto_output_dir() should produce a directory name matching:
+        runs/True_{true_model}_LLM_{llm}_COLLAB_{agents}_{run_number}/
+        """
+        agents = default_agent_configs()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = auto_output_dir(
+                true_model="GCM",
+                llm_model="gpt-4o",
+                agent_configs=agents,
+                base_dir=tmpdir,
+            )
+            # Should contain the key components
+            assert "True_GCM" in result
+            assert "LLM_gpt-4o" in result
+            assert "COLLAB_Exemplar-Rule-Clustering" in result
+            assert result.endswith("_01")
+
+            # Create the first dir, then call again — should increment
+            os.makedirs(result)
+            result2 = auto_output_dir(
+                true_model="GCM",
+                llm_model="gpt-4o",
+                agent_configs=agents,
+                base_dir=tmpdir,
+            )
+            assert result2.endswith("_02")
