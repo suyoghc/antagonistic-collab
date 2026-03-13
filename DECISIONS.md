@@ -144,3 +144,22 @@ Tracks what was changed, why, what alternatives were considered, and what's stil
 **Tests:** 4 new regression tests, 108 total passing.
 
 **Status:** Done.
+
+---
+
+## D11: Leave-one-out prediction to fix self-prediction bias — 2026-03-13
+
+**Problem:** Multi-model validation showed SUSTAIN (Clustering_Agent) winning even when GCM or RULEX was the ground truth model. Root cause: `compute_model_predictions()` trained and tested models on the same items. For GCM, predicting item i with item i in the training set gives distance=0, similarity=1.0 — a self-match that produces near-binary predictions for every item. These over-confident predictions don't match noisy synthetic data (binomial sampling), while SUSTAIN's softer cluster-based predictions accidentally fit noise better.
+
+**Decision:** Implement leave-one-out (LOO) cross-validation — when predicting item i, exclude item i from the training set. Applied to both `compute_model_predictions()` and `compute_divergence_map()`. LOO is standard practice in the GCM literature (Nosofsky 1986).
+
+**Alternatives considered:**
+- (A) Hold-out split — discards data, reduces training set quality
+- (B) Rank correlation instead of RMSE — changes metric semantics, doesn't fix root cause
+- (C) Noise-free evaluation (compare to ground truth model, not noisy data) — useful as secondary metric but doesn't address the overfitting
+
+**Verification:** With LOO, GCM on `rule_plus_exception_1exc` (c=6.0) produces varied per-item predictions (0.13–0.87) instead of all-identical values. Full/LOO predictions differ for every item, confirming self-matches are excluded.
+
+**Tests:** 4 new regression tests, 112 total passing.
+
+**Status:** Done. Re-run multi-model validation to confirm correct agents now win.

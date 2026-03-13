@@ -494,16 +494,20 @@ class DebateProtocol:
             struct_results = {}
             for agent_config in self.agent_configs:
                 model = agent_config.model_class
-                # Get predictions for each item
+                # Get predictions for each item (leave-one-out)
+                stimuli_arr = np.asarray(struct["stimuli"])
+                labels_arr = np.asarray(struct["labels"])
                 item_probs = []
-                for item, label in zip(struct["stimuli"], struct["labels"]):
+                for idx, (item, label) in enumerate(
+                    zip(struct["stimuli"], struct["labels"])
+                ):
                     call_params = {**agent_config.default_params}
                     # Deterministic seed for stochastic models (e.g. RULEX)
                     if isinstance(model, RULEX):
                         call_params.setdefault("seed", 42)
-                    pred = model.predict(
-                        item, struct["stimuli"], struct["labels"], **call_params
-                    )
+                    loo_stimuli = np.delete(stimuli_arr, idx, axis=0)
+                    loo_labels = np.delete(labels_arr, idx)
+                    pred = model.predict(item, loo_stimuli, loo_labels, **call_params)
                     item_probs.append(pred["probabilities"].get(0, 0.5))
 
                 # Compute accuracy (proportion of items correctly classified)
@@ -592,10 +596,15 @@ class DebateProtocol:
         if isinstance(model, RULEX):
             params.setdefault("seed", 42)
 
-        # Get per-item P(correct label)
+        # Get per-item P(correct label) using leave-one-out:
+        # When predicting item i, exclude it from the training set.
+        # This prevents self-prediction bias (e.g., GCM always matching
+        # item i to itself with distance=0, similarity=1.0).
         item_accuracies = {}
         for i, (stim, label) in enumerate(zip(stimuli, labels)):
-            pred = model.predict(stim, stimuli, labels, **params)
+            loo_stimuli = np.delete(stimuli, i, axis=0)
+            loo_labels = np.delete(labels, i)
+            pred = model.predict(stim, loo_stimuli, loo_labels, **params)
             p_correct = pred["probabilities"].get(int(label), 0.5)
             item_accuracies[f"item_{i}"] = float(p_correct)
 
