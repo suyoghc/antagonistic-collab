@@ -108,10 +108,15 @@ Human-readable summary of each Claude Code session on this project.
 - Updated prediction prompt with item-level guidance
 - Enhanced `_divergence_context()` with ranked structure list
 - 9 new TDD regression tests, 82 total passing, ruff clean
+- Ran 3-cycle validation debate (Princeton/GPT-4o): data now varies (0.666, 0.473, 0.651 across cycles)
+- Discovered next blocker: Clustering_Agent beats Exemplar_Agent despite GCM being ground truth — agents guess predictions instead of running models (D8)
+- Logged findings to LESSONS_LEARNED.md Phase 2 (2.1–2.3)
 
 **Key discussion:**
-- This resolves the main M2 blocker (D6): experiments now produce genuinely different data depending on structure, condition, and cycle
-- Ready to move to M3 (convergence validation)
+- Phase 2 data pipeline fix works: different structures/conditions/cycles produce different data
+- But prediction scoring is confounded by LLM calibration — agents need to call `model.predict()` for predictions
+- Agents also underuse divergence ranking (nobody picked 5-4 despite highest divergence)
+- Next: agents call their models for predictions, then re-validate with 4-cycle run
 
 ---
 

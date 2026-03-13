@@ -79,6 +79,7 @@ Rules:
 
 - Commit after every successful, coherent set of changes.
 - Write detailed, descriptive commit messages.
+- Do NOT add "Co-Authored-By" lines to commit messages.
 - Prefer working in feature branches so reverts are clean.
 - Do not overwrite or delete user-authored content (READMEs, config, prompts)
   without explicit permission.

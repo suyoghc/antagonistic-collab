@@ -75,3 +75,49 @@ This critique is logically valid — these models *can* in principle account for
 The "best" predictor was the theoretically *wrong* model. Rule_Agent won simply by guessing closer to 0.55, not by making theoretically grounded predictions. Meanwhile, the models already compute per-item classification probabilities that diverge substantially across category structures — this information was generated but thrown away by the scalar scoring.
 
 **Implication:** The metric determines what the system optimizes for, and a scalar metric on flat data incentivizes lucky guessing over theoretical insight. This is an alignment problem in miniature. The fix has two parts: (a) make the data vary so that predictions are non-trivially constrained, and (b) score on the dimensions where models actually diverge — per-item accuracy patterns rather than grand means. The models already produce the richer output; the scoring just needs to use it.
+
+---
+
+## Phase 2: Model-sensitive synthetic data (2026-03-13)
+
+Fixed the data pipeline so different experiments produce different data. Added a structure registry (11 structures), condition effects (5 conditions with per-model param overrides), rewrote `_synthetic_runner()` to use structure lookup and md5-based per-experiment seeds, merged `item_accuracies` into scoring, and updated prompts with structure/condition menus and item-level prediction guidance. 9 new tests, 82 total passing.
+
+### 2.1 Data variation works, but the wrong agent wins
+
+**Expected:** With model-sensitive data, the ground-truth model's agent (GCM/Exemplar_Agent) should accumulate the best prediction RMSE over 3 cycles.
+
+**Actual:** Data now genuinely varies across experiments:
+
+| Cycle | Structure | Condition | mean_accuracy |
+|-------|-----------|-----------|---------------|
+| 0 | Type_VI | baseline | 0.666 |
+| 1 | Type_II | low_attention | 0.473 |
+| 2 | Type_VI | baseline | 0.651 |
+
+But the final leaderboard after 3 cycles:
+
+| Agent | Mean RMSE | True model? |
+|-------|-----------|-------------|
+| Clustering_Agent | 0.1135 | No |
+| Exemplar_Agent | 0.1483 | **Yes (GCM)** |
+| Rule_Agent | 0.2021 | No |
+
+Clustering_Agent beat Exemplar_Agent despite GCM being the ground truth. The reason: agents don't actually *run* their models to generate predictions. The LLM *reasons about* what its model would predict, then writes down numbers. Clustering_Agent happened to make more conservative, closer-to-mean predictions that scored better. The RMSE reflects how well the LLM approximates each model's behavior, not the model's actual fit to data.
+
+**Implication:** There is a critical gap between "the model that generated the data" and "the agent that best predicts the data." The LLM's numerical intuition about its model is not the same as running the model. This means prediction accuracy is confounded by the LLM's calibration — a well-calibrated guesser can beat the theoretically correct model. The fix is to have agents actually call `model.predict()` with their stated parameters and use those outputs as predictions, removing the LLM's numerical guessing from the scoring loop entirely.
+
+### 2.2 Agents underuse the divergence ranking
+
+**Expected:** Agents would pick structures from the top of the divergence ranking (5-4 had the highest divergence at 0.556).
+
+**Actual:** No agent picked 5-4. Two out of three experiments used Type_VI, one used Type_II. Agents appeared to pick structures based on their narrative about what's theoretically interesting rather than by consulting the quantitative divergence ranking.
+
+**Implication:** Providing information is not the same as influencing behavior. The divergence ranking was in the prompt, but agents defaulted to structures they could argue about most fluently. Stronger nudging — e.g., requiring agents to justify why they didn't pick the highest-divergence structure, or defaulting to the top-ranked structure — may be needed.
+
+### 2.3 Conditions are being used but not strategically
+
+**Expected:** Agents would use conditions (low_attention, high_noise, etc.) to create maximally diagnostic experiments.
+
+**Actual:** Rule_Agent picked `low_attention` for Type_II (a reasonable choice — testing whether verbal load disrupts rule discovery). Exemplar_Agent picked `high_attention` for Type_VI in cycle 2. But the condition choices appeared to be narrative-driven ("cognitive load disrupts rule learning") rather than grounded in knowing what the parameter changes actually do to model predictions.
+
+**Implication:** Agents don't know what `low_attention` does to model parameters. They reason about it as a psychological manipulation, not as a parameter perturbation. This is fine for ecological validity (real scientists also reason about manipulations conceptually) but limits the system's ability to find maximally discriminating experiments. A future enhancement could show agents what each condition does to each model's predictions on the selected structure.

@@ -87,4 +87,14 @@ Tracks what was changed, why, what alternatives were considered, and what's stil
 
 **Alternatives considered:** Option B (parse LLM-designed structures) — too brittle. Option D (pre-computed menu) — deferred, could be added later.
 
-**Result:** 9 new tests, 82 total passing. Different structures/conditions/cycles now produce genuinely different data.
+**Result:** 9 new tests, 82 total passing. Different structures/conditions/cycles now produce genuinely different data. However, 3-cycle validation run showed Clustering_Agent beating Exemplar_Agent despite GCM being ground truth — because agents guess predictions rather than running their models. See LESSONS_LEARNED.md 2.1.
+
+---
+
+## D8: Agents must call their models for predictions (NEXT) — 2026-03-13
+
+**Problem:** LLMs write down numerical predictions by reasoning about what their model would predict, rather than running `model.predict()`. This confounds RMSE scoring with LLM calibration quality, not model fit.
+
+**Decision:** Agents should call their actual models during the prediction phase. The runner should run `model.predict()` with the agent's stated params on the approved structure and use those outputs as the predicted pattern.
+
+**Status:** Next up.

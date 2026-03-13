@@ -10,6 +10,9 @@
 - [x] **Expand scoring beyond mean_accuracy** — item_accuracies now merged into scoring dict, per-item predictions scored
 - [x] **Vary model params by experimental conditions** — CONDITION_EFFECTS maps 5 conditions to model param overrides
 
+### Next (M2 cont.)
+- [ ] **Agents call their models for predictions** — run `model.predict()` during execution phase instead of LLM-guessed numbers (D8)
+
 ### Up Next (M3)
 - [ ] Validate convergence: run 3+ cycle debates where the true model's agent should accumulate best RMSE over cycles
 - [ ] Assess whether critique quality degrades over cycles (circular "my model can also predict that" pattern)
