@@ -467,10 +467,32 @@ def run_human_arbitration(protocol: DebateProtocol, transcript: list) -> PhaseRe
         print(f"  [{i}] {p.title} (by {p.proposed_by}, {n_critiques} critiques)")
 
     if _BATCH_MODE:
-        # Auto-approve: pick proposal with most critiques addressed
-        # (heuristic: more critique = more refined)
-        choice = "approve 0"
-        print(f"\n[BATCH MODE] Auto-selecting: {choice}")
+        # Round-robin by proposer: pick the proposal whose agent has been
+        # approved *least* in prior cycles, with critique-count tiebreaker
+        # (more scrutinized = more refined).
+        prior_approvals: dict[str, int] = {}
+        for exp in protocol.state.experiments:
+            if (
+                exp.status in ("approved", "executed")
+                and exp.cycle < protocol.state.cycle
+            ):
+                prior_approvals[exp.proposed_by] = (
+                    prior_approvals.get(exp.proposed_by, 0) + 1
+                )
+
+        ranked = sorted(
+            range(len(current_proposals)),
+            key=lambda i: (
+                prior_approvals.get(current_proposals[i].proposed_by, 0),
+                -len(current_proposals[i].critique_log),
+            ),
+        )
+        best = ranked[0]
+        choice = f"approve {best}"
+        print(
+            f"\n[BATCH MODE] Auto-selecting: {choice} "
+            f"(round-robin by prior approvals, critique tiebreak)"
+        )
     else:
         print("\nOptions:")
         print("  approve <N>          — Approve proposal N as-is")

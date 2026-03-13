@@ -10,3 +10,4 @@ demo_state.json
 debate_cycle_*.json
 epistemic_state_cycle_*.json
 .env
+runs/

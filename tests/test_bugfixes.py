@@ -1677,3 +1677,154 @@ class TestMarkdownReports:
             "run_execution prompt must instruct agents to include "
             "'mean_accuracy' in predicted_pattern for scoring to work"
         )
+
+
+# =========================================================================
+# Batch-mode moderator rotation  (runner.py — run_human_arbitration)
+# =========================================================================
+
+
+class TestBatchModeRotation:
+    """
+    Bug: In batch mode, run_human_arbitration() always picked `approve 0`
+    — the first proposal.  Because run_experiment_proposal() iterates
+    agents in list order, Exemplar_Agent always proposed first and always
+    won.  This biases the entire debate toward one agent.
+
+    Fix: round-robin selection by fewest prior approvals, with a
+    critique-count tiebreaker (more critiques = more refined).
+    """
+
+    @staticmethod
+    def _make_protocol():
+        """Create a bare protocol for testing."""
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        return DebateProtocol(state, agents)
+
+    @patch("antagonistic_collab.runner._BATCH_MODE", True)
+    def test_batch_mode_rotates_proposals(self):
+        """
+        Set up 2 prior cycles where Exemplar_Agent was approved both
+        times.  Create 3 current-cycle proposals from different agents.
+        Batch mode should pick the agent with 0 prior approvals.
+        """
+        protocol = self._make_protocol()
+        state = protocol.state
+
+        # --- Simulate 2 prior cycles where Exemplar_Agent always won ---
+        state.cycle = 1
+        exp1 = state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Prior Exp 1",
+            design_spec={},
+            rationale="r",
+        )
+        state.approve_experiment(exp1.experiment_id)
+
+        state.cycle = 2
+        exp2 = state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Prior Exp 2",
+            design_spec={},
+            rationale="r",
+        )
+        state.approve_experiment(exp2.experiment_id)
+
+        # --- Current cycle: 3 proposals from different agents ---
+        state.cycle = 3
+        state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Exemplar Proposal",
+            design_spec={},
+            rationale="r",
+        )
+        state.propose_experiment(
+            proposed_by="Prototype_Agent",
+            title="Prototype Proposal",
+            design_spec={},
+            rationale="r",
+        )
+        state.propose_experiment(
+            proposed_by="Rational_Agent",
+            title="Rational Proposal",
+            design_spec={},
+            rationale="r",
+        )
+
+        run_human_arbitration(protocol, [])
+
+        # Should NOT pick Exemplar_Agent (2 prior approvals)
+        approved = [
+            e for e in state.experiments if e.cycle == 3 and e.status == "approved"
+        ]
+        assert len(approved) == 1
+        assert approved[0].proposed_by != "Exemplar_Agent", (
+            "Batch mode should rotate away from the agent with the most "
+            "prior approvals, but it picked Exemplar_Agent again."
+        )
+
+    @patch("antagonistic_collab.runner._BATCH_MODE", True)
+    def test_batch_mode_critique_tiebreak(self):
+        """
+        All agents have 0 prior approvals.  One proposal has 3 critiques,
+        another has 1.  The one with more critiques should be selected
+        (more scrutinized = more refined).
+        """
+        protocol = self._make_protocol()
+        state = protocol.state
+
+        # --- Current cycle: 2 proposals, no prior history ---
+        state.cycle = 1
+        exp_few = state.propose_experiment(
+            proposed_by="Agent_A",
+            title="Few critiques",
+            design_spec={},
+            rationale="r",
+        )
+        state.add_critique(exp_few.experiment_id, "Agent_B", "minor issue")
+
+        exp_many = state.propose_experiment(
+            proposed_by="Agent_B",
+            title="Many critiques",
+            design_spec={},
+            rationale="r",
+        )
+        state.add_critique(exp_many.experiment_id, "Agent_A", "concern 1")
+        state.add_critique(exp_many.experiment_id, "Agent_A", "concern 2")
+        state.add_critique(exp_many.experiment_id, "Agent_A", "concern 3")
+
+        run_human_arbitration(protocol, [])
+
+        approved = [
+            e for e in state.experiments if e.cycle == 1 and e.status == "approved"
+        ]
+        assert len(approved) == 1
+        assert approved[0].title == "Many critiques", (
+            "When prior approvals are tied, batch mode should prefer the "
+            "proposal with the most critiques (more refined), but it didn't."
+        )
+
+    @patch("antagonistic_collab.runner._BATCH_MODE", True)
+    def test_batch_mode_single_proposal(self):
+        """
+        Edge case: only 1 proposal on the table.  Should approve it
+        without crashing.
+        """
+        protocol = self._make_protocol()
+        state = protocol.state
+        state.cycle = 1
+        state.propose_experiment(
+            proposed_by="Only_Agent",
+            title="Solo Proposal",
+            design_spec={},
+            rationale="r",
+        )
+
+        run_human_arbitration(protocol, [])
+
+        approved = [
+            e for e in state.experiments if e.cycle == 1 and e.status == "approved"
+        ]
+        assert len(approved) == 1
+        assert approved[0].title == "Solo Proposal"
