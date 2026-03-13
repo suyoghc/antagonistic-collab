@@ -97,4 +97,22 @@ Human-readable summary of each Claude Code session on this project.
 
 ---
 
+## Session 6 — 2026-03-13
+
+**What we did:**
+- Implemented Phase 2: model-sensitive synthetic data (D7)
+- Added `STRUCTURE_REGISTRY` (11 structures) and `CONDITION_EFFECTS` (5 conditions) to `debate_protocol.py`
+- Rewrote `_synthetic_runner()`: looks up structure by name, applies condition overrides, uses md5-based per-experiment seeds, returns metadata
+- Fixed scoring filter in `runner.py`: item_accuracies merged into actual dict for per-item scoring
+- Updated experiment proposal prompt with structure/condition menus
+- Updated prediction prompt with item-level guidance
+- Enhanced `_divergence_context()` with ranked structure list
+- 9 new TDD regression tests, 82 total passing, ruff clean
+
+**Key discussion:**
+- This resolves the main M2 blocker (D6): experiments now produce genuinely different data depending on structure, condition, and cycle
+- Ready to move to M3 (convergence validation)
+
+---
+
 *This log is maintained manually. Update it at the end of each session.*

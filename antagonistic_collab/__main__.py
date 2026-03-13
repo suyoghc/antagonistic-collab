@@ -16,12 +16,14 @@ def _entry():
             demo_epistemic_state,
             demo_full_cycle,
         )
+
         demo_model_predictions()
         demo_divergence_mapping()
         demo_epistemic_state()
         demo_full_cycle()
     else:
         from .runner import main
+
         main()
 
 

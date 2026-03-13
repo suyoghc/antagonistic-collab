@@ -13,6 +13,7 @@ Each phase has:
 - Transition criteria (when to move on)
 """
 
+import hashlib
 import json
 from enum import Enum, auto
 from dataclasses import dataclass, field
@@ -23,7 +24,84 @@ from .epistemic_state import EpistemicState
 from .models.gcm import GCM
 from .models.sustain import SUSTAIN
 from .models.rulex import RULEX
-from .models.category_structures import shepard_types, five_four_structure
+from .models.category_structures import (
+    shepard_types,
+    five_four_structure,
+    rule_plus_exception,
+    linear_separable,
+)
+
+
+# ---------------------------------------------------------------------------
+# Structure registry — maps short names to category structure dicts
+# ---------------------------------------------------------------------------
+
+
+def _build_structure_registry() -> dict[str, dict]:
+    """Build the registry at import time from existing structure functions."""
+    registry = {}
+    # Shepard Types I-VI
+    for type_name, struct in shepard_types().items():
+        registry[f"Type_{type_name}"] = struct
+    # 5-4 structure
+    registry["five_four"] = five_four_structure()
+    # Rule-plus-exception variants (deterministic seeds)
+    registry["rule_plus_exception_1exc"] = rule_plus_exception(n_exceptions=1, seed=100)
+    registry["rule_plus_exception_2exc"] = rule_plus_exception(n_exceptions=2, seed=101)
+    # Linear separable variants
+    registry["linear_separable_2d"] = linear_separable(n_dims=2, seed=200)
+    registry["linear_separable_4d"] = linear_separable(n_dims=4, seed=201)
+    return registry
+
+
+STRUCTURE_REGISTRY: dict[str, dict] = _build_structure_registry()
+
+# Short descriptions for the structure menu shown to agents
+STRUCTURE_DESCRIPTIONS: dict[str, str] = {
+    "Type_I": "Shepard Type I — single-dimension rule (easiest)",
+    "Type_II": "Shepard Type II — XOR on two dimensions",
+    "Type_III": "Shepard Type III — single dimension + 1 exception",
+    "Type_IV": "Shepard Type IV — biconditional / family resemblance",
+    "Type_V": "Shepard Type V — complex with 2 exceptions",
+    "Type_VI": "Shepard Type VI — no simple rule (hardest for rules)",
+    "five_four": "Medin & Schaffer 5-4 structure — favors exemplar models",
+    "rule_plus_exception_1exc": "Rule on D1 with 1 exception per category",
+    "rule_plus_exception_2exc": "Rule on D1 with 2 exceptions per category",
+    "linear_separable_2d": "Two Gaussian clusters in 2D (continuous features)",
+    "linear_separable_4d": "Two Gaussian clusters in 4D (continuous features)",
+}
+
+# ---------------------------------------------------------------------------
+# Condition effects — map experimental conditions to model param overrides
+# ---------------------------------------------------------------------------
+
+CONDITION_EFFECTS: dict[str, dict[str, dict]] = {
+    "baseline": {
+        "GCM": {},
+        "SUSTAIN": {},
+        "RULEX": {},
+    },
+    "low_attention": {
+        "GCM": {"c": 1.5},
+        "SUSTAIN": {"r": 3.0},
+        "RULEX": {"p_single": 0.3, "p_conj": 0.15},
+    },
+    "high_attention": {
+        "GCM": {"c": 6.0},
+        "SUSTAIN": {"r": 12.0},
+        "RULEX": {"p_single": 0.7, "p_conj": 0.4},
+    },
+    "fast_presentation": {
+        "GCM": {"c": 2.0},
+        "SUSTAIN": {"eta": 0.04},
+        "RULEX": {"max_search_steps": 20, "error_tolerance": 0.2},
+    },
+    "high_noise": {
+        "GCM": {"c": 2.0},
+        "SUSTAIN": {"eta": 0.05, "r": 5.0},
+        "RULEX": {"error_tolerance": 0.25},
+    },
+}
 
 
 class Phase(Enum):
@@ -481,6 +559,30 @@ class DebateProtocol:
                     f"max at item {div['max_diff_item']} ({div['max_diff_value']:.3f})"
                 )
             lines.append("")
+
+        # Ranked list of structures by maximum divergence
+        ranked = []
+        for struct_name, data in div_map.items():
+            max_div = max(
+                (d["mean_abs_diff"] for d in data["divergences"].values()),
+                default=0.0,
+            )
+            # Map divergence map keys to registry keys
+            registry_key = f"Type_{struct_name}"
+            if registry_key not in STRUCTURE_REGISTRY:
+                registry_key = struct_name
+            ranked.append((registry_key, max_div))
+        ranked.sort(key=lambda x: x[1], reverse=True)
+
+        lines.append("## Structures Ranked by Maximum Divergence\n")
+        lines.append("Use these `structure_name` values in experiment proposals:\n")
+        for rank, (name, div) in enumerate(ranked, 1):
+            desc = STRUCTURE_DESCRIPTIONS.get(name, "")
+            lines.append(f"  {rank}. `{name}` — max divergence = {div:.3f}")
+            if desc:
+                lines.append(f"     {desc}")
+        lines.append("")
+
         return "\n".join(lines)
 
     def _proposals_context(self) -> str:
@@ -575,64 +677,103 @@ class DebateProtocol:
         self,
         design_spec: dict,
         true_model: str = "GCM",
+        cycle: int = 0,
     ) -> dict:
         """
         Generate synthetic data from a specified ground-truth model.
 
-        For the first prototype, this replaces real data collection.
-        The 'true_model' parameter controls which theory generates the data —
-        this lets you test whether the debate converges correctly when
-        one theory is objectively right.
+        Looks up `design_spec["structure_name"]` from STRUCTURE_REGISTRY.
+        Applies condition overrides from CONDITION_EFFECTS on top of base params.
+        Uses a deterministic but experiment-varying seed so different experiments
+        produce different noise.
         """
-        # Parse the design spec to get a category structure
-        struct = design_spec.get("category_structure", None)
-        if (
-            not isinstance(struct, dict)
-            or "stimuli" not in struct
-            or "labels" not in struct
-        ):
-            # Default to Shepard Type II (interesting case)
-            struct = shepard_types()["II"]
+        # --- Resolve category structure ---
+        structure_name = design_spec.get("structure_name", "")
+        if structure_name in STRUCTURE_REGISTRY:
+            struct = STRUCTURE_REGISTRY[structure_name]
+        else:
+            # Fallback: pick highest-divergence structure from divergence map
+            try:
+                div_map = self.compute_divergence_map()
+                best_name = None
+                best_div = -1.0
+                for sname, sdata in div_map.items():
+                    for pair_key, pair_div in sdata["divergences"].items():
+                        if pair_div["mean_abs_diff"] > best_div:
+                            best_div = pair_div["mean_abs_diff"]
+                            best_name = sname
+                # Map divergence map keys (e.g. "II") to registry keys (e.g. "Type_II")
+                if best_name and f"Type_{best_name}" in STRUCTURE_REGISTRY:
+                    structure_name = f"Type_{best_name}"
+                elif best_name and best_name in STRUCTURE_REGISTRY:
+                    structure_name = best_name
+                else:
+                    structure_name = "Type_II"
+            except Exception:
+                structure_name = "Type_II"
+            struct = STRUCTURE_REGISTRY[structure_name]
 
         stimuli = np.asarray(struct["stimuli"])
         labels = np.asarray(struct["labels"])
 
-        # Generate data from the true model
+        # --- Resolve condition and base params ---
+        condition = design_spec.get("condition", "baseline")
+        if condition not in CONDITION_EFFECTS:
+            condition = "baseline"
+
         if true_model == "GCM":
             model = GCM()
             params = {"c": 4.0, "attention_weights": None, "r": 1, "gamma": 1.0}
+            overrides = CONDITION_EFFECTS[condition].get("GCM", {})
         elif true_model == "SUSTAIN":
             model = SUSTAIN()
             params = {"r": 9.01, "beta": 1.252, "d": 16.924, "eta": 0.092}
+            overrides = CONDITION_EFFECTS[condition].get("SUSTAIN", {})
         elif true_model == "RULEX":
             model = RULEX()
             params = {"p_single": 0.5, "p_conj": 0.3, "error_tolerance": 0.1}
+            overrides = CONDITION_EFFECTS[condition].get("RULEX", {})
         else:
             raise ValueError(f"Unknown model: {true_model}")
 
-        # Get model predictions for each item
+        # Apply condition overrides
+        params.update(overrides)
+
+        # --- Get model predictions for each item ---
         item_probs = {}
         for i, (stim, label) in enumerate(zip(stimuli, labels)):
             pred = model.predict(stim, stimuli, labels, **params)
-            # Convert numpy key types to native Python for JSON serialization
             item_probs[f"item_{i}"] = {
                 int(k): float(v) for k, v in pred["probabilities"].items()
             }
 
-        # Add noise to simulate real behavioral data
-        rng = np.random.default_rng(42)
+        # --- Add noise with a deterministic, experiment-varying seed ---
+        seed_input = f"{cycle}_{structure_name}_{condition}"
+        seed_hash = int(hashlib.md5(seed_input.encode()).hexdigest()[:8], 16) % 10000
+        seed = 42 + seed_hash
+        n_subjects = design_spec.get("n_subjects_recommended", 30)
+        if not isinstance(n_subjects, int) or n_subjects < 1:
+            n_subjects = 30
+
+        rng = np.random.default_rng(seed)
         noisy_accuracy = {}
         for item_key, probs in item_probs.items():
             correct_cat = labels[int(item_key.split("_")[1])]
             p_correct = probs.get(correct_cat, 0.5)
-            # Simulate 30 subjects
-            n_correct = rng.binomial(30, np.clip(p_correct, 0.01, 0.99))
-            noisy_accuracy[item_key] = n_correct / 30
+            n_correct = rng.binomial(n_subjects, np.clip(p_correct, 0.01, 0.99))
+            noisy_accuracy[item_key] = n_correct / n_subjects
 
         return {
             "item_accuracies": noisy_accuracy,
             "mean_accuracy": float(np.mean(list(noisy_accuracy.values()))),
             "model_predictions": item_probs,
-            "n_subjects": 30,
+            "n_subjects": n_subjects,
             "ground_truth_model": true_model,
+            "structure_name": structure_name,
+            "condition": condition,
+            "params_used": {
+                k: v
+                for k, v in params.items()
+                if not isinstance(v, np.ndarray) and v is not None
+            },
         }

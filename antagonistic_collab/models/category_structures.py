@@ -19,36 +19,39 @@ def shepard_types() -> dict[str, dict]:
     """
     Shepard, Hovland & Jenkins (1961) six category structure types.
     3 binary dimensions, 8 stimuli split into two categories of 4.
-    
+
     Type I:   Single dimension rule (easiest)
     Type II:  XOR on two dimensions
     Type III: Single dimension + exception
     Type IV:  Biconditional-like
     Type V:   Complex with 2 exceptions
     Type VI:  No simple rule (hardest for rules, fine for exemplars)
-    
+
     Classic ordering: I < II < III ≈ IV ≈ V < VI
     But the *relative* ordering of II vs III-V is theory-diagnostic.
     """
     # All 8 stimuli in 3 binary dimensions
-    stimuli = np.array([
-        [0, 0, 0],
-        [0, 0, 1],
-        [0, 1, 0],
-        [0, 1, 1],
-        [1, 0, 0],
-        [1, 0, 1],
-        [1, 1, 0],
-        [1, 1, 1],
-    ], dtype=float)
+    stimuli = np.array(
+        [
+            [0, 0, 0],
+            [0, 0, 1],
+            [0, 1, 0],
+            [0, 1, 1],
+            [1, 0, 0],
+            [1, 0, 1],
+            [1, 1, 0],
+            [1, 1, 1],
+        ],
+        dtype=float,
+    )
 
     type_labels = {
-        "I":   np.array([0, 0, 0, 0, 1, 1, 1, 1]),  # dim 1 rule
-        "II":  np.array([0, 1, 1, 0, 1, 0, 0, 1]),  # XOR on dims 1,2
+        "I": np.array([0, 0, 0, 0, 1, 1, 1, 1]),  # dim 1 rule
+        "II": np.array([0, 1, 1, 0, 1, 0, 0, 1]),  # XOR on dims 1,2
         "III": np.array([0, 0, 0, 1, 1, 1, 1, 0]),  # dim 1 + exception
-        "IV":  np.array([0, 0, 1, 1, 1, 0, 0, 1]),  # family resemblance variant
-        "V":   np.array([0, 0, 1, 0, 1, 1, 0, 1]),  # complex
-        "VI":  np.array([0, 1, 1, 0, 0, 1, 1, 0]),  # parity (no simple rule)
+        "IV": np.array([0, 0, 1, 1, 1, 0, 0, 1]),  # family resemblance variant
+        "V": np.array([0, 0, 1, 0, 1, 1, 0, 1]),  # complex
+        "VI": np.array([0, 1, 1, 0, 0, 1, 1, 0]),  # parity (no simple rule)
     }
 
     structures = {}
@@ -68,24 +71,27 @@ def five_four_structure() -> dict:
     Medin & Schaffer (1978) 5-4 category structure.
     4 binary dimensions. Category A has 5 members, B has 4.
     Neither category has a prototype that is a member.
-    
+
     This structure famously favors exemplar models over prototype models:
     the prototype of each category is NOT a category member, so a prototype
     model predicts classification of category members poorly.
     """
-    stimuli = np.array([
-        # Category A (5 items)
-        [1, 1, 1, 0],
-        [1, 0, 1, 0],
-        [1, 0, 1, 1],
-        [1, 1, 0, 1],
-        [0, 1, 1, 1],
-        # Category B (4 items)
-        [1, 1, 0, 0],
-        [0, 1, 1, 0],
-        [0, 0, 0, 1],
-        [0, 0, 0, 0],
-    ], dtype=float)
+    stimuli = np.array(
+        [
+            # Category A (5 items)
+            [1, 1, 1, 0],
+            [1, 0, 1, 0],
+            [1, 0, 1, 1],
+            [1, 1, 0, 1],
+            [0, 1, 1, 1],
+            # Category B (4 items)
+            [1, 1, 0, 0],
+            [0, 1, 1, 0],
+            [0, 0, 0, 1],
+            [0, 0, 0, 0],
+        ],
+        dtype=float,
+    )
 
     labels = np.array([0, 0, 0, 0, 0, 1, 1, 1, 1])
 
@@ -110,7 +116,7 @@ def rule_plus_exception(
     """
     Generate a rule-plus-exception structure.
     One dimension defines the rule; n_exceptions items violate it.
-    
+
     Diagnostic: Rule models handle the rule, struggle with exceptions.
     Exemplar models handle exceptions via similarity to stored instances.
     SUSTAIN recruits extra clusters for exceptions.
@@ -137,7 +143,7 @@ def rule_plus_exception(
     return {
         "stimuli": stimuli,
         "labels": labels,
-        "dim_names": [f"D{i+1}" for i in range(n_dims)],
+        "dim_names": [f"D{i + 1}" for i in range(n_dims)],
         "name": f"Rule-plus-exception ({n_exceptions} exceptions)",
         "description": (
             f"Rule on D1 with {n_exceptions} exception(s) per category. "
@@ -156,7 +162,7 @@ def linear_separable(
 ) -> dict:
     """
     Generate a linearly separable category structure in continuous space.
-    
+
     Two Gaussian clusters separated along the first dimension.
     Useful for testing boundary placement and generalization gradients.
     """
@@ -179,7 +185,7 @@ def linear_separable(
     return {
         "stimuli": stimuli,
         "labels": labels,
-        "dim_names": [f"D{i+1}" for i in range(n_dims)],
+        "dim_names": [f"D{i + 1}" for i in range(n_dims)],
         "name": f"Linear separable ({n_dims}D, sep={separation})",
         "description": (
             f"Two Gaussian clusters in {n_dims}D, separation={separation}. "
@@ -199,7 +205,7 @@ def make_structure(
     stimuli = np.asarray(stimuli, dtype=float)
     labels = np.asarray(labels)
     if dim_names is None:
-        dim_names = [f"D{i+1}" for i in range(stimuli.shape[1])]
+        dim_names = [f"D{i + 1}" for i in range(stimuli.shape[1])]
     return {
         "stimuli": stimuli,
         "labels": labels,

@@ -14,6 +14,10 @@ from .epistemic_state import EpistemicState, TheoryCommitment, ModelClaim
 from .debate_protocol import DebateProtocol, Phase, default_agent_configs
 
 __all__ = [
-    "EpistemicState", "TheoryCommitment", "ModelClaim",
-    "DebateProtocol", "Phase", "default_agent_configs",
+    "EpistemicState",
+    "TheoryCommitment",
+    "ModelClaim",
+    "DebateProtocol",
+    "Phase",
+    "default_agent_configs",
 ]

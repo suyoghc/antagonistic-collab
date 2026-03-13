@@ -58,11 +58,11 @@ class RULEX:
     ) -> dict:
         """
         Evaluate a candidate rule on the training data.
-        
+
         rule format:
             {"type": "single", "dim": int, "threshold": float, "direction": int}
             {"type": "conjunction", "dims": list[int], "thresholds": list[float], "directions": list[int]}
-        
+
         direction: 0 means below threshold -> cat 0, 1 means above threshold -> cat 0
         """
         n = len(labels)
@@ -117,12 +117,14 @@ class RULEX:
                 ]
             for thresh in thresholds:
                 for direction in [0, 1]:
-                    rules.append({
-                        "type": "single",
-                        "dim": dim,
-                        "threshold": thresh,
-                        "direction": direction,
-                    })
+                    rules.append(
+                        {
+                            "type": "single",
+                            "dim": dim,
+                            "threshold": thresh,
+                            "direction": direction,
+                        }
+                    )
         return rules
 
     def _generate_conjunction_rules(self, stimuli: np.ndarray) -> list[dict]:
@@ -135,14 +137,24 @@ class RULEX:
                 for d1_dir in [0, 1]:
                     unique_0 = sorted(set(stimuli[:, dims[0]]))
                     unique_1 = sorted(set(stimuli[:, dims[1]]))
-                    t0 = (unique_0[0] + unique_0[-1]) / 2 if len(unique_0) == 2 else np.median(unique_0)
-                    t1 = (unique_1[0] + unique_1[-1]) / 2 if len(unique_1) == 2 else np.median(unique_1)
-                    rules.append({
-                        "type": "conjunction",
-                        "dims": list(dims),
-                        "thresholds": [t0, t1],
-                        "directions": [d0_dir, d1_dir],
-                    })
+                    t0 = (
+                        (unique_0[0] + unique_0[-1]) / 2
+                        if len(unique_0) == 2
+                        else np.median(unique_0)
+                    )
+                    t1 = (
+                        (unique_1[0] + unique_1[-1]) / 2
+                        if len(unique_1) == 2
+                        else np.median(unique_1)
+                    )
+                    rules.append(
+                        {
+                            "type": "conjunction",
+                            "dims": list(dims),
+                            "thresholds": [t0, t1],
+                            "directions": [d0_dir, d1_dir],
+                        }
+                    )
         return rules
 
     def find_best_rule(
@@ -157,7 +169,7 @@ class RULEX:
     ) -> dict:
         """
         Simulate RULEX's hierarchical rule search.
-        
+
         Returns best rule found and its performance.
         """
         rng = np.random.default_rng(seed)
@@ -183,11 +195,13 @@ class RULEX:
                 continue
 
             eval_result = self._evaluate_rule(candidate, stimuli, labels)
-            search_log.append({
-                "step": step,
-                "rule": candidate,
-                "accuracy": eval_result["accuracy"],
-            })
+            search_log.append(
+                {
+                    "step": step,
+                    "rule": candidate,
+                    "accuracy": eval_result["accuracy"],
+                }
+            )
 
             if eval_result["accuracy"] > best_accuracy:
                 best_accuracy = eval_result["accuracy"]
@@ -220,7 +234,7 @@ class RULEX:
     ) -> dict:
         """
         Predict category membership for a stimulus.
-        
+
         1. Find best rule via stochastic search
         2. Apply rule to stimulus
         3. If stimulus matches a stored exception, override rule
@@ -229,8 +243,10 @@ class RULEX:
 
         # Find the best rule
         rule_result = self.find_best_rule(
-            training_items, training_labels,
-            p_single=p_single, p_conj=p_conj,
+            training_items,
+            training_labels,
+            p_single=p_single,
+            p_conj=p_conj,
             max_search_steps=max_search_steps,
             error_tolerance=error_tolerance,
             seed=seed,
@@ -297,42 +313,46 @@ class RULEX:
     ) -> list[dict]:
         """
         Simulate learning curve.
-        
+
         RULEX predicts discrete transitions — poor performance until
-        rule discovery, then a sudden jump. This is qualitatively 
+        rule discovery, then a sudden jump. This is qualitatively
         different from GCM's gradual curve and SUSTAIN's step-wise.
         """
         p = {**self.default_params, **params}
         curve = []
-        
+
         items_seen = []
         labels_seen = []
-        
+
         for block_start in range(0, len(training_sequence), block_size):
             block = training_sequence[block_start : block_start + block_size]
             for stim, label in block:
                 items_seen.append(stim)
                 labels_seen.append(label)
-            
+
             if len(items_seen) < 2:
-                curve.append({
-                    "block": block_start // block_size,
-                    "accuracy": 0.5,
-                    "rule_found": False,
-                })
+                curve.append(
+                    {
+                        "block": block_start // block_size,
+                        "accuracy": 0.5,
+                        "rule_found": False,
+                    }
+                )
                 continue
-            
+
             train_arr = np.array(items_seen)
             label_arr = np.array(labels_seen)
-            
+
             # Find best rule given items seen so far
             rule_result = self.find_best_rule(
-                train_arr, label_arr,
-                p_single=p["p_single"], p_conj=p["p_conj"],
+                train_arr,
+                label_arr,
+                p_single=p["p_single"],
+                p_conj=p["p_conj"],
                 max_search_steps=p["max_search_steps"],
                 error_tolerance=p["error_tolerance"],
             )
-            
+
             if rule_result["rule"] is None:
                 acc = 0.5
                 rule_found = False
@@ -343,12 +363,16 @@ class RULEX:
                 )
                 acc = eval_result["accuracy"]
                 rule_found = True
-            
-            curve.append({
-                "block": block_start // block_size,
-                "accuracy": acc,
-                "rule_found": rule_found,
-                "rule_accuracy_on_training": rule_result["accuracy"] if rule_result["rule"] else None,
-            })
-        
+
+            curve.append(
+                {
+                    "block": block_start // block_size,
+                    "accuracy": acc,
+                    "rule_found": rule_found,
+                    "rule_accuracy_on_training": rule_result["accuracy"]
+                    if rule_result["rule"]
+                    else None,
+                }
+            )
+
         return curve

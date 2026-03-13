@@ -70,4 +70,21 @@ Tracks what was changed, why, what alternatives were considered, and what's stil
 
 **Leaning toward:** A + C (structure library + condition-to-param mapping). Smallest change, biggest impact.
 
-**Status:** Awaiting decision.
+**Status:** Resolved — see D7.
+
+---
+
+## D7: Structure registry + condition mapping + item-level scoring — 2026-03-13
+
+**Problem:** D6 — every experiment produced identical data (mean_accuracy=0.550).
+
+**Decision:** Implemented Option A + C:
+1. `STRUCTURE_REGISTRY` — 11 structures (Shepard I-VI, 5-4, rule+exception ×2, linear-separable ×2) built from existing `category_structures.py` functions.
+2. `CONDITION_EFFECTS` — 5 conditions (baseline, low_attention, high_attention, fast_presentation, high_noise) mapping to per-model parameter overrides.
+3. Rewrote `_synthetic_runner()` to look up `structure_name` from registry, apply condition overrides, use deterministic per-experiment seeds (md5-based).
+4. Fixed scoring filter in `runner.py` to merge `item_accuracies` into actual dict for per-item scoring.
+5. Updated prompts: experiment proposal shows structure/condition menus, prediction prompt guides item-level predictions, divergence context ranks structures by divergence.
+
+**Alternatives considered:** Option B (parse LLM-designed structures) — too brittle. Option D (pre-computed menu) — deferred, could be added later.
+
+**Result:** 9 new tests, 82 total passing. Different structures/conditions/cycles now produce genuinely different data.

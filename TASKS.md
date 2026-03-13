@@ -3,12 +3,12 @@
 ## Current Milestone: M2 — Make data meaningful
 
 ### Blocking
-- [ ] **Fix synthetic data generator** — experiments must produce different data depending on category structure and conditions (see DECISIONS.md D6)
-- [ ] **Constrain agent proposals to structure library** — agents pick from Shepard I-VI, 5-4, rule+exception, linear-separable instead of inventing freeform specs
+- [x] **Fix synthetic data generator** — experiments now produce different data depending on category structure and conditions (D6 → D7)
+- [x] **Constrain agent proposals to structure library** — agents pick from STRUCTURE_REGISTRY menu (11 structures)
 
 ### High Priority
-- [ ] **Expand scoring beyond mean_accuracy** — score on item-level accuracy patterns where models actually diverge
-- [ ] **Vary model params by experimental conditions** — map conditions like "cognitive load" to parameter perturbations
+- [x] **Expand scoring beyond mean_accuracy** — item_accuracies now merged into scoring dict, per-item predictions scored
+- [x] **Vary model params by experimental conditions** — CONDITION_EFFECTS maps 5 conditions to model param overrides
 
 ### Up Next (M3)
 - [ ] Validate convergence: run 3+ cycle debates where the true model's agent should accumulate best RMSE over cycles

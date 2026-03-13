@@ -10,7 +10,12 @@ from .category_structures import (
 )
 
 __all__ = [
-    "GCM", "SUSTAIN", "RULEX",
-    "shepard_types", "five_four_structure", "make_structure",
-    "linear_separable", "rule_plus_exception",
+    "GCM",
+    "SUSTAIN",
+    "RULEX",
+    "shepard_types",
+    "five_four_structure",
+    "make_structure",
+    "linear_separable",
+    "rule_plus_exception",
 ]

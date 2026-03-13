@@ -47,6 +47,9 @@ from .debate_protocol import (
     Phase,
     PhaseResult,
     default_agent_configs,
+    STRUCTURE_REGISTRY,
+    STRUCTURE_DESCRIPTIONS,
+    CONDITION_EFFECTS,
 )
 
 
@@ -289,16 +292,29 @@ def run_experiment_proposal(
     print("PHASE: EXPERIMENT PROPOSAL — Each agent proposes a design")
     print("=" * 70)
 
+    # Build structure menu for the prompt
+    struct_menu = "\n".join(
+        f"  - {name}: {STRUCTURE_DESCRIPTIONS.get(name, '')}"
+        for name in STRUCTURE_REGISTRY
+    )
+    cond_menu = "\n".join(f"  - {name}" for name in CONDITION_EFFECTS)
+
     for agent in protocol.agent_configs:
         context = protocol.state.summary_for_agent(agent.name)
         prompt = (
             f"PHASE: Experiment Proposal\n\n"
             f"GOAL: {spec['goal']}\n\n"
             f"CURRENT STATE:\n{context}\n\n"
+            f"AVAILABLE STRUCTURES (pick one by exact name):\n{struct_menu}\n\n"
+            f"AVAILABLE CONDITIONS (pick one):\n{cond_menu}\n\n"
+            f"CRITICAL: You MUST pick a structure_name from the list above. "
+            f"Do NOT invent new structures — the experiment runner can only "
+            f"execute structures from this menu.\n\n"
             f"Propose an experiment. You MUST output a JSON block with:\n"
             f'{{"title": "...", "design": "between|within|mixed", '
-            f'"category_structure": {{...}}, "conditions": [...], '
-            f'"dependent_variables": [...], "n_subjects_recommended": N, '
+            f'"structure_name": "<exact name from menu>", '
+            f'"condition": "<condition from menu>", '
+            f'"n_subjects_recommended": N, '
             f'"prediction_if_supports_me": "...", '
             f'"prediction_if_challenges_me": "...", "rationale": "..."}}'
         )
@@ -573,6 +589,12 @@ def run_execution(
     exp = approved[0]
     context = protocol._approved_experiment_context()
 
+    # Determine item count from the structure for item-level guidance
+    struct_name = exp.design_spec.get("structure_name", "")
+    struct = STRUCTURE_REGISTRY.get(struct_name)
+    n_items = len(struct["labels"]) if struct else 8
+    item_keys = ", ".join(f'"item_{i}"' for i in range(n_items))
+
     # Each agent registers predictions BEFORE seeing data
     print("\n--- Agents register predictions ---")
     for agent in protocol.agent_configs:
@@ -582,12 +604,16 @@ def run_execution(
             f"You MUST register a quantitative prediction for the approved "
             f"experiment BEFORE seeing any data. This prediction will be "
             f"scored against the actual results.\n\n"
-            f"IMPORTANT: Your predicted_pattern MUST include a "
-            f"'mean_accuracy' key (a float between 0 and 1) — this is "
-            f"the primary metric the experiment will return. You may also "
-            f"include other metrics.\n\n"
+            f"IMPORTANT: Your predicted_pattern MUST include:\n"
+            f"  - 'mean_accuracy' (float 0–1): overall accuracy\n"
+            f"  - Item-level predictions: the experiment has {n_items} items "
+            f"with keys {item_keys}. Each value is accuracy (0–1) for "
+            f"that item.\n\n"
+            f"Item-level predictions are MORE diagnostic than mean_accuracy "
+            f"alone — they reveal where models actually disagree.\n\n"
             f"Output a JSON block:\n"
-            f'{{"predicted_pattern": {{"mean_accuracy": 0.75, ...}}, '
+            f'{{"predicted_pattern": {{"mean_accuracy": 0.75, '
+            f'"item_0": 0.9, "item_1": 0.6, ...}}, '
             f'"confidence": "high|medium|low", '
             f'"reasoning": "..."}}'
         )
@@ -618,7 +644,9 @@ def run_execution(
 
     # Run the experiment (synthetic)
     print(f"\n--- Running experiment (synthetic, true_model={true_model}) ---")
-    data = protocol.experiment_runner(exp.design_spec, true_model=true_model)
+    data = protocol.experiment_runner(
+        exp.design_spec, true_model=true_model, cycle=protocol.state.cycle
+    )
     protocol.state.record_data(exp.experiment_id, data)
 
     mean_acc = data.get("mean_accuracy")
@@ -627,8 +655,9 @@ def run_execution(
     else:
         print("Results: mean_accuracy=N/A")
 
-    # Score predictions
+    # Score predictions — include item-level accuracies for fine-grained scoring
     actual = {k: v for k, v in data.items() if isinstance(v, (int, float))}
+    actual.update(data.get("item_accuracies", {}))
     if actual:
         protocol.state.score_predictions(exp.experiment_id, actual)
         board = protocol.state.prediction_leaderboard()

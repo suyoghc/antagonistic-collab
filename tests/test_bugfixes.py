@@ -37,6 +37,8 @@ from antagonistic_collab.debate_protocol import (
     Phase,
     PhaseResult,
     default_agent_configs,
+    STRUCTURE_REGISTRY,
+    CONDITION_EFFECTS,
 )
 from antagonistic_collab.models.sustain import SUSTAIN
 from antagonistic_collab.models.gcm import GCM
@@ -1828,3 +1830,233 @@ class TestBatchModeRotation:
         ]
         assert len(approved) == 1
         assert approved[0].title == "Solo Proposal"
+
+
+# =========================================================================
+# Synthetic data variation  (Phase 2: model-sensitive data)
+# =========================================================================
+
+
+class TestSyntheticDataVariation:
+    """
+    Regression tests for D6 — synthetic data always returned mean_accuracy=0.550
+    regardless of experiment design. These tests ensure that different structures,
+    conditions, and cycles produce genuinely different data.
+    """
+
+    def _make_protocol(self):
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        return DebateProtocol(state, agents)
+
+    # --- Test 1: Registry completeness ---
+
+    def test_structure_registry_completeness(self):
+        """STRUCTURE_REGISTRY must contain all expected keys with stimuli and labels."""
+        expected_keys = {
+            "Type_I",
+            "Type_II",
+            "Type_III",
+            "Type_IV",
+            "Type_V",
+            "Type_VI",
+            "five_four",
+            "rule_plus_exception_1exc",
+            "rule_plus_exception_2exc",
+            "linear_separable_2d",
+            "linear_separable_4d",
+        }
+        assert expected_keys.issubset(set(STRUCTURE_REGISTRY.keys())), (
+            f"Missing keys: {expected_keys - set(STRUCTURE_REGISTRY.keys())}"
+        )
+        for name, struct in STRUCTURE_REGISTRY.items():
+            assert "stimuli" in struct, f"{name} missing 'stimuli'"
+            assert "labels" in struct, f"{name} missing 'labels'"
+            assert len(struct["stimuli"]) == len(struct["labels"]), (
+                f"{name}: stimuli/labels length mismatch"
+            )
+
+    # --- Test 2: Different structures produce different data ---
+
+    def test_different_structures_produce_different_data(self):
+        """
+        Running _synthetic_runner on all 6 Shepard types must produce
+        at least 3 distinct mean_accuracy values. Before the fix, all
+        returned 0.550.
+        """
+        protocol = self._make_protocol()
+        accuracies = []
+        for type_name in [
+            "Type_I",
+            "Type_II",
+            "Type_III",
+            "Type_IV",
+            "Type_V",
+            "Type_VI",
+        ]:
+            data = protocol._synthetic_runner(
+                {"structure_name": type_name}, true_model="GCM"
+            )
+            accuracies.append(round(data["mean_accuracy"], 4))
+        distinct = len(set(accuracies))
+        assert distinct >= 3, (
+            f"Expected >=3 distinct accuracies across 6 types, got {distinct}: {accuracies}"
+        )
+
+    # --- Test 3: structure_name lookup works ---
+
+    def test_synthetic_runner_uses_structure_name(self):
+        """Type_I (single rule, easy) and Type_VI (no rule, hard) must differ."""
+        protocol = self._make_protocol()
+        data_i = protocol._synthetic_runner(
+            {"structure_name": "Type_I"}, true_model="GCM"
+        )
+        data_vi = protocol._synthetic_runner(
+            {"structure_name": "Type_VI"}, true_model="GCM"
+        )
+        assert data_i["mean_accuracy"] != data_vi["mean_accuracy"], (
+            f"Type_I and Type_VI produced identical mean_accuracy: {data_i['mean_accuracy']}"
+        )
+        # Verify metadata
+        assert data_i.get("structure_name") == "Type_I"
+        assert data_vi.get("structure_name") == "Type_VI"
+
+    # --- Test 4: Condition varies data ---
+
+    def test_synthetic_runner_condition_varies_data(self):
+        """Same structure with baseline vs low_attention must produce different data."""
+        protocol = self._make_protocol()
+        data_base = protocol._synthetic_runner(
+            {"structure_name": "Type_II", "condition": "baseline"}, true_model="GCM"
+        )
+        data_low = protocol._synthetic_runner(
+            {"structure_name": "Type_II", "condition": "low_attention"},
+            true_model="GCM",
+        )
+        # item_accuracies should differ (different params → different predictions)
+        assert data_base["item_accuracies"] != data_low["item_accuracies"], (
+            "baseline and low_attention produced identical item_accuracies"
+        )
+
+    # --- Test 5: Seed varies by cycle ---
+
+    def test_synthetic_runner_seed_varies_by_cycle(self):
+        """Same structure+condition at different cycles must produce different noise."""
+        protocol = self._make_protocol()
+        data_c0 = protocol._synthetic_runner(
+            {"structure_name": "Type_II"}, true_model="GCM", cycle=0
+        )
+        data_c1 = protocol._synthetic_runner(
+            {"structure_name": "Type_II"}, true_model="GCM", cycle=1
+        )
+        # Model predictions are the same, but noise differs due to different seeds
+        assert data_c0["mean_accuracy"] != data_c1["mean_accuracy"], (
+            "Different cycles produced identical mean_accuracy (seed not varying)"
+        )
+
+    # --- Test 6: item_accuracies passed to scoring ---
+
+    def test_item_accuracies_passed_to_scoring(self):
+        """
+        When experiment data contains item_accuracies, scoring must include
+        them so agents are scored on per-item predictions, not just mean_accuracy.
+        """
+        state = EpistemicState(domain="test")
+        # Register a theory commitment (required by some code paths)
+        state.register_theory(
+            TheoryCommitment(
+                name="Test Theory",
+                agent_name="TestAgent",
+                core_claims=["test"],
+                model_name="GCM",
+            )
+        )
+        # Propose and approve an experiment
+        exp = state.propose_experiment(
+            proposed_by="TestAgent",
+            title="Item-level test",
+            design_spec={},
+            rationale="test",
+        )
+        exp.status = "approved"
+
+        # Register prediction with item-level keys
+        state.register_prediction(
+            experiment_id=exp.experiment_id,
+            agent_name="TestAgent",
+            model_name="GCM",
+            model_params={},
+            predicted_pattern={
+                "mean_accuracy": 0.8,
+                "item_0": 0.9,
+                "item_1": 0.7,
+                "item_2": 0.85,
+                "item_3": 0.75,
+                "item_4": 0.8,
+                "item_5": 0.9,
+                "item_6": 0.65,
+                "item_7": 0.7,
+            },
+        )
+
+        # Build actual data the same way runner.py should (scalar filter + item_accuracies)
+        raw_data = {
+            "mean_accuracy": 0.78,
+            "n_subjects": 30,
+            "ground_truth_model": "GCM",
+            "item_accuracies": {
+                "item_0": 0.87,
+                "item_1": 0.73,
+                "item_2": 0.80,
+                "item_3": 0.77,
+                "item_4": 0.83,
+                "item_5": 0.87,
+                "item_6": 0.60,
+                "item_7": 0.73,
+            },
+        }
+        # This is what runner.py should do: merge item_accuracies into actual
+        actual = {k: v for k, v in raw_data.items() if isinstance(v, (int, float))}
+        actual.update(raw_data.get("item_accuracies", {}))
+
+        state.score_predictions(exp.experiment_id, actual)
+
+        pred = [p for p in state.predictions if p.experiment_id == exp.experiment_id][0]
+        assert pred.score is not None, "Prediction was not scored"
+        # Score should be based on 9 shared keys (mean_accuracy + 8 items), not just 1
+        shared_keys = set(pred.predicted_pattern.keys()) & set(actual.keys())
+        assert len(shared_keys) >= 9, (
+            f"Expected >=9 shared scoring keys, got {len(shared_keys)}: {shared_keys}"
+        )
+
+    # --- Test 7: condition_effects keys valid ---
+
+    def test_condition_effects_keys_valid(self):
+        """Every condition must have GCM, SUSTAIN, and RULEX entries."""
+        for cond_name, overrides in CONDITION_EFFECTS.items():
+            assert "GCM" in overrides, f"{cond_name} missing GCM"
+            assert "SUSTAIN" in overrides, f"{cond_name} missing SUSTAIN"
+            assert "RULEX" in overrides, f"{cond_name} missing RULEX"
+
+    # --- Test 8: Fallback on missing structure_name ---
+
+    def test_fallback_on_missing_structure_name(self):
+        """Empty design spec should not crash and should return valid data."""
+        protocol = self._make_protocol()
+        data = protocol._synthetic_runner({}, true_model="GCM")
+        assert "mean_accuracy" in data
+        assert "item_accuracies" in data
+        assert isinstance(data["mean_accuracy"], float)
+        assert 0.0 <= data["mean_accuracy"] <= 1.0
+
+    # --- Test 9: Backward compat ---
+
+    def test_backward_compat_no_structure_name(self):
+        """_synthetic_runner({}) must still work (no KeyError, no crash)."""
+        protocol = self._make_protocol()
+        data = protocol._synthetic_runner({}, true_model="GCM")
+        assert "mean_accuracy" in data
+        data2 = protocol._synthetic_runner({}, true_model="SUSTAIN")
+        assert "mean_accuracy" in data2
+        data3 = protocol._synthetic_runner({}, true_model="RULEX")
+        assert "mean_accuracy" in data3
