@@ -1617,3 +1617,63 @@ class TestMarkdownReports:
                 base_dir=tmpdir,
             )
             assert result2.endswith("_02")
+
+    def test_cycle_markdown_no_duplicate_json(self):
+        """
+        Bug: save_cycle_markdown() rendered parsed_json as a code block AND
+        the full response text (which already contains that JSON), causing
+        the same JSON to appear twice.
+
+        Fix: skip rendering parsed_json separately; the response already
+        contains it in context.
+        """
+        response_text = (
+            "Here is my proposal:\n"
+            '```json\n{"title": "Test exp", "design": "between"}\n```\n'
+            "This tests exemplar advantage."
+        )
+        cycle_messages = [
+            {
+                "agent": "Exemplar_Agent",
+                "phase": "EXPERIMENT_PROPOSAL",
+                "response": response_text,
+                "parsed_json": {"title": "Test exp", "design": "between"},
+            },
+        ]
+        metadata = {"true_model": "GCM", "llm_model": "gpt-4o", "backend": "princeton"}
+        state = EpistemicState(domain="Test")
+        protocol = DebateProtocol(state, default_agent_configs())
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            save_cycle_markdown(
+                cycle_messages,
+                protocol,
+                cycle_num=0,
+                metadata=metadata,
+                output_dir=tmpdir,
+            )
+            content = open(os.path.join(tmpdir, "debate_cycle_0.md")).read()
+
+            # The JSON should appear exactly once, not twice
+            count = content.count('"title": "Test exp"')
+            assert count == 1, f"JSON appeared {count} times, expected 1"
+
+    def test_prediction_prompt_requests_mean_accuracy(self):
+        """
+        Bug: agents predicted with arbitrary metric keys (e.g.,
+        classification_accuracy_training) while synthetic data uses
+        mean_accuracy, so score_predictions found no overlapping keys
+        and the leaderboard was empty.
+
+        Fix: the prediction prompt must explicitly instruct agents to
+        include mean_accuracy as a key in their predicted_pattern.
+        """
+        from antagonistic_collab.runner import run_execution
+        import inspect
+
+        source = inspect.getsource(run_execution)
+        # The prompt must instruct agents to use mean_accuracy
+        assert "'mean_accuracy'" in source, (
+            "run_execution prompt must instruct agents to include "
+            "'mean_accuracy' in predicted_pattern for scoring to work"
+        )

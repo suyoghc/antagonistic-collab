@@ -560,8 +560,12 @@ def run_execution(
             f"You MUST register a quantitative prediction for the approved "
             f"experiment BEFORE seeing any data. This prediction will be "
             f"scored against the actual results.\n\n"
+            f"IMPORTANT: Your predicted_pattern MUST include a "
+            f"'mean_accuracy' key (a float between 0 and 1) — this is "
+            f"the primary metric the experiment will return. You may also "
+            f"include other metrics.\n\n"
             f"Output a JSON block:\n"
-            f'{{"predicted_pattern": {{"metric_name": value, ...}}, '
+            f'{{"predicted_pattern": {{"mean_accuracy": 0.75, ...}}, '
             f'"confidence": "high|medium|low", '
             f'"reasoning": "..."}}'
         )
@@ -943,16 +947,6 @@ def save_cycle_markdown(
 
         # Default: agent header + response
         lines.append(f"### {agent}")
-
-        # Include parsed JSON as a code block if present
-        parsed = msg.get("parsed_json")
-        if parsed:
-            lines.append("")
-            lines.append("```json")
-            lines.append(json.dumps(parsed, indent=2, default=str))
-            lines.append("```")
-            lines.append("")
-
         lines.append(msg.get("response", ""))
         lines.append("")
 
