@@ -147,4 +147,24 @@ Human-readable summary of each Claude Code session on this project.
 
 ---
 
+## Session 8 — 2026-03-13
+
+**Commits:** `8927fb9`, `b11e6d9`
+
+**What we did:**
+- Comprehensive code review across all 6 modules (runner.py, debate_protocol.py, epistemic_state.py, gcm.py, sustain.py, rulex.py/category_structures.py)
+- Identified 19+ issues, fixed 10 highest-impact bugs in two rounds:
+  - **Round 1 (D9):** Format crash on missing mean_accuracy, design_spec validation, GCM r=0 and incomplete bias, SUSTAIN zero-lambdas NaN, to_json parent dirs, NaN guard in divergence map, unknown condition warning
+  - **Round 2 (D10):** SUSTAIN predict_learning_curve now evaluates held-out test items (was reporting training accuracy), call_agent retry with exponential backoff
+- 17 new regression tests (108 total), ruff clean
+- Updated TASKS.md, DECISIONS.md, SCRATCHPAD.md
+
+**Key discussion:**
+- Code review was systematic: 4 parallel agents examined different modules
+- Most bugs were edge-case crashes (invalid params, missing data, API failures) rather than logic errors in the core debate flow
+- SUSTAIN predict_learning_curve was the only semantic correctness bug — it violated the contract shared with GCM
+- Remaining queued items: Phase 5 placeholder (P1), reject path (P2), --demo flag (P3)
+
+---
+
 *This log is maintained manually. Update it at the end of each session.*

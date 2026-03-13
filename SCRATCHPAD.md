@@ -6,14 +6,14 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ## Current focus — 2026-03-13
 
-Phase 3 validated. Exemplar_Agent wins with RMSE=0.0776 when GCM is ground truth (3.6x gap over nearest competitor). M3 core hypothesis confirmed.
+Code review complete. Fixed 10 bugs across 6 files (D9, D10). 108 tests passing.
 
 ### Where to pick up next session:
 1. **Multi-model validation** — run `--true-model SUSTAIN` and `--true-model RULEX` to verify Clustering_Agent and Rule_Agent win respectively
 2. **Longer debates** — run 5+ cycles with `--true-model GCM` to check if RMSE gap widens monotonically
-3. **Concrete divergence display** — queued feature to show per-model predicted accuracies in divergence ranking (agents ignore abstract scores)
-4. **Critique quality assessment** — check whether "my model can also predict that" pattern persists or improves with model-computed predictions
-5. **Codex review fixes** — 4 queued items (P1–P3), none blocking M3 validation
+3. **Concrete divergence display** — queued feature to show per-model predicted accuracies in divergence ranking
+4. **Critique quality assessment** — check whether "my model can also predict that" pattern persists
+5. **Remaining Codex review items** — P1 (Phase 5 placeholder), P2 (reject path), P3 (--demo flag)
 
 ### Key files for context:
 - `FEATURES.md` — full inventory of scientifically meaningful design choices
