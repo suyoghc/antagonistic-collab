@@ -51,6 +51,11 @@ class GCM:
         r: int = 1,
     ) -> float:
         """Weighted Minkowski distance between two stimuli."""
+        if r <= 0:
+            raise ValueError(
+                f"Distance metric r must be positive (got r={r}). "
+                "Use r=1 for city-block or r=2 for Euclidean."
+            )
         diff = np.abs(x - y)
         if r == 1:
             return np.sum(attention_weights * diff)
@@ -91,6 +96,13 @@ class GCM:
         categories = sorted(set(training_labels))
         if bias is None:
             bias = {cat: 1.0 for cat in categories}
+        else:
+            missing = [cat for cat in categories if cat not in bias]
+            if missing:
+                raise ValueError(
+                    f"Bias dict is missing categories {missing}. "
+                    f"Expected keys: {categories}"
+                )
 
         # Compute summed similarity to each category
         cat_similarities = {}

@@ -24,6 +24,17 @@
 - [ ] **[P2] Fix moderator reject path** — "reject all" prints a message but doesn't loop back to proposals; burns the cycle instead
 - [ ] **[P2] SUSTAIN.predict_learning_curve() ignores test_items/test_labels** — only uses training log accuracy; held-out data is accepted but unused
 - [ ] **[P3] Fix --demo order-sensitivity** — `sys.argv[1] == "--demo"` fails when other flags precede it
+- [ ] **Show concrete model predictions in divergence ranking** — instead of abstract divergence scores, show each model's predicted accuracy per structure (e.g., "GCM: 0.85, RULEX: 0.40, SUSTAIN: 0.44") so agents can see what the divergence actually means for their model
+
+### Done (code review fixes, 2026-03-13)
+- [x] Fix format crash: :.3f applied to 'N/A' string on missing mean_accuracy (runner.py:647)
+- [x] Validate design_spec is dict before .get() calls (runner.py:593)
+- [x] GCM: r=0 now raises ValueError instead of ZeroDivisionError (gcm.py:58)
+- [x] GCM: incomplete bias dict now raises ValueError instead of KeyError (gcm.py:108)
+- [x] SUSTAIN: zero lambdas produce mean(dim_sim) instead of NaN (sustain.py:74)
+- [x] EpistemicState.to_json() creates parent directories (epistemic_state.py:717)
+- [x] NaN guard in divergence map computation (debate_protocol.py:530)
+- [x] Warning for unknown condition names in compute_model_predictions
 
 ### Done
 - [x] Fix P1 crashes and data-integrity bugs — 2026-03-11 → 2026-03-12

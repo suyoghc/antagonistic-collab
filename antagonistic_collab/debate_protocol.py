@@ -527,8 +527,14 @@ class DebateProtocol:
             for i in range(len(agent_names)):
                 for j in range(i + 1, len(agent_names)):
                     a, b = agent_names[i], agent_names[j]
-                    probs_a = np.array(struct_results[a]["item_probabilities"])
-                    probs_b = np.array(struct_results[b]["item_probabilities"])
+                    probs_a = np.nan_to_num(
+                        np.array(struct_results[a]["item_probabilities"]),
+                        nan=0.5,
+                    )
+                    probs_b = np.nan_to_num(
+                        np.array(struct_results[b]["item_probabilities"]),
+                        nan=0.5,
+                    )
                     divergences[f"{a}_vs_{b}"] = {
                         "mean_abs_diff": float(np.mean(np.abs(probs_a - probs_b))),
                         "max_diff_item": int(np.argmax(np.abs(probs_a - probs_b))),
@@ -575,6 +581,8 @@ class DebateProtocol:
             model_key = agent_config.model_class.name.split()[0]
             cond_overrides = CONDITION_EFFECTS[condition].get(model_key, {})
             params.update(cond_overrides)
+        elif condition and condition != "baseline":
+            print(f"⚠ Unknown condition '{condition}'; using defaults")
         if param_overrides:
             params.update(param_overrides)
 

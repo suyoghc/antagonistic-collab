@@ -71,7 +71,11 @@ class SUSTAIN:
         # Per-dimension similarity
         dim_sim = np.exp(-cluster.lambdas * np.abs(stimulus - cluster.position))
         # Aggregate with attentional focus
-        act = np.sum(cluster.lambdas * dim_sim) / np.sum(cluster.lambdas)
+        lambda_sum = np.sum(cluster.lambdas)
+        if lambda_sum == 0:
+            act = float(np.mean(dim_sim))
+        else:
+            act = np.sum(cluster.lambdas * dim_sim) / lambda_sum
         return act**r
 
     def _output(

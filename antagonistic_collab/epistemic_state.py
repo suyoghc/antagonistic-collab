@@ -17,6 +17,7 @@ cumulative — it's just long. The epistemic state explicitly tracks:
 import copy
 import json
 import hashlib
+import os
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 from datetime import datetime
@@ -714,6 +715,9 @@ class EpistemicState:
                 return obj.tolist()
             return obj
 
+        parent_dir = os.path.dirname(path)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
         with open(path, "w") as f:
             json.dump(_sanitize(self.to_dict()), f, indent=2, default=str)
 

@@ -104,3 +104,25 @@ Tracks what was changed, why, what alternatives were considered, and what's stil
 **Result:** 91 tests pass (including param_overrides fix from Codex review). Predictions are now model-computed, not LLM-guessed. Validated with 3-cycle run: Exemplar_Agent wins with RMSE=0.0776, 3.6x lower than nearest competitor (Rule_Agent=0.2755, Clustering_Agent=0.3528). See LESSONS_LEARNED.md 3.1–3.4.
 
 **Status:** Done.
+
+---
+
+## D9: Code review bug fixes (8 issues) — 2026-03-13
+
+**Problem:** Comprehensive code review identified 10+ issues across runner.py, models, debate_protocol.py, and epistemic_state.py. Most were crash-level bugs triggered by edge cases (invalid params, missing data, malformed LLM output).
+
+**Decision:** Fixed the 8 highest-impact issues:
+1. **runner.py:647** — `:.3f` format applied to string `'N/A'` → conditional formatting
+2. **runner.py:593** — `design_spec.get()` without dict check → validate type first
+3. **gcm.py:58** — `r=0` causes ZeroDivisionError → raise ValueError with message
+4. **gcm.py:108** — incomplete bias dict causes KeyError → validate keys, raise ValueError
+5. **sustain.py:74** — zero lambdas cause NaN (division by zero) → fallback to mean(dim_sim)
+6. **epistemic_state.py:717** — `to_json()` doesn't create parent dirs → add `os.makedirs()`
+7. **debate_protocol.py:530** — NaN in model probs corrupts divergence map → `nan_to_num(0.5)`
+8. **debate_protocol.py:574** — unknown condition name silently uses defaults → add warning
+
+**Tests:** 13 new regression tests, 104 total passing. Also fixed a weak source-inspection test that checked for single-quoted string literal instead of the actual semantic content.
+
+**Alternatives considered:** For SUSTAIN zero-lambdas, considered raising an error, but `mean(dim_sim)` is the mathematically sensible degenerate case (uniform attention → unweighted average).
+
+**Status:** Done.

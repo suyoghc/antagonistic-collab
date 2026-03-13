@@ -590,8 +590,9 @@ def run_execution(
     context = protocol._approved_experiment_context()
 
     # Resolve structure name and condition for model predictions
-    struct_name = exp.design_spec.get("structure_name", "")
-    condition = exp.design_spec.get("condition", "baseline")
+    design = exp.design_spec if isinstance(exp.design_spec, dict) else {}
+    struct_name = design.get("structure_name", "")
+    condition = design.get("condition", "baseline")
 
     # Each agent registers predictions BEFORE seeing data
     # The system runs each agent's model automatically; the LLM provides
@@ -643,9 +644,11 @@ def run_execution(
             predicted_pattern=predicted,
         )
 
-        print(
-            f"    Model-computed: mean_accuracy={predicted.get('mean_accuracy', 'N/A'):.3f}"
-        )
+        mean_acc = predicted.get("mean_accuracy")
+        if isinstance(mean_acc, (int, float)):
+            print(f"    Model-computed: mean_accuracy={mean_acc:.3f}")
+        else:
+            print("    Model-computed: mean_accuracy=N/A")
 
         messages.append(
             {
