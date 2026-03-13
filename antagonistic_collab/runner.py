@@ -624,15 +624,22 @@ def run_execution(
         json_block = extract_json(response) or {}
         llm_reasoning = json_block.get("reasoning", "")
         llm_confidence = json_block.get("confidence", "medium")
+        llm_param_overrides = json_block.get("param_overrides") or {}
+        # Sanitize: only accept dict of scalar values
+        if not isinstance(llm_param_overrides, dict):
+            llm_param_overrides = {}
 
         # Compute predictions by running the agent's actual model
-        predicted = protocol.compute_model_predictions(agent, struct_name, condition)
+        predicted = protocol.compute_model_predictions(
+            agent, struct_name, condition, param_overrides=llm_param_overrides
+        )
+        params_used = predicted.pop("params_used", agent.default_params)
 
         protocol.state.register_prediction(
             experiment_id=exp.experiment_id,
             agent_name=agent.name,
             model_name=agent.model_class.name,
-            model_params=agent.default_params,
+            model_params=params_used,
             predicted_pattern=predicted,
         )
 

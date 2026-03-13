@@ -18,6 +18,12 @@
 - [ ] Assess whether critique quality degrades over cycles (circular "my model can also predict that" pattern)
 - [ ] Run with each model as ground truth (GCM, SUSTAIN, RULEX) and compare
 
+### Queued (from Codex review, 2026-03-13)
+- [ ] **[P1] Implement Phase 5 (Design Revision)** — currently a placeholder (runner.py ~line 862); critiques never lead to revised proposals
+- [ ] **[P2] Fix moderator reject path** — "reject all" prints a message but doesn't loop back to proposals; burns the cycle instead
+- [ ] **[P2] SUSTAIN.predict_learning_curve() ignores test_items/test_labels** — only uses training log accuracy; held-out data is accepted but unused
+- [ ] **[P3] Fix --demo order-sensitivity** — `sys.argv[1] == "--demo"` fails when other flags precede it
+
 ### Done
 - [x] Fix P1 crashes and data-integrity bugs — 2026-03-11 → 2026-03-12
 - [x] Add Princeton/Portkey backend — 2026-03-12 16:40

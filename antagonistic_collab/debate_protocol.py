@@ -549,13 +549,16 @@ class DebateProtocol:
         agent_config: AgentConfig,
         structure_name: str,
         condition: str = "baseline",
+        param_overrides: Optional[dict] = None,
     ) -> dict:
         """
         Run an agent's model on a category structure and return per-item
         predictions as P(correct label) for each item.
 
-        Returns dict with "mean_accuracy" and "item_0" through "item_N",
-        all floats in [0, 1].
+        Params are layered: agent defaults → condition effects → param_overrides.
+
+        Returns dict with "mean_accuracy", "item_0" through "item_N" (all
+        floats in [0, 1]), and "params_used" (the final merged params).
         """
         # Resolve structure (fallback to Type_II)
         if structure_name in STRUCTURE_REGISTRY:
@@ -566,12 +569,14 @@ class DebateProtocol:
         stimuli = np.asarray(struct["stimuli"])
         labels = np.asarray(struct["labels"])
 
-        # Build params: start from agent defaults, apply condition overrides
+        # Build params: agent defaults → condition overrides → agent overrides
         params = dict(agent_config.default_params)
         if condition in CONDITION_EFFECTS:
             model_key = agent_config.model_class.name.split()[0]
-            overrides = CONDITION_EFFECTS[condition].get(model_key, {})
-            params.update(overrides)
+            cond_overrides = CONDITION_EFFECTS[condition].get(model_key, {})
+            params.update(cond_overrides)
+        if param_overrides:
+            params.update(param_overrides)
 
         model = agent_config.model_class
 
@@ -588,7 +593,14 @@ class DebateProtocol:
 
         mean_acc = float(np.mean(list(item_accuracies.values())))
 
-        result = {"mean_accuracy": mean_acc}
+        # Record params actually used (exclude non-serializable values)
+        params_used = {
+            k: v
+            for k, v in params.items()
+            if not isinstance(v, np.ndarray) and v is not None
+        }
+
+        result = {"mean_accuracy": mean_acc, "params_used": params_used}
         result.update(item_accuracies)
         return result
 

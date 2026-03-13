@@ -2218,3 +2218,49 @@ class TestModelBasedPredictions:
         assert "mean_accuracy" in result
         assert isinstance(result["mean_accuracy"], float)
         assert 0.0 <= result["mean_accuracy"] <= 1.0
+
+    # --- Test 8: param_overrides change predictions ---
+
+    def test_param_overrides_change_predictions(self):
+        """
+        Bug (P1): compute_model_predictions() ignored param_overrides from
+        the LLM response, so agents couldn't request non-default parameters.
+
+        Passing c=1.0 (low sensitivity) vs c=8.0 (high sensitivity) to GCM
+        on Type_II must produce different predictions.
+        """
+        protocol = self._make_protocol()
+        agent = self._get_agent(protocol, "Exemplar")
+
+        result_low = protocol.compute_model_predictions(
+            agent, "Type_II", "baseline", param_overrides={"c": 1.0}
+        )
+        result_high = protocol.compute_model_predictions(
+            agent, "Type_II", "baseline", param_overrides={"c": 8.0}
+        )
+        assert result_low != result_high, (
+            "param_overrides with different c values produced identical "
+            "predictions — overrides not applied"
+        )
+
+    # --- Test 9: param_overrides returned in metadata ---
+
+    def test_param_overrides_returned_in_metadata(self):
+        """
+        Bug (P1): register_prediction() stored agent.default_params instead
+        of the actual params used (defaults + condition + overrides).
+
+        compute_model_predictions() must return a 'params_used' key so the
+        caller can record what was actually used.
+        """
+        protocol = self._make_protocol()
+        agent = self._get_agent(protocol, "Exemplar")
+
+        result = protocol.compute_model_predictions(
+            agent, "Type_II", "low_attention", param_overrides={"c": 7.0}
+        )
+        assert "params_used" in result, "Missing params_used in result"
+        # c=7.0 from overrides should win over low_attention's c=1.5
+        assert result["params_used"]["c"] == 7.0, (
+            f"Expected c=7.0 from param_overrides, got {result['params_used']['c']}"
+        )
