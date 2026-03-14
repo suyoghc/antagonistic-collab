@@ -41,6 +41,13 @@
 - [x] **[P3] Fix --demo order-sensitivity** — `"--demo" in sys.argv` works regardless of position
 - [x] **Show concrete model predictions in divergence ranking** — ranked summary now shows per-model predicted accuracy (e.g., "Exemplar_Agent: 0.75, Rule_Agent: 0.80, Clustering_Agent: 0.50") so agents can see their advantage per structure
 
+### Done (Codex review round 4, 2026-03-14)
+- [x] **RULEX ground truth non-deterministic** — _synthetic_runner() missing seed=42 for RULEX.predict() (D22)
+- [x] **RULEX predict_learning_curve() drops seed** — find_best_rule() call missing seed forwarding (D22)
+- [x] **Redundant model_predicted/predicted keys** — removed duplicate key in execution messages (D22)
+- [x] **.gitignore gap for .md transcripts** — added debate_cycle_*.md pattern (D22)
+- [ ] **(Latent) GCM.fit() self-prediction bias** — same D11 bug exists in fit(), not used in pipeline currently
+
 ### Done (Codex review round 3, 2026-03-14)
 - [x] **[P1] Override fallback drops condition params** — fallback now uses condition-applied params, not bare defaults (D21)
 - [x] **[P1] Scalar addresses_critiques crashes design revision** — coerce to list before iterating (D21)

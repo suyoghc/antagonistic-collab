@@ -435,3 +435,36 @@ Out-of-range index nulls `idx` but doesn't set `rejected = True`. The outer `run
 **Tests:** 4 regression tests, 194 total passing, ruff clean.
 
 **Status:** Done.
+
+---
+
+## D22: Codex review round 4 — RULEX determinism, cleanup — 2026-03-14
+
+**Source:** Codex automated review flagged 7 issues. Fixed 4, deferred 1, dismissed 2.
+
+**Bug 1: RULEX ground truth non-deterministic.**
+`_synthetic_runner()` called `RULEX.predict()` without a seed. RULEX's `find_best_rule()` uses a stochastic search (`rng = np.random.default_rng(seed)`), so `seed=None` produces different results each run. `compute_model_predictions()` already had `seed=42` for RULEX — the synthetic runner was the oversight.
+**Fix:** Add `"seed": 42` to RULEX params in `_synthetic_runner()`.
+
+**Bug 2: RULEX `predict_learning_curve()` drops seed.**
+`predict_learning_curve()` merges `**params` into `p` dict, but calls `find_best_rule()` with explicit keyword args that omit `seed`. Even if `seed=42` is in `p`, it's silently dropped.
+**Fix:** Add `seed=p.get("seed")` to the `find_best_rule()` call.
+
+**Bug 4: Redundant `model_predicted`/`predicted` keys.**
+Execution prediction messages contained both keys with the same value.
+**Fix:** Removed `model_predicted`, kept `predicted`.
+
+**Bug 5: .gitignore gap.**
+Pattern covered `debate_cycle_*.json` but not `.md` transcripts.
+**Fix:** Added `debate_cycle_*.md`.
+
+**Deferred:**
+- Bug 7 (latent): `GCM.fit()` has the same self-prediction bias fixed in D11, but `fit()` is unused in the pipeline. Logged in TASKS.md.
+
+**Dismissed:**
+- Bug 3 (module-level globals): Valid design concern but large refactor with low ROI for current single-process architecture.
+- Bug 6 (`__init__.py` code): These are import re-exports, not business logic. Standard Python packaging practice despite CLAUDE.md's general rule.
+
+**Tests:** 4 regression tests, 198 total passing, ruff clean.
+
+**Status:** Done.
