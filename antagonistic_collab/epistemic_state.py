@@ -608,9 +608,8 @@ class EpistemicState:
                     f"  Latest revision: {latest.get('description', '(no description)')}"
                 )
                 if latest.get("new_predictions"):
-                    lines.append(
-                        f"  New predictions from revision: {'; '.join(latest['new_predictions'][:2])}"
-                    )
+                    preds = [str(p) for p in latest["new_predictions"][:2]]
+                    lines.append(f"  New predictions from revision: {'; '.join(preds)}")
             if t.term_glossary:
                 key_terms = list(t.term_glossary.keys())[:4]
                 lines.append(

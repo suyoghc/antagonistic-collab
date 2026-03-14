@@ -5978,3 +5978,46 @@ class TestNovelStructurePrompting:
         assert any("4" in p and "32" in p for p in captured_prompts), (
             "Prompt should mention item count constraints (4-32)"
         )
+
+
+# =========================================================================
+# summary_for_agent crash on non-string new_predictions (epistemic_state.py)
+# =========================================================================
+
+
+class TestSummaryForAgentNonStringPredictions:
+    """Bug: summary_for_agent() crashes with TypeError when
+    new_predictions from a theory revision contains dicts instead of strings.
+    This happens when LLM agents return structured predictions (e.g.,
+    {"item": ..., "accuracy": ...}) during interpretation debate revision.
+    """
+
+    def test_summary_does_not_crash_on_dict_predictions(self):
+        """summary_for_agent should handle non-string items in
+        new_predictions without crashing."""
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        # Register a theory
+        state.register_theory(
+            TheoryCommitment(
+                name=agents[0].theory_name,
+                agent_name=agents[0].name,
+                core_claims=agents[0].model_class.core_claims,
+                model_name=agents[0].model_class.name,
+                model_params=agents[0].default_params,
+            )
+        )
+        # Revise with dict-valued new_predictions (as LLM might produce)
+        state.revise_theory(
+            agents[0].theory_name,
+            description="Revised after interpretation",
+            triggered_by_experiment="exp_001",
+            new_predictions=[
+                {"item": "Type_I", "accuracy": 0.9},
+                {"item": "Type_II", "accuracy": 0.7},
+            ],
+        )
+        # This should not crash
+        summary = state.summary_for_agent(agents[0].name)
+        assert isinstance(summary, str)
+        assert len(summary) > 0
