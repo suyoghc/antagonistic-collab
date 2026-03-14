@@ -23,7 +23,7 @@
 - [ ] **Investigate GCM flexibility confound** — GCM outperforms RULEX on RULEX-generated data (4.7% gap after 4 rounds of improvements). May need structures specifically designed to disadvantage GCM, or longer runs to accumulate signal.
 
 ### Queued (from Codex review, 2026-03-13)
-- [ ] **[P1] Implement Phase 5 (Design Revision)** — currently a placeholder (runner.py ~line 862); critiques never lead to revised proposals
+- [x] **[P1] Implement Phase 5 (Design Revision)** — agents now revise proposals based on critiques, updating design_spec via state.revise_proposal()
 - [ ] **[P2] Fix moderator reject path** — "reject all" prints a message but doesn't loop back to proposals; burns the cycle instead
 - [x] **[P2] SUSTAIN.predict_learning_curve() ignores test_items/test_labels** — fixed: now evaluates test items at each block boundary (matches GCM contract)
 - [ ] **[P3] Fix --demo order-sensitivity** — `sys.argv[1] == "--demo"` fails when other flags precede it

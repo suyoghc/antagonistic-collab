@@ -3141,3 +3141,170 @@ class TestSUSTAINPartialBlock:
             f"SUSTAIN curve length ({len(sustain_curve)}) != "
             f"GCM curve length ({len(gcm_curve)})"
         )
+
+
+# =========================================================================
+# Phase 5: Design Revision — 2026-03-14
+# =========================================================================
+
+
+class TestDesignRevision:
+    """
+    Bug: Phase 5 (Design Revision) is a placeholder that creates an empty
+    PhaseResult. Critiques never lead to revised proposals. The design
+    revision function should let each agent revise their proposal in
+    light of critiques, updating the design_spec via state.revise_proposal().
+    """
+
+    def _make_protocol(self):
+        return DebateProtocol(
+            agent_configs=default_agent_configs(),
+            state=EpistemicState(domain="test"),
+        )
+
+    def test_run_design_revision_exists(self):
+        """run_design_revision should be importable from runner."""
+        from antagonistic_collab.runner import run_design_revision
+
+        assert callable(run_design_revision)
+
+    def test_revision_updates_design_spec(self):
+        """
+        When an agent revises their proposal, the design_spec should be
+        updated to the revised version.
+        """
+        protocol = self._make_protocol()
+        state = protocol.state
+
+        # Create a proposal with critiques
+        exp = state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Original Proposal",
+            design_spec={"structure_name": "Type_VI", "condition": "baseline"},
+            rationale="Test exemplar theory",
+        )
+        state.add_critique(
+            exp.experiment_id,
+            "Rule_Agent",
+            "Type_VI is non-diagnostic for rule models",
+        )
+
+        # Revise the proposal
+        state.revise_proposal(
+            exp.experiment_id,
+            revised_by="Exemplar_Agent",
+            addresses_critiques=[0],
+            changes="Changed structure to five_four",
+            new_design_spec={"structure_name": "five_four", "condition": "baseline"},
+        )
+
+        # Design spec should be updated
+        assert exp.design_spec["structure_name"] == "five_four"
+        assert len(exp.revision_history) == 1
+        assert exp.revision_history[0]["addresses_critiques"] == [0]
+
+    @patch("antagonistic_collab.runner.call_agent")
+    def test_run_design_revision_calls_agents(self, mock_call):
+        """
+        run_design_revision should call each agent that has a proposal
+        with critiques, asking them to revise.
+        """
+        from antagonistic_collab.runner import run_design_revision
+
+        protocol = self._make_protocol()
+        state = protocol.state
+
+        # Create proposals with critiques
+        exp1 = state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Exemplar Proposal",
+            design_spec={"structure_name": "Type_VI", "condition": "baseline"},
+            rationale="r",
+        )
+        state.add_critique(exp1.experiment_id, "Rule_Agent", "Non-diagnostic")
+
+        exp2 = state.propose_experiment(
+            proposed_by="Rule_Agent",
+            title="Rule Proposal",
+            design_spec={"structure_name": "Type_II", "condition": "baseline"},
+            rationale="r",
+        )
+        state.add_critique(exp2.experiment_id, "Exemplar_Agent", "Too easy")
+
+        # Mock LLM to return revised proposals
+        mock_call.side_effect = [
+            json.dumps(
+                {
+                    "structure_name": "five_four",
+                    "condition": "baseline",
+                    "changes": "Switched to five_four per critique",
+                    "addresses_critiques": [0],
+                }
+            ),
+            json.dumps(
+                {
+                    "structure_name": "Type_III",
+                    "condition": "high_attention",
+                    "changes": "Switched to harder structure",
+                    "addresses_critiques": [0],
+                }
+            ),
+        ]
+
+        result = run_design_revision(protocol, None, [])
+
+        assert result.phase == Phase.DESIGN_REVISION
+        # Both agents should have been called
+        assert mock_call.call_count == 2
+
+    @patch("antagonistic_collab.runner.call_agent")
+    def test_revision_preserves_proposal_without_critiques(self, mock_call):
+        """
+        Proposals with no critiques should not be revised.
+        """
+        from antagonistic_collab.runner import run_design_revision
+
+        protocol = self._make_protocol()
+        state = protocol.state
+
+        # Proposal with no critiques
+        exp = state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Uncontested Proposal",
+            design_spec={"structure_name": "Type_I", "condition": "baseline"},
+            rationale="r",
+        )
+
+        run_design_revision(protocol, None, [])
+
+        # Agent should NOT be called (no critiques to address)
+        assert mock_call.call_count == 0
+        # Design spec should be unchanged
+        assert exp.design_spec["structure_name"] == "Type_I"
+
+    @patch("antagonistic_collab.runner.call_agent")
+    def test_revision_handles_bad_llm_output(self, mock_call):
+        """
+        If the LLM returns garbage, the proposal should remain unchanged.
+        """
+        from antagonistic_collab.runner import run_design_revision
+
+        protocol = self._make_protocol()
+        state = protocol.state
+
+        exp = state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Proposal",
+            design_spec={"structure_name": "Type_VI", "condition": "baseline"},
+            rationale="r",
+        )
+        state.add_critique(exp.experiment_id, "Rule_Agent", "Bad")
+
+        # Mock returns unparseable garbage
+        mock_call.return_value = "I think we should reconsider the whole approach..."
+
+        run_design_revision(protocol, None, [])
+
+        # Proposal should be unchanged
+        assert exp.design_spec["structure_name"] == "Type_VI"
+        assert len(exp.revision_history) == 0

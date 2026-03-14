@@ -479,6 +479,124 @@ def run_adversarial_critique(
     )
 
 
+def run_design_revision(
+    protocol: DebateProtocol, client, transcript: list
+) -> PhaseResult:
+    """Phase 5: Each agent revises their proposal in light of critiques."""
+    spec = protocol.phase_spec(Phase.DESIGN_REVISION)
+    messages = []
+
+    print("\n" + "=" * 70)
+    print("PHASE: DESIGN REVISION — Agents revise proposals")
+    print("=" * 70)
+
+    current_proposals = [
+        e
+        for e in protocol.state.experiments
+        if e.cycle == protocol.state.cycle and e.status == "proposed"
+    ]
+
+    for proposal in current_proposals:
+        if not proposal.critique_log:
+            print(f"\n  {proposal.proposed_by}: no critiques, skipping revision")
+            continue
+
+        # Find the agent config for the proposer
+        agent = next(
+            (a for a in protocol.agent_configs if a.name == proposal.proposed_by),
+            None,
+        )
+        if agent is None:
+            continue
+
+        # Build critique summary for this proposal
+        critique_text = "\n".join(
+            f"  - {c['agent']}: {c['critique']}" for c in proposal.critique_log
+        )
+
+        # Build structure menu
+        struct_menu = "\n".join(
+            f"  - {name}: {STRUCTURE_DESCRIPTIONS.get(name, '')}"
+            for name in STRUCTURE_REGISTRY
+        )
+
+        prompt = (
+            f"PHASE: Design Revision\n\n"
+            f"GOAL: {spec['goal']}\n\n"
+            f"YOUR ORIGINAL PROPOSAL:\n"
+            f"  Title: {proposal.title}\n"
+            f"  Design: {json.dumps(proposal.design_spec)}\n\n"
+            f"CRITIQUES RECEIVED ({len(proposal.critique_log)}):\n"
+            f"{critique_text}\n\n"
+            f"AVAILABLE STRUCTURES:\n{struct_menu}\n\n"
+            f"Revise your proposal to address the critiques. You MUST output "
+            f"a JSON block with:\n"
+            f'{{"structure_name": "<exact name from menu>", '
+            f'"condition": "<condition>", '
+            f'"changes": "<what you changed and why>", '
+            f'"addresses_critiques": [<indices of critiques addressed, 0-based>]}}\n\n'
+            f"If you believe your original proposal is strong despite the "
+            f"critiques, you may keep the same structure_name but must still "
+            f"explain why the critiques don't warrant changes."
+        )
+
+        print(f"\n  {agent.name} revises '{proposal.title}':")
+        response = call_agent(client, agent.system_prompt, prompt)
+        print(response[:600] + "..." if len(response) > 600 else response)
+
+        # Parse the revision
+        revision_json = extract_json(response) or {}
+        new_structure = revision_json.get("structure_name", "")
+        addresses = revision_json.get("addresses_critiques", [])
+        changes = revision_json.get("changes", "")
+
+        if new_structure and addresses and new_structure in STRUCTURE_REGISTRY:
+            # Validate critique indices
+            valid_indices = [
+                i
+                for i in addresses
+                if isinstance(i, int) and 0 <= i < len(proposal.critique_log)
+            ]
+            if not valid_indices:
+                valid_indices = list(range(len(proposal.critique_log)))
+
+            new_spec = dict(proposal.design_spec)
+            new_spec["structure_name"] = new_structure
+            if "condition" in revision_json:
+                new_spec["condition"] = revision_json["condition"]
+
+            protocol.state.revise_proposal(
+                proposal.experiment_id,
+                revised_by=agent.name,
+                addresses_critiques=valid_indices,
+                changes=changes or f"Changed to {new_structure}",
+                new_design_spec=new_spec,
+            )
+            print(f"  → Revised: {proposal.design_spec.get('structure_name')}")
+        else:
+            print("  → No valid revision parsed, keeping original")
+
+        messages.append(
+            {
+                "agent": agent.name,
+                "phase": "DESIGN_REVISION",
+                "response": response,
+                "parsed_json": revision_json,
+                "experiment_id": proposal.experiment_id,
+            }
+        )
+
+    transcript.extend(messages)
+    return PhaseResult(
+        phase=Phase.DESIGN_REVISION,
+        cycle=protocol.state.cycle,
+        outputs={
+            "n_revisions": sum(1 for p in current_proposals if p.revision_history)
+        },
+        messages=messages,
+    )
+
+
 def run_human_arbitration(protocol: DebateProtocol, transcript: list) -> PhaseResult:
     """Phase 6: Human moderator reviews and decides."""
     print("\n" + "=" * 70)
@@ -894,10 +1012,9 @@ def run_cycle(
     )
     protocol.advance_phase(result)
 
-    # Phase 5: Design revision (simplified — agents revise in critique rounds)
-    protocol.advance_phase(
-        PhaseResult(phase=Phase.DESIGN_REVISION, cycle=protocol.state.cycle, outputs={})
-    )
+    # Phase 5: Design revision — agents revise proposals based on critiques
+    result = run_design_revision(protocol, client, transcript)
+    protocol.advance_phase(result)
 
     # Phase 6: Human arbitration
     result = run_human_arbitration(protocol, transcript)
