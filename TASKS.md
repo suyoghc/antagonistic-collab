@@ -19,7 +19,7 @@
 - [x] Fix self-prediction bias — leave-one-out cross-validation in compute_model_predictions and compute_divergence_map (D11)
 - [ ] Assess whether critique quality degrades over cycles (circular "my model can also predict that" pattern)
 - [ ] Run longer debates (5+ cycles) to check whether RMSE gap widens monotonically
-- [ ] **Make the debate influence outcomes** — replace round-robin with divergence-driven experiment selection so critiques and proposals matter for scoring
+- [x] **Make the debate influence outcomes** — divergence-driven experiment selection picks the most diagnostic structure (D12). Re-running RULEX validation.
 
 ### Queued (from Codex review, 2026-03-13)
 - [ ] **[P1] Implement Phase 5 (Design Revision)** — currently a placeholder (runner.py ~line 862); critiques never lead to revised proposals

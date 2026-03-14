@@ -163,3 +163,26 @@ Tracks what was changed, why, what alternatives were considered, and what's stil
 **Tests:** 4 new regression tests, 112 total passing.
 
 **Status:** Done. Re-run multi-model validation to confirm correct agents now win.
+
+---
+
+## D12: Divergence-driven experiment selection — 2026-03-14
+
+**Problem:** Batch-mode arbitration used round-robin agent rotation to pick which experiment to run. This ignored the diagnostic value of different category structures. RULEX consistently lost because Type_VI (where it's weakest — no simple rule exists) was always selected in cycle 0 by Exemplar_Agent. Only 1 of 3 experiments tested a rule-favorable structure.
+
+**Decision:** Replaced round-robin with divergence-driven selection. The moderator now:
+1. Computes `compute_divergence_map()` over all 11 structures in `STRUCTURE_REGISTRY`
+2. For each proposal, looks up its `structure_name` in the divergence map
+3. Picks the proposal whose structure has the highest max pairwise divergence between models
+4. Falls back to critique count on ties (more scrutinized = more refined)
+
+Also expanded `compute_divergence_map()` to use the full `STRUCTURE_REGISTRY` (was only Shepard I–VI + five_four). This ensures divergence map keys match registry keys directly.
+
+**Alternatives considered:**
+- (A) Weighted random sampling by divergence — adds noise, harder to debug
+- (B) LLM moderator selects based on divergence context — adds API cost and latency, LLM may not optimize well
+- (C) Pre-computed optimal sequence — inflexible, doesn't adapt to debate state
+
+**Tests:** Updated `test_batch_mode_rotates_proposals` → `test_batch_mode_divergence_driven`, fixed div map key lookups, 115 total passing.
+
+**Status:** Done. Re-running RULEX validation to verify Rule_Agent now wins.
