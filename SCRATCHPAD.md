@@ -13,7 +13,7 @@ Implemented debate-as-hypothesis-generator architecture (D19). Three-phase refac
 
 Legacy 9-phase flow preserved as `--mode legacy` (default). New flow: `--mode full_pool`.
 
-**Status:** Full_pool mode validated end-to-end (2-cycle real run with Princeton/GPT-4o). Phase desync bug fixed (skip_to_phase before EIG advance).
+**Status:** Full_pool mode validated end-to-end (2-cycle real run with Princeton/GPT-4o). All integration gaps closed (D23): learning curves wired into execution + Bayesian update, novel structures validated + registered, curve context in interpretation debate, temporary structures in curve computation.
 
 ### 2-cycle full_pool validation (GCM ground truth)
 - Cycle 0: EIG selected `five_four / fast_presentation` (highest EIG)
@@ -22,10 +22,9 @@ Legacy 9-phase flow preserved as `--mode legacy` (default). New flow: `--mode fu
 - Correct agent wins decisively
 
 **Next:**
-- Wire learning curves into `run_execution()` (compute + pass to posterior update)
-- Feed novel structures from interpretation debate back into `protocol.temporary_structures`
-- Include learning curve results in interpretation debate context
-- 5-cycle validation runs comparing `--mode full_pool` vs `--mode legacy` convergence
+- 5-cycle comparative validation: `--mode full_pool` vs `--mode legacy` for all 3 ground truths
+- Prompt novel structure generation (few-shot examples in interpretation debate)
+- Update CHATLOG.md with session 13 summary
 
 ### 5-cycle validation results (pre-diversity-penalty)
 

@@ -61,7 +61,9 @@ models/
 - Measure whether RMSE gap grows over cycles — **DONE** (15.1% GCM, 32.2% SUSTAIN, 1.8% RULEX at 5 cycles)
 - Check whether critique quality improves or degrades — **DONE** (stable but formulaic)
 - Full-pool EIG mode validated end-to-end — **DONE** (2-cycle, correct convergence, 36% fewer LLM calls)
-- Remaining: wire learning curves into execution, 5-cycle comparative validation (full_pool vs legacy)
+- Learning curves wired into execution + Bayesian update — **DONE** (D23)
+- Novel structures validated/registered from interpretation debate — **DONE** (D23)
+- Remaining: 5-cycle comparative validation (full_pool vs legacy), novel structure prompting
 
 ### M4: Multi-model ground truth
 - Run with each model as ground truth (GCM, SUSTAIN, RULEX)
