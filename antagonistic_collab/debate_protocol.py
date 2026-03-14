@@ -612,11 +612,22 @@ class DebateProtocol:
         # When predicting item i, exclude it from the training set.
         # This prevents self-prediction bias (e.g., GCM always matching
         # item i to itself with distance=0, similarity=1.0).
+        #
+        # If LLM-provided param values crash the model (wrong shapes,
+        # bad types), fall back to default params for the entire run.
+        default_only = {
+            k: v for k, v in agent_config.default_params.items() if k in valid_params
+        }
         item_accuracies = {}
         for i, (stim, label) in enumerate(zip(stimuli, labels)):
             loo_stimuli = np.delete(stimuli, i, axis=0)
             loo_labels = np.delete(labels, i)
-            pred = model.predict(stim, loo_stimuli, loo_labels, **params)
+            try:
+                pred = model.predict(stim, loo_stimuli, loo_labels, **params)
+            except (ValueError, TypeError):
+                # Malformed override values — fall back to defaults
+                params = default_only
+                pred = model.predict(stim, loo_stimuli, loo_labels, **params)
             p_correct = pred["probabilities"].get(int(label), 0.5)
             item_accuracies[f"item_{i}"] = float(p_correct)
 

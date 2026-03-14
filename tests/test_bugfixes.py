@@ -3000,3 +3000,144 @@ class TestUnknownParamOverrides:
         # Should succeed and apply the valid param
         assert "mean_accuracy" in result
         assert result["params_used"].get("c") == 10.0
+
+    def test_wrong_shape_attention_weights_does_not_crash(self):
+        """
+        LLM agent passes attention_weights with wrong number of dimensions
+        (e.g., 3 weights for a 4D structure). Should fall back to defaults
+        instead of crashing.
+        """
+        protocol = self._make_protocol()
+        gcm_agent = next(a for a in protocol.agent_configs if "Exemplar" in a.name)
+
+        # linear_separable_4d has 4 dimensions, but we pass 3 weights
+        result = protocol.compute_model_predictions(
+            gcm_agent,
+            "linear_separable_4d",
+            "baseline",
+            param_overrides={"attention_weights": [0.5, 0.3, 0.2]},
+        )
+
+        # Should succeed without crashing
+        assert "mean_accuracy" in result
+        assert isinstance(result["mean_accuracy"], float)
+
+    def test_negative_c_does_not_crash(self):
+        """
+        LLM agent passes c=-1 which is invalid. Should fall back to
+        defaults instead of crashing.
+        """
+        protocol = self._make_protocol()
+        gcm_agent = next(a for a in protocol.agent_configs if "Exemplar" in a.name)
+
+        result = protocol.compute_model_predictions(
+            gcm_agent,
+            "Type_II",
+            "baseline",
+            param_overrides={"c": -1.0},
+        )
+
+        assert "mean_accuracy" in result
+        assert isinstance(result["mean_accuracy"], float)
+
+    def test_string_param_value_does_not_crash(self):
+        """
+        LLM agent passes a string where a number is expected.
+        Should fall back to defaults instead of crashing.
+        """
+        protocol = self._make_protocol()
+        gcm_agent = next(a for a in protocol.agent_configs if "Exemplar" in a.name)
+
+        result = protocol.compute_model_predictions(
+            gcm_agent,
+            "Type_II",
+            "baseline",
+            param_overrides={"c": "high", "r": "manhattan"},
+        )
+
+        assert "mean_accuracy" in result
+        assert isinstance(result["mean_accuracy"], float)
+
+
+# =========================================================================
+# SUSTAIN partial block drop — 2026-03-14
+# =========================================================================
+
+
+class TestSUSTAINPartialBlock:
+    """
+    Bug: SUSTAIN.predict_learning_curve() iterates only complete blocks.
+    If len(training_sequence) % block_size != 0, the final partial block
+    is silently dropped, making SUSTAIN's curve shorter than GCM/RULEX.
+    """
+
+    def test_partial_block_included(self):
+        """
+        A training sequence of 10 items with block_size=4 should produce
+        3 curve entries (blocks at 4, 8, 10), not 2 (blocks at 4, 8).
+        """
+        from antagonistic_collab.models.sustain import SUSTAIN
+
+        model = SUSTAIN()
+        # 10 items, block_size=4 → should get blocks at 4, 8, 10
+        training_seq = [(np.array([i % 2, i % 3]), i % 2) for i in range(10)]
+        test_items = np.array([[0, 0], [1, 1]])
+        test_labels = np.array([0, 1])
+
+        curve = model.predict_learning_curve(
+            training_seq, test_items, test_labels, block_size=4
+        )
+
+        assert len(curve) == 3, (
+            f"Expected 3 blocks (4, 8, 10) for 10 items with block_size=4, "
+            f"got {len(curve)} blocks"
+        )
+
+    def test_exact_block_size_no_extra(self):
+        """
+        A training sequence of 8 items with block_size=4 should produce
+        exactly 2 curve entries (no partial block to add).
+        """
+        from antagonistic_collab.models.sustain import SUSTAIN
+
+        model = SUSTAIN()
+        training_seq = [(np.array([i % 2, i % 3]), i % 2) for i in range(8)]
+        test_items = np.array([[0, 0], [1, 1]])
+        test_labels = np.array([0, 1])
+
+        curve = model.predict_learning_curve(
+            training_seq, test_items, test_labels, block_size=4
+        )
+
+        assert len(curve) == 2, (
+            f"Expected 2 blocks (4, 8) for 8 items with block_size=4, "
+            f"got {len(curve)} blocks"
+        )
+
+    def test_curve_length_matches_gcm(self):
+        """
+        SUSTAIN and GCM should produce learning curves of the same length
+        for the same training sequence and block_size.
+        """
+        from antagonistic_collab.models.sustain import SUSTAIN
+        from antagonistic_collab.models.gcm import GCM
+
+        sustain = SUSTAIN()
+        gcm = GCM()
+
+        # 7 items, block_size=3 → blocks at 3, 6, 7
+        training_seq = [(np.array([i % 2, i % 3]), i % 2) for i in range(7)]
+        test_items = np.array([[0, 0], [1, 1]])
+        test_labels = np.array([0, 1])
+
+        sustain_curve = sustain.predict_learning_curve(
+            training_seq, test_items, test_labels, block_size=3
+        )
+        gcm_curve = gcm.predict_learning_curve(
+            training_seq, test_items, test_labels, block_size=3
+        )
+
+        assert len(sustain_curve) == len(gcm_curve), (
+            f"SUSTAIN curve length ({len(sustain_curve)}) != "
+            f"GCM curve length ({len(gcm_curve)})"
+        )

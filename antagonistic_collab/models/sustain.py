@@ -353,7 +353,11 @@ class SUSTAIN:
         test_labels = np.asarray(test_labels)
 
         curve = []
-        for block_end in range(block_size, len(training_sequence) + 1, block_size):
+        block_ends = list(range(block_size, len(training_sequence) + 1, block_size))
+        # Include the final partial block if the sequence isn't evenly divisible
+        if len(training_sequence) % block_size != 0:
+            block_ends.append(len(training_sequence))
+        for block_end in block_ends:
             # Train on items up to this block
             partial_seq = training_sequence[:block_end]
             result = self.simulate_learning(partial_seq, **sim_params)
