@@ -666,6 +666,7 @@ def run_human_arbitration(protocol: DebateProtocol, transcript: list) -> PhaseRe
             choice = "skip"
 
     messages = [{"agent": "MODERATOR", "phase": "HUMAN_ARBITRATION", "input": choice}]
+    rejected = False
 
     if choice.startswith("approve"):
         parts = choice.split(maxsplit=2)
@@ -693,13 +694,17 @@ def run_human_arbitration(protocol: DebateProtocol, transcript: list) -> PhaseRe
             protocol.state.approve_experiment(current_proposals[0].experiment_id)
             print(f"\n✓ Auto-approved: {current_proposals[0].title}")
     else:
-        print("\n✗ All proposals rejected. (In full version, this loops back.)")
+        print("\n✗ All proposals rejected. Will loop back for new proposals.")
+        rejected = True
 
     transcript.extend(messages)
+    outputs = {"moderator_choice": choice}
+    if rejected:
+        outputs["rejected"] = True
     return PhaseResult(
         phase=Phase.HUMAN_ARBITRATION,
         cycle=protocol.state.cycle,
-        outputs={"moderator_choice": choice},
+        outputs=outputs,
         messages=messages,
     )
 
@@ -1002,23 +1007,47 @@ def run_cycle(
     result = run_divergence_mapping(protocol, client, transcript)
     protocol.advance_phase(result)
 
-    # Phase 3: Experiment proposal
-    result = run_experiment_proposal(protocol, client, transcript)
-    protocol.advance_phase(result)
+    # Phases 3–6 may loop if the moderator rejects all proposals
+    MAX_REJECT_RETRIES = 2  # up to 3 total attempts (initial + 2 retries)
+    for attempt in range(1 + MAX_REJECT_RETRIES):
+        if attempt > 0:
+            # Loop back: reset phase to EXPERIMENT_PROPOSAL and mark
+            # rejected proposals so new ones can be created
+            print(
+                f"\n[RETRY {attempt}/{MAX_REJECT_RETRIES}] "
+                "Moderator rejected all proposals. Requesting new round."
+            )
+            for exp in protocol.state.experiments:
+                if exp.cycle == protocol.state.cycle and exp.status == "proposed":
+                    exp.status = "rejected"
+            protocol.skip_to_phase(Phase.EXPERIMENT_PROPOSAL)
 
-    # Phase 4: Adversarial critique
-    result = run_adversarial_critique(
-        protocol, client, transcript, n_rounds=critique_rounds
-    )
-    protocol.advance_phase(result)
+        # Phase 3: Experiment proposal
+        result = run_experiment_proposal(protocol, client, transcript)
+        protocol.advance_phase(result)
 
-    # Phase 5: Design revision — agents revise proposals based on critiques
-    result = run_design_revision(protocol, client, transcript)
-    protocol.advance_phase(result)
+        # Phase 4: Adversarial critique
+        result = run_adversarial_critique(
+            protocol, client, transcript, n_rounds=critique_rounds
+        )
+        protocol.advance_phase(result)
 
-    # Phase 6: Human arbitration
-    result = run_human_arbitration(protocol, transcript)
-    protocol.advance_phase(result)
+        # Phase 5: Design revision — agents revise proposals based on critiques
+        result = run_design_revision(protocol, client, transcript)
+        protocol.advance_phase(result)
+
+        # Phase 6: Human arbitration
+        result = run_human_arbitration(protocol, transcript)
+        protocol.advance_phase(result)
+
+        if not result.outputs.get("rejected"):
+            break  # Moderator approved or skipped — continue to execution
+    else:
+        # Exhausted all retries — proceed with no approved experiment
+        print(
+            f"\n[WARNING] All {1 + MAX_REJECT_RETRIES} proposal rounds rejected. "
+            "Proceeding with no approved experiment."
+        )
 
     # Phase 7: Execution
     result = run_execution(protocol, client, transcript, true_model=true_model)

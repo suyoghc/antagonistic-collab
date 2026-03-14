@@ -245,3 +245,22 @@ Also updated the proposal prompt to explicitly direct agents toward structures w
 **Tests:** 5 new regression tests, 133 total passing.
 
 **Status:** Done. The 9-phase debate loop is now structurally complete.
+
+---
+
+## D16: Fix moderator reject path (P2) — 2026-03-14
+
+**Problem:** In interactive mode, typing "reject" at the moderator prompt printed a placeholder message ("In full version, this loops back.") and fell through. No experiment was approved, so `run_execution` found nothing and skipped. The cycle was wasted.
+
+**Decision:** Two changes:
+1. `run_human_arbitration()` now sets `outputs["rejected"] = True` when the moderator rejects, signaling to `run_cycle()`.
+2. `run_cycle()` wraps Phases 3–6 (proposal → critique → revision → arbitration) in a retry loop. On rejection, old proposals are marked `status="rejected"` and the loop restarts from Phase 3 via `skip_to_phase()`. Capped at `MAX_REJECT_RETRIES = 2` (3 total attempts). After exhausting retries, proceeds with no approved experiment (execution phase already handles this gracefully).
+
+**Alternatives considered:**
+- (A) Loop inside `run_human_arbitration` only — can't re-run proposals/critiques, just re-prompts the moderator with the same proposals
+- (B) No retry cap — risks infinite loops if moderator keeps rejecting
+- (C) Auto-approve after max retries — masks the moderator's objection; better to skip the cycle visibly
+
+**Tests:** 7 new regression tests, 140 total passing.
+
+**Status:** Done.

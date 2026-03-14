@@ -3308,3 +3308,410 @@ class TestDesignRevision:
         # Proposal should be unchanged
         assert exp.design_spec["structure_name"] == "Type_VI"
         assert len(exp.revision_history) == 0
+
+
+# =========================================================================
+# Moderator reject path — P2 fix
+# =========================================================================
+
+
+class TestModeratorRejectPath:
+    """
+    Bug (P2): In interactive mode, typing "reject" at the moderator prompt
+    printed "All proposals rejected. (In full version, this loops back.)"
+    but did NOT actually loop back. The cycle continued with no approved
+    experiment, burning the cycle.
+
+    Fix: run_human_arbitration signals rejection via outputs["rejected"]=True.
+    run_cycle checks this and loops back to proposal → critique → revision →
+    arbitration, up to MAX_REJECT_RETRIES times.
+    """
+
+    @staticmethod
+    def _make_protocol():
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        return DebateProtocol(state, agents)
+
+    @patch("builtins.input", return_value="reject")
+    @patch("antagonistic_collab.runner._BATCH_MODE", False)
+    def test_reject_signals_rejection_in_output(self, mock_input):
+        """
+        When the moderator types 'reject', the PhaseResult outputs must
+        include rejected=True so run_cycle knows to loop back.
+        """
+        protocol = self._make_protocol()
+        state = protocol.state
+        state.cycle = 0
+
+        state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Test proposal",
+            design_spec={"structure_name": "Type_I", "condition": "baseline"},
+            rationale="r",
+        )
+
+        result = run_human_arbitration(protocol, [])
+
+        assert result.outputs.get("rejected") is True, (
+            "run_human_arbitration should set outputs['rejected']=True on reject"
+        )
+
+    @patch("builtins.input", return_value="reject")
+    @patch("antagonistic_collab.runner._BATCH_MODE", False)
+    def test_reject_does_not_approve_any_experiment(self, mock_input):
+        """
+        After rejection, no experiment should be in 'approved' status.
+        """
+        protocol = self._make_protocol()
+        state = protocol.state
+        state.cycle = 0
+
+        state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Test proposal",
+            design_spec={"structure_name": "Type_I", "condition": "baseline"},
+            rationale="r",
+        )
+
+        run_human_arbitration(protocol, [])
+
+        approved = [e for e in state.experiments if e.status == "approved"]
+        assert len(approved) == 0, "Rejection should not approve any experiment"
+
+    @patch("builtins.input", return_value="approve 0")
+    @patch("antagonistic_collab.runner._BATCH_MODE", False)
+    def test_approve_does_not_signal_rejection(self, mock_input):
+        """
+        Normal approval should NOT set rejected=True.
+        """
+        protocol = self._make_protocol()
+        state = protocol.state
+        state.cycle = 0
+
+        state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Test proposal",
+            design_spec={"structure_name": "Type_I", "condition": "baseline"},
+            rationale="r",
+        )
+
+        result = run_human_arbitration(protocol, [])
+
+        assert result.outputs.get("rejected") is not True, (
+            "Approval should not signal rejection"
+        )
+
+    @patch("builtins.input", return_value="reject")
+    @patch("antagonistic_collab.runner._BATCH_MODE", False)
+    def test_reject_marks_proposals_status(self, mock_input):
+        """
+        After rejection, the 'rejected' flag is set so run_cycle can
+        mark proposals and loop back. Proposals are NOT auto-marked by
+        run_human_arbitration itself — that's run_cycle's job.
+        """
+        protocol = self._make_protocol()
+        state = protocol.state
+        state.cycle = 0
+
+        state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Test proposal",
+            design_spec={"structure_name": "Type_I", "condition": "baseline"},
+            rationale="r",
+        )
+
+        result = run_human_arbitration(protocol, [])
+        assert result.outputs["rejected"] is True
+
+    @patch("antagonistic_collab.runner._BATCH_MODE", False)
+    def test_run_cycle_retries_on_reject(self):
+        """
+        When the moderator rejects once then approves, run_cycle should
+        call run_experiment_proposal twice (one initial + one retry).
+        """
+        from antagonistic_collab.runner import run_cycle
+
+        protocol = self._make_protocol()
+        state = protocol.state
+        proposal_call_count = 0
+
+        def mock_proposal(proto, client, transcript):
+            nonlocal proposal_call_count
+            proposal_call_count += 1
+            state.propose_experiment(
+                proposed_by="Exemplar_Agent",
+                title=f"Proposal round {proposal_call_count}",
+                design_spec={"structure_name": "Type_I", "condition": "baseline"},
+                rationale="r",
+            )
+            return PhaseResult(
+                phase=Phase.EXPERIMENT_PROPOSAL,
+                cycle=state.cycle,
+                outputs={},
+                messages=[],
+            )
+
+        def mock_critique(proto, client, transcript, n_rounds=2):
+            return PhaseResult(
+                phase=Phase.ADVERSARIAL_CRITIQUE,
+                cycle=state.cycle,
+                outputs={},
+                messages=[],
+            )
+
+        def mock_revision(proto, client, transcript):
+            return PhaseResult(
+                phase=Phase.DESIGN_REVISION,
+                cycle=state.cycle,
+                outputs={},
+                messages=[],
+            )
+
+        arbitration_calls = 0
+
+        def mock_arbitration(proto, transcript):
+            nonlocal arbitration_calls
+            arbitration_calls += 1
+            if arbitration_calls == 1:
+                # First call: reject
+                return PhaseResult(
+                    phase=Phase.HUMAN_ARBITRATION,
+                    cycle=state.cycle,
+                    outputs={"moderator_choice": "reject", "rejected": True},
+                    messages=[],
+                )
+            else:
+                # Second call: approve
+                proposed = [
+                    e
+                    for e in state.experiments
+                    if e.cycle == state.cycle and e.status == "proposed"
+                ]
+                if proposed:
+                    state.approve_experiment(proposed[0].experiment_id)
+                return PhaseResult(
+                    phase=Phase.HUMAN_ARBITRATION,
+                    cycle=state.cycle,
+                    outputs={"moderator_choice": "approve 0"},
+                    messages=[],
+                )
+
+        def mock_noop(proto, client, transcript, **kwargs):
+            return PhaseResult(
+                phase=Phase.EXECUTION,
+                cycle=state.cycle,
+                outputs={},
+                messages=[],
+            )
+
+        with (
+            patch("antagonistic_collab.runner.run_commitment", mock_noop),
+            patch("antagonistic_collab.runner.run_divergence_mapping", mock_noop),
+            patch("antagonistic_collab.runner.run_experiment_proposal", mock_proposal),
+            patch("antagonistic_collab.runner.run_adversarial_critique", mock_critique),
+            patch("antagonistic_collab.runner.run_design_revision", mock_revision),
+            patch("antagonistic_collab.runner.run_human_arbitration", mock_arbitration),
+            patch("antagonistic_collab.runner.run_execution", mock_noop),
+            patch("antagonistic_collab.runner.run_interpretation", mock_noop),
+            patch("antagonistic_collab.runner.run_audit", mock_noop),
+            patch("antagonistic_collab.runner.save_transcript"),
+            patch("antagonistic_collab.runner.save_cycle_markdown"),
+        ):
+            run_cycle(protocol, None, [], output_dir="/tmp/test_reject")
+
+        assert proposal_call_count == 2, (
+            f"Expected 2 proposal rounds (initial + 1 retry), got {proposal_call_count}"
+        )
+        assert arbitration_calls == 2, (
+            f"Expected 2 arbitration calls, got {arbitration_calls}"
+        )
+
+    @patch("antagonistic_collab.runner._BATCH_MODE", False)
+    def test_run_cycle_caps_retries(self):
+        """
+        After MAX_REJECT_RETRIES rejections, run_cycle should stop looping
+        and proceed (with no approved experiment).
+        """
+        from antagonistic_collab.runner import run_cycle
+
+        protocol = self._make_protocol()
+        state = protocol.state
+        proposal_call_count = 0
+
+        def mock_proposal(proto, client, transcript):
+            nonlocal proposal_call_count
+            proposal_call_count += 1
+            state.propose_experiment(
+                proposed_by="Exemplar_Agent",
+                title=f"Proposal round {proposal_call_count}",
+                design_spec={"structure_name": "Type_I", "condition": "baseline"},
+                rationale="r",
+            )
+            return PhaseResult(
+                phase=Phase.EXPERIMENT_PROPOSAL,
+                cycle=state.cycle,
+                outputs={},
+                messages=[],
+            )
+
+        def mock_critique(proto, client, transcript, n_rounds=2):
+            return PhaseResult(
+                phase=Phase.ADVERSARIAL_CRITIQUE,
+                cycle=state.cycle,
+                outputs={},
+                messages=[],
+            )
+
+        def mock_revision(proto, client, transcript):
+            return PhaseResult(
+                phase=Phase.DESIGN_REVISION,
+                cycle=state.cycle,
+                outputs={},
+                messages=[],
+            )
+
+        def mock_always_reject(proto, transcript):
+            return PhaseResult(
+                phase=Phase.HUMAN_ARBITRATION,
+                cycle=state.cycle,
+                outputs={"moderator_choice": "reject", "rejected": True},
+                messages=[],
+            )
+
+        def mock_noop(proto, client, transcript, **kwargs):
+            return PhaseResult(
+                phase=Phase.EXECUTION,
+                cycle=state.cycle,
+                outputs={},
+                messages=[],
+            )
+
+        with (
+            patch("antagonistic_collab.runner.run_commitment", mock_noop),
+            patch("antagonistic_collab.runner.run_divergence_mapping", mock_noop),
+            patch("antagonistic_collab.runner.run_experiment_proposal", mock_proposal),
+            patch("antagonistic_collab.runner.run_adversarial_critique", mock_critique),
+            patch("antagonistic_collab.runner.run_design_revision", mock_revision),
+            patch(
+                "antagonistic_collab.runner.run_human_arbitration", mock_always_reject
+            ),
+            patch("antagonistic_collab.runner.run_execution", mock_noop),
+            patch("antagonistic_collab.runner.run_interpretation", mock_noop),
+            patch("antagonistic_collab.runner.run_audit", mock_noop),
+            patch("antagonistic_collab.runner.save_transcript"),
+            patch("antagonistic_collab.runner.save_cycle_markdown"),
+        ):
+            run_cycle(protocol, None, [], output_dir="/tmp/test_reject")
+
+        # MAX_REJECT_RETRIES = 2, so 3 total attempts
+        assert proposal_call_count == 3, (
+            f"Expected 3 proposal rounds (initial + 2 retries), got {proposal_call_count}"
+        )
+
+    @patch("antagonistic_collab.runner._BATCH_MODE", False)
+    def test_rejected_proposals_marked_rejected(self):
+        """
+        When looping back, the rejected proposals should be marked with
+        status='rejected' so new proposals don't collide.
+        """
+        from antagonistic_collab.runner import run_cycle
+
+        protocol = self._make_protocol()
+        state = protocol.state
+        rejected_ids = []
+        proposal_round = 0
+
+        def mock_proposal(proto, client, transcript):
+            nonlocal proposal_round
+            proposal_round += 1
+            state.propose_experiment(
+                proposed_by="Exemplar_Agent",
+                title=f"Proposal round {proposal_round}",
+                design_spec={"structure_name": "Type_I", "condition": "baseline"},
+                rationale="r",
+            )
+            return PhaseResult(
+                phase=Phase.EXPERIMENT_PROPOSAL,
+                cycle=state.cycle,
+                outputs={},
+                messages=[],
+            )
+
+        def mock_critique(proto, client, transcript, n_rounds=2):
+            return PhaseResult(
+                phase=Phase.ADVERSARIAL_CRITIQUE,
+                cycle=state.cycle,
+                outputs={},
+                messages=[],
+            )
+
+        def mock_revision(proto, client, transcript):
+            return PhaseResult(
+                phase=Phase.DESIGN_REVISION,
+                cycle=state.cycle,
+                outputs={},
+                messages=[],
+            )
+
+        call_count = 0
+
+        def mock_arbitration(proto, transcript):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # Capture the proposed experiment IDs before rejection
+                for e in state.experiments:
+                    if e.cycle == state.cycle and e.status == "proposed":
+                        rejected_ids.append(e.experiment_id)
+                return PhaseResult(
+                    phase=Phase.HUMAN_ARBITRATION,
+                    cycle=state.cycle,
+                    outputs={"moderator_choice": "reject", "rejected": True},
+                    messages=[],
+                )
+            else:
+                proposed = [
+                    e
+                    for e in state.experiments
+                    if e.cycle == state.cycle and e.status == "proposed"
+                ]
+                if proposed:
+                    state.approve_experiment(proposed[0].experiment_id)
+                return PhaseResult(
+                    phase=Phase.HUMAN_ARBITRATION,
+                    cycle=state.cycle,
+                    outputs={"moderator_choice": "approve 0"},
+                    messages=[],
+                )
+
+        def mock_noop(proto, client, transcript, **kwargs):
+            return PhaseResult(
+                phase=Phase.EXECUTION,
+                cycle=state.cycle,
+                outputs={},
+                messages=[],
+            )
+
+        with (
+            patch("antagonistic_collab.runner.run_commitment", mock_noop),
+            patch("antagonistic_collab.runner.run_divergence_mapping", mock_noop),
+            patch("antagonistic_collab.runner.run_experiment_proposal", mock_proposal),
+            patch("antagonistic_collab.runner.run_adversarial_critique", mock_critique),
+            patch("antagonistic_collab.runner.run_design_revision", mock_revision),
+            patch("antagonistic_collab.runner.run_human_arbitration", mock_arbitration),
+            patch("antagonistic_collab.runner.run_execution", mock_noop),
+            patch("antagonistic_collab.runner.run_interpretation", mock_noop),
+            patch("antagonistic_collab.runner.run_audit", mock_noop),
+            patch("antagonistic_collab.runner.save_transcript"),
+            patch("antagonistic_collab.runner.save_cycle_markdown"),
+        ):
+            run_cycle(protocol, None, [], output_dir="/tmp/test_reject")
+
+        # Check that the first-round proposals were marked rejected
+        for eid in rejected_ids:
+            exp = next(e for e in state.experiments if e.experiment_id == eid)
+            assert exp.status == "rejected", (
+                f"Experiment {eid} should be rejected after moderator reject, "
+                f"got status={exp.status}"
+            )
