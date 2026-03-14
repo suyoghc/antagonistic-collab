@@ -105,6 +105,77 @@ CONDITION_EFFECTS: dict[str, dict[str, dict]] = {
 }
 
 
+def extract_curve_features(curve: list[dict]) -> dict:
+    """Extract summary features from a learning curve.
+
+    Args:
+        curve: list of dicts, each with at least "accuracy" and "block".
+
+    Returns:
+        dict with: final_accuracy, onset_block, max_jump, n_big_jumps,
+        monotonic, mean_slope, learning_pattern (gradual|sudden|stepwise).
+    """
+    if not curve:
+        return {
+            "final_accuracy": 0.0,
+            "onset_block": 0,
+            "max_jump": 0.0,
+            "n_big_jumps": 0,
+            "monotonic": True,
+            "mean_slope": 0.0,
+            "learning_pattern": "gradual",
+        }
+
+    accs = [b["accuracy"] for b in curve]
+    n = len(accs)
+
+    final_accuracy = accs[-1]
+
+    # Compute block-to-block jumps
+    jumps = [accs[i + 1] - accs[i] for i in range(n - 1)] if n > 1 else [0.0]
+
+    max_jump = max(abs(j) for j in jumps) if jumps else 0.0
+
+    # Big jump threshold: > 0.15 accuracy change in one block
+    big_jump_threshold = 0.15
+    n_big_jumps = sum(1 for j in jumps if abs(j) > big_jump_threshold)
+
+    # Monotonic: non-decreasing
+    monotonic = all(jumps[i] >= -0.01 for i in range(len(jumps)))
+
+    # Mean slope: average change per block
+    mean_slope = (accs[-1] - accs[0]) / max(n - 1, 1) if n > 1 else 0.0
+
+    # Onset block: first block where accuracy > 0.55 (above chance)
+    onset_block = 0
+    for i, acc in enumerate(accs):
+        if acc > 0.55:
+            onset_block = i
+            break
+
+    # Classify learning pattern
+    if n_big_jumps == 0 and monotonic:
+        learning_pattern = "gradual"
+    elif n_big_jumps == 1 and max_jump > 0.2:
+        learning_pattern = "sudden"
+    elif n_big_jumps >= 2:
+        learning_pattern = "stepwise"
+    elif max_jump > 0.2:
+        learning_pattern = "sudden"
+    else:
+        learning_pattern = "gradual"
+
+    return {
+        "final_accuracy": final_accuracy,
+        "onset_block": onset_block,
+        "max_jump": max_jump,
+        "n_big_jumps": n_big_jumps,
+        "monotonic": monotonic,
+        "mean_slope": mean_slope,
+        "learning_pattern": learning_pattern,
+    }
+
+
 class Phase(Enum):
     COMMITMENT = auto()  # Agents register theories & models
     DIVERGENCE_MAPPING = auto()  # Compute where predictions disagree
@@ -643,6 +714,80 @@ class DebateProtocol:
         result = {"mean_accuracy": mean_acc, "params_used": params_used}
         result.update(item_accuracies)
         return result
+
+    # --- Learning curve predictions ---
+
+    def compute_learning_curve_predictions(
+        self,
+        structure_name: str,
+        condition: str = "baseline",
+        n_epochs: int = 3,
+        block_size: int = 2,
+    ) -> dict:
+        """Run predict_learning_curve() for all models on a structure.
+
+        Args:
+            structure_name: key from STRUCTURE_REGISTRY.
+            condition: experimental condition for param overrides.
+            n_epochs: number of times to cycle through training items.
+            block_size: items per block for the learning curve.
+
+        Returns:
+            {agent_name: list[dict]} where each dict has at least "accuracy" and "block".
+        """
+        if structure_name not in STRUCTURE_REGISTRY:
+            structure_name = "Type_II"
+        struct = STRUCTURE_REGISTRY[structure_name]
+        stimuli = np.asarray(struct["stimuli"])
+        labels = np.asarray(struct["labels"])
+
+        # Build training sequence: n_epochs passes through the items
+        training_sequence = []
+        for _ in range(n_epochs):
+            for stim, label in zip(stimuli, labels):
+                training_sequence.append((np.asarray(stim), int(label)))
+
+        test_items = stimuli
+        test_labels = labels
+
+        curves = {}
+        for agent in self.agent_configs:
+            model = agent.model_class
+
+            # Build params with condition overrides
+            params = dict(agent.default_params)
+            if condition in CONDITION_EFFECTS:
+                model_key = model.name.split()[0]
+                cond_overrides = CONDITION_EFFECTS[condition].get(model_key, {})
+                params.update(cond_overrides)
+
+            # Filter to valid params for predict_learning_curve
+            valid_params = set(
+                inspect.signature(model.predict_learning_curve).parameters.keys()
+            )
+            valid_params -= {
+                "self",
+                "training_sequence",
+                "test_items",
+                "test_labels",
+                "block_size",
+            }
+            filtered_params = {k: v for k, v in params.items() if k in valid_params}
+
+            # RULEX needs deterministic seed
+            if isinstance(model, RULEX):
+                filtered_params.setdefault("seed", 42)
+
+            curve = model.predict_learning_curve(
+                training_sequence,
+                test_items,
+                test_labels,
+                block_size=block_size,
+                **filtered_params,
+            )
+            curves[agent.name] = curve
+
+        return curves
 
     # --- Context generators for each phase ---
 

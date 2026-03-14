@@ -333,11 +333,14 @@ def update_posterior_from_experiment(
     condition: str,
     cycle: int,
     n_subjects: int = 20,
+    learning_curves: Optional[dict] = None,
+    curve_weight: float = 0.5,
 ) -> ModelPosterior:
     """Update the posterior after observing experimental results.
 
     Computes log-likelihoods of the observed data under each model
-    and performs a Bayesian update.
+    and performs a Bayesian update. Optionally incorporates learning
+    curve evidence.
 
     Args:
         posterior: current ModelPosterior
@@ -347,6 +350,11 @@ def update_posterior_from_experiment(
         condition: experimental condition
         cycle: current debate cycle
         n_subjects: assumed subjects per item
+        learning_curves: optional {agent_name: curve_list} from
+            compute_learning_curve_predictions(). If provided,
+            curve-shape RMSE is added as additional evidence.
+        curve_weight: weight of curve evidence relative to accuracy
+            evidence (default 0.5 = half weight).
 
     Returns:
         The same posterior (updated in place), for convenience.
@@ -373,6 +381,40 @@ def update_posterior_from_experiment(
 
         log_likelihoods[m_idx] = compute_log_likelihood(observed, predicted, n_subjects)
 
+    # Add learning curve evidence if provided
+    if learning_curves:
+        # Simulate ground-truth curve from data's ground_truth_model
+        gt_model = data.get("ground_truth_model", "")
+        if gt_model:
+            gt_curve = None
+            # Find ground truth model's curve by matching model name
+            for agent_config in protocol.agent_configs:
+                model_key = agent_config.model_class.name.split()[0]
+                if model_key == gt_model and agent_config.name in learning_curves:
+                    gt_curve = learning_curves[agent_config.name]
+                    break
+
+            if gt_curve:
+                gt_accs = np.array([b["accuracy"] for b in gt_curve])
+                for m_idx, agent_config in enumerate(protocol.agent_configs):
+                    if agent_config.name in learning_curves:
+                        pred_curve = learning_curves[agent_config.name]
+                        pred_accs = np.array([b["accuracy"] for b in pred_curve])
+                        # Match lengths
+                        min_len = min(len(gt_accs), len(pred_accs))
+                        if min_len > 0:
+                            curve_rmse = float(
+                                np.sqrt(
+                                    np.mean(
+                                        (gt_accs[:min_len] - pred_accs[:min_len]) ** 2
+                                    )
+                                )
+                            )
+                            # Convert RMSE to log-likelihood-like score
+                            # Lower RMSE = higher score
+                            curve_ll = -curve_rmse * n_subjects * curve_weight
+                            log_likelihoods[m_idx] += curve_ll
+
     # Record history before update
     history_entry = {
         "cycle": cycle,
@@ -380,6 +422,7 @@ def update_posterior_from_experiment(
         "condition": condition,
         "log_likelihoods": log_likelihoods.tolist(),
         "prior_probs": posterior.probs.tolist(),
+        "has_curve_evidence": learning_curves is not None,
     }
 
     posterior.update(log_likelihoods)

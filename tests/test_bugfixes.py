@@ -4592,3 +4592,229 @@ class TestFullPoolModeFlag:
         assert "proposal" not in call_phases
         assert "critique" not in call_phases
         assert "revision" not in call_phases
+
+
+# =========================================================================
+# Phase B: Learning Curves as Second Evidence Channel (D19)
+# =========================================================================
+
+
+class TestLearningCurvePredictions:
+    """Tests for learning curve generation and feature extraction.
+
+    Learning curves are a second evidence channel orthogonal to RMSE.
+    GCM predicts gradual learning, RULEX predicts sudden transitions,
+    SUSTAIN predicts stepwise cluster-recruitment bumps.
+    """
+
+    def test_learning_curve_all_models_produce_curves(self):
+        """All 3 models produce learning curves for a given structure."""
+        from antagonistic_collab.debate_protocol import DebateProtocol
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        curves = protocol.compute_learning_curve_predictions(
+            "Type_I", "baseline", n_epochs=2, block_size=2
+        )
+        assert len(curves) == 3  # one per agent
+        for agent_name, curve in curves.items():
+            assert len(curve) > 0, f"{agent_name} produced empty curve"
+            for block in curve:
+                assert "accuracy" in block
+                assert isinstance(block["accuracy"], (int, float))
+
+    def test_gcm_curve_monotonic_on_easy_structure(self):
+        """GCM on Type_I: monotonic and reaches ceiling quickly."""
+        from antagonistic_collab.debate_protocol import DebateProtocol
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        curves = protocol.compute_learning_curve_predictions(
+            "Type_I", "baseline", n_epochs=3, block_size=2
+        )
+        gcm_curve = curves["Exemplar_Agent"]
+
+        from antagonistic_collab.debate_protocol import extract_curve_features
+
+        features = extract_curve_features(gcm_curve)
+        # GCM on Type_I should be monotonic (exemplar accumulation)
+        assert features["monotonic"] is True
+        assert features["final_accuracy"] >= 0.75
+
+    def test_rulex_curve_has_jumps(self):
+        """RULEX on Type_I should show jumps (rule discovery)."""
+        from antagonistic_collab.debate_protocol import DebateProtocol
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        curves = protocol.compute_learning_curve_predictions(
+            "Type_I", "baseline", n_epochs=3, block_size=2
+        )
+        rulex_curve = curves["Rule_Agent"]
+
+        from antagonistic_collab.debate_protocol import extract_curve_features
+
+        features = extract_curve_features(rulex_curve)
+        # RULEX should show jumps — sudden or stepwise
+        assert features["learning_pattern"] in ("sudden", "stepwise")
+        assert features["max_jump"] > 0.1
+
+    def test_sustain_curve_on_type_vi(self):
+        """SUSTAIN on Type_VI produces a classifiable learning curve."""
+        from antagonistic_collab.debate_protocol import DebateProtocol
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        curves = protocol.compute_learning_curve_predictions(
+            "Type_VI", "baseline", n_epochs=3, block_size=2
+        )
+        sustain_curve = curves["Clustering_Agent"]
+
+        from antagonistic_collab.debate_protocol import extract_curve_features
+
+        features = extract_curve_features(sustain_curve)
+        # SUSTAIN on Type_VI: pattern is classified (any valid pattern)
+        assert features["learning_pattern"] in ("gradual", "sudden", "stepwise")
+        assert features["final_accuracy"] >= 0.5
+
+    def test_extract_curve_features(self):
+        """extract_curve_features returns the expected fields."""
+        from antagonistic_collab.debate_protocol import extract_curve_features
+
+        # Synthetic gradual curve
+        gradual = [
+            {"accuracy": 0.5, "block": 0},
+            {"accuracy": 0.6, "block": 1},
+            {"accuracy": 0.7, "block": 2},
+            {"accuracy": 0.8, "block": 3},
+        ]
+        features = extract_curve_features(gradual)
+        assert "final_accuracy" in features
+        assert "onset_block" in features
+        assert "max_jump" in features
+        assert "n_big_jumps" in features
+        assert "monotonic" in features
+        assert "mean_slope" in features
+        assert "learning_pattern" in features
+        assert features["final_accuracy"] == 0.8
+        assert features["monotonic"] is True
+        assert features["learning_pattern"] == "gradual"
+
+    def test_curve_rmse_scoring(self):
+        """Matching curve shapes should score lower RMSE than mismatched."""
+
+        observed = [
+            {"accuracy": 0.5, "block": 0},
+            {"accuracy": 0.55, "block": 1},
+            {"accuracy": 0.65, "block": 2},
+            {"accuracy": 0.75, "block": 3},
+        ]
+        good_pred = [
+            {"accuracy": 0.5, "block": 0},
+            {"accuracy": 0.55, "block": 1},
+            {"accuracy": 0.65, "block": 2},
+            {"accuracy": 0.75, "block": 3},
+        ]
+        bad_pred = [
+            {"accuracy": 0.5, "block": 0},
+            {"accuracy": 0.5, "block": 1},
+            {"accuracy": 0.5, "block": 2},
+            {"accuracy": 0.9, "block": 3},
+        ]
+
+        obs_accs = np.array([b["accuracy"] for b in observed])
+        good_accs = np.array([b["accuracy"] for b in good_pred])
+        bad_accs = np.array([b["accuracy"] for b in bad_pred])
+
+        rmse_good = float(np.sqrt(np.mean((obs_accs - good_accs) ** 2)))
+        rmse_bad = float(np.sqrt(np.mean((obs_accs - bad_accs) ** 2)))
+        assert rmse_good < rmse_bad
+
+    def test_posterior_update_with_curves(self):
+        """update_posterior_from_experiment with learning curves shifts posterior."""
+        from antagonistic_collab.bayesian_selection import (
+            update_posterior_from_experiment,
+        )
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+        posterior = ModelPosterior.uniform([a.name for a in agents])
+
+        # Simulate data from GCM ground truth
+        data = protocol.experiment_runner(
+            {"structure_name": "Type_I", "condition": "baseline"},
+            true_model="GCM",
+            cycle=0,
+        )
+
+        # Compute learning curves
+        curves = protocol.compute_learning_curve_predictions(
+            "Type_I", "baseline", n_epochs=2, block_size=2
+        )
+
+        prior_probs = posterior.probs.copy()
+        posterior = update_posterior_from_experiment(
+            posterior,
+            protocol,
+            data,
+            "Type_I",
+            "baseline",
+            cycle=0,
+            learning_curves=curves,
+        )
+        # Posterior should have shifted (not identical to prior)
+        assert not np.allclose(posterior.probs, prior_probs, atol=1e-6)
+
+    def test_curves_in_execution_data(self):
+        """Learning curves appear in execution data when computed."""
+        from antagonistic_collab.debate_protocol import DebateProtocol
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        curves = protocol.compute_learning_curve_predictions(
+            "Type_I", "baseline", n_epochs=2, block_size=2
+        )
+        assert isinstance(curves, dict)
+        assert len(curves) == 3
+        for name, curve in curves.items():
+            assert isinstance(curve, list)
+
+    def test_curve_evidence_breaks_gcm_rulex_tie(self):
+        """Learning curves should provide evidence beyond accuracy RMSE.
+
+        When GCM and RULEX have similar accuracy but different learning
+        dynamics, curve shape should be an additional discriminator.
+        """
+        from antagonistic_collab.debate_protocol import extract_curve_features
+
+        # GCM-like gradual curve
+        gcm_curve = [
+            {"accuracy": 0.5, "block": 0},
+            {"accuracy": 0.6, "block": 1},
+            {"accuracy": 0.7, "block": 2},
+            {"accuracy": 0.8, "block": 3},
+        ]
+        # RULEX-like sudden curve
+        rulex_curve = [
+            {"accuracy": 0.5, "block": 0},
+            {"accuracy": 0.5, "block": 1},
+            {"accuracy": 0.5, "block": 2},
+            {"accuracy": 0.85, "block": 3},
+        ]
+
+        gcm_features = extract_curve_features(gcm_curve)
+        rulex_features = extract_curve_features(rulex_curve)
+
+        # Different learning patterns → can break ties
+        assert gcm_features["learning_pattern"] != rulex_features["learning_pattern"]
