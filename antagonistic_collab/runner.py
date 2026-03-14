@@ -501,31 +501,38 @@ def run_human_arbitration(protocol: DebateProtocol, transcript: list) -> PhaseRe
         print(f"  [{i}] {p.title} (by {p.proposed_by}, {n_critiques} critiques)")
 
     if _BATCH_MODE:
-        # Round-robin by proposer: pick the proposal whose agent has been
-        # approved *least* in prior cycles, with critique-count tiebreaker
-        # (more scrutinized = more refined).
-        prior_approvals: dict[str, int] = {}
-        for exp in protocol.state.experiments:
-            if (
-                exp.status in ("approved", "executed")
-                and exp.cycle < protocol.state.cycle
-            ):
-                prior_approvals[exp.proposed_by] = (
-                    prior_approvals.get(exp.proposed_by, 0) + 1
-                )
+        # Divergence-driven selection: pick the proposal whose structure
+        # has the highest divergence between models. This ensures experiments
+        # are maximally diagnostic. Falls back to critique count on ties.
+        div_map = protocol.compute_divergence_map()
+
+        def _structure_divergence(proposal) -> float:
+            """Get max pairwise divergence for a proposal's structure."""
+            design = (
+                proposal.design_spec if isinstance(proposal.design_spec, dict) else {}
+            )
+            struct_name = design.get("structure_name", "")
+            if struct_name in div_map:
+                divs = div_map[struct_name].get("divergences", {})
+                return max((d["mean_abs_diff"] for d in divs.values()), default=0.0)
+            return 0.0
 
         ranked = sorted(
             range(len(current_proposals)),
             key=lambda i: (
-                prior_approvals.get(current_proposals[i].proposed_by, 0),
+                -_structure_divergence(current_proposals[i]),
                 -len(current_proposals[i].critique_log),
             ),
         )
         best = ranked[0]
+        best_struct = ""
+        if isinstance(current_proposals[best].design_spec, dict):
+            best_struct = current_proposals[best].design_spec.get("structure_name", "")
+        best_div = _structure_divergence(current_proposals[best])
         choice = f"approve {best}"
         print(
             f"\n[BATCH MODE] Auto-selecting: {choice} "
-            f"(round-robin by prior approvals, critique tiebreak)"
+            f"(divergence-driven: {best_struct} div={best_div:.3f})"
         )
     else:
         print("\nOptions:")

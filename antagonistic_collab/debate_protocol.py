@@ -485,9 +485,8 @@ class DebateProtocol:
         that proposals are grounded in actual model behavior.
         """
         if structures is None:
-            # Default: Shepard types + 5-4 structure
-            structures = shepard_types()
-            structures["5-4"] = five_four_structure()
+            # Use all structures from the registry for comprehensive divergence
+            structures = STRUCTURE_REGISTRY
 
         results = {}
         for struct_name, struct in structures.items():
@@ -646,11 +645,7 @@ class DebateProtocol:
                 (d["mean_abs_diff"] for d in data["divergences"].values()),
                 default=0.0,
             )
-            # Map divergence map keys to registry keys
-            registry_key = f"Type_{struct_name}"
-            if registry_key not in STRUCTURE_REGISTRY:
-                registry_key = struct_name
-            ranked.append((registry_key, max_div))
+            ranked.append((struct_name, max_div))
         ranked.sort(key=lambda x: x[1], reverse=True)
 
         lines.append("## Structures Ranked by Maximum Divergence\n")

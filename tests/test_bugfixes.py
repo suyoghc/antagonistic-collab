@@ -395,18 +395,17 @@ class TestSyntheticRunner:
         data = protocol._synthetic_runner(spec, true_model="GCM")
         assert "mean_accuracy" in data
 
-    def test_valid_category_structure_is_used(self):
+    def test_valid_structure_name_is_used(self):
         """
-        Sanity check: when the LLM provides a properly formatted
-        category_structure with stimuli and labels, it should be used
-        (not silently replaced by the fallback).
+        Sanity check: when structure_name is a valid registry key,
+        the corresponding structure should be used (not the fallback).
         """
-        from antagonistic_collab.models.category_structures import shepard_types
+        from antagonistic_collab.debate_protocol import STRUCTURE_REGISTRY
 
-        type_i = shepard_types()["I"]
-        spec = {"category_structure": type_i}
+        spec = {"structure_name": "Type_I", "condition": "baseline"}
         protocol = self._make_protocol()
         data = protocol._synthetic_runner(spec, true_model="GCM")
+        type_i = STRUCTURE_REGISTRY["Type_I"]
         assert len(data["item_accuracies"]) == len(type_i["stimuli"])
 
 
@@ -1705,65 +1704,40 @@ class TestBatchModeRotation:
         return DebateProtocol(state, agents)
 
     @patch("antagonistic_collab.runner._BATCH_MODE", True)
-    def test_batch_mode_rotates_proposals(self):
+    def test_batch_mode_divergence_driven(self):
         """
-        Set up 2 prior cycles where Exemplar_Agent was approved both
-        times.  Create 3 current-cycle proposals from different agents.
-        Batch mode should pick the agent with 0 prior approvals.
+        With divergence-driven selection, proposals with higher-divergence
+        structures are preferred over proposals with lower-divergence
+        structures, regardless of which agent proposed them.
         """
         protocol = self._make_protocol()
         state = protocol.state
-
-        # --- Simulate 2 prior cycles where Exemplar_Agent always won ---
         state.cycle = 1
-        exp1 = state.propose_experiment(
-            proposed_by="Exemplar_Agent",
-            title="Prior Exp 1",
-            design_spec={},
-            rationale="r",
-        )
-        state.approve_experiment(exp1.experiment_id)
 
-        state.cycle = 2
-        exp2 = state.propose_experiment(
-            proposed_by="Exemplar_Agent",
-            title="Prior Exp 2",
-            design_spec={},
-            rationale="r",
-        )
-        state.approve_experiment(exp2.experiment_id)
-
-        # --- Current cycle: 3 proposals from different agents ---
-        state.cycle = 3
+        # Agent with 2 prior approvals proposes high-divergence structure
         state.propose_experiment(
             proposed_by="Exemplar_Agent",
-            title="Exemplar Proposal",
-            design_spec={},
+            title="High div proposal",
+            design_spec={"structure_name": "five_four", "condition": "baseline"},
             rationale="r",
         )
+        # Other agent proposes low-divergence structure
         state.propose_experiment(
-            proposed_by="Prototype_Agent",
-            title="Prototype Proposal",
-            design_spec={},
-            rationale="r",
-        )
-        state.propose_experiment(
-            proposed_by="Rational_Agent",
-            title="Rational Proposal",
-            design_spec={},
+            proposed_by="Rule_Agent",
+            title="Low div proposal",
+            design_spec={"structure_name": "Type_I", "condition": "baseline"},
             rationale="r",
         )
 
         run_human_arbitration(protocol, [])
 
-        # Should NOT pick Exemplar_Agent (2 prior approvals)
         approved = [
-            e for e in state.experiments if e.cycle == 3 and e.status == "approved"
+            e for e in state.experiments if e.cycle == 1 and e.status == "approved"
         ]
         assert len(approved) == 1
-        assert approved[0].proposed_by != "Exemplar_Agent", (
-            "Batch mode should rotate away from the agent with the most "
-            "prior approvals, but it picked Exemplar_Agent again."
+        assert approved[0].design_spec.get("structure_name") == "five_four", (
+            "Divergence-driven selection should pick the highest-divergence "
+            f"structure, got {approved[0].design_spec.get('structure_name')}"
         )
 
     @patch("antagonistic_collab.runner._BATCH_MODE", True)
@@ -2688,3 +2662,146 @@ class TestLeaveOneOutPredictions:
         sus_items = {k: v for k, v in sus_pred.items() if k.startswith("item_")}
         assert len(gcm_items) == len(sus_items)
         assert len(gcm_items) > 0
+
+
+# =========================================================================
+# Divergence-driven experiment selection — 2026-03-14 Session 8
+# =========================================================================
+
+
+class TestDivergenceDrivenSelection:
+    """
+    Bug: Batch-mode arbitration uses round-robin by agent, ignoring which
+    experiment would best discriminate between models. This means RULEX
+    loses because Type_VI (where it's weakest) is always selected in
+    cycle 0. The moderator should pick the proposal whose structure has
+    the highest divergence between models.
+    """
+
+    def _make_protocol(self):
+        return DebateProtocol(
+            agent_configs=default_agent_configs(),
+            state=EpistemicState(domain="test"),
+        )
+
+    def test_selects_highest_divergence_structure(self):
+        """
+        Given proposals for Type_I (low divergence) and five_four (high
+        divergence), batch mode should select five_four.
+        """
+        protocol = self._make_protocol()
+
+        # Propose two experiments with different structures
+        protocol.state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Type I experiment",
+            design_spec={"structure_name": "Type_I", "condition": "baseline"},
+            rationale="Test simple rule",
+        )
+        protocol.state.propose_experiment(
+            proposed_by="Rule_Agent",
+            title="Five-four experiment",
+            design_spec={"structure_name": "five_four", "condition": "baseline"},
+            rationale="Test complex structure",
+        )
+
+        # Compute divergence map to get actual rankings
+        div_map = protocol.compute_divergence_map()
+
+        # Get divergence for each structure (keys match STRUCTURE_REGISTRY)
+        def max_div(struct_name, dmap):
+            if struct_name in dmap:
+                divs = dmap[struct_name].get("divergences", {})
+                return max((d["mean_abs_diff"] for d in divs.values()), default=0.0)
+            return 0.0
+
+        # Verify five_four actually has higher divergence than Type_I
+        # (If not, this test's premise is wrong)
+        div_five_four = max_div("five_four", div_map)
+        div_type_i = max_div("Type_I", div_map)
+        assert div_five_four > div_type_i, (
+            f"Test premise failed: five_four div ({div_five_four}) "
+            f"<= Type_I div ({div_type_i})"
+        )
+
+    def test_batch_mode_uses_divergence_not_round_robin(self):
+        """
+        The batch-mode selection should consider structure divergence,
+        not just cycle through agents in order.
+        """
+        protocol = self._make_protocol()
+
+        # Agent 0 proposes low-divergence structure
+        protocol.state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Low divergence",
+            design_spec={"structure_name": "Type_I", "condition": "baseline"},
+            rationale="",
+        )
+        # Agent 1 proposes high-divergence structure
+        protocol.state.propose_experiment(
+            proposed_by="Rule_Agent",
+            title="High divergence",
+            design_spec={"structure_name": "five_four", "condition": "baseline"},
+            rationale="",
+        )
+
+        # Run arbitration in batch mode
+        import antagonistic_collab.runner as runner
+
+        old_batch = getattr(runner, "_BATCH_MODE", False)
+        runner._BATCH_MODE = True
+        try:
+            run_human_arbitration(protocol, [])
+        finally:
+            runner._BATCH_MODE = old_batch
+
+        # Check which experiment was approved
+        approved = [e for e in protocol.state.experiments if e.status == "approved"]
+        assert len(approved) == 1
+        assert approved[0].design_spec.get("structure_name") == "five_four", (
+            f"Expected five_four (high divergence), got "
+            f"{approved[0].design_spec.get('structure_name')}"
+        )
+
+    def test_falls_back_to_critique_count_on_tie(self):
+        """
+        When proposals have similar divergence, prefer the one with more
+        critiques (more scrutinized = more refined).
+        """
+        protocol = self._make_protocol()
+
+        # Both propose the same structure
+        protocol.state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Proposal A",
+            design_spec={"structure_name": "Type_II", "condition": "baseline"},
+            rationale="",
+        )
+        exp2 = protocol.state.propose_experiment(
+            proposed_by="Rule_Agent",
+            title="Proposal B",
+            design_spec={"structure_name": "Type_II", "condition": "baseline"},
+            rationale="",
+        )
+
+        # Add more critiques to proposal B
+        protocol.state.add_critique(
+            exp2.experiment_id, "Clustering_Agent", "Good proposal"
+        )
+        protocol.state.add_critique(exp2.experiment_id, "Exemplar_Agent", "I agree")
+
+        import antagonistic_collab.runner as runner
+
+        old_batch = getattr(runner, "_BATCH_MODE", False)
+        runner._BATCH_MODE = True
+        try:
+            run_human_arbitration(protocol, [])
+        finally:
+            runner._BATCH_MODE = old_batch
+
+        approved = [e for e in protocol.state.experiments if e.status == "approved"]
+        assert len(approved) == 1
+        assert approved[0].title == "Proposal B", (
+            f"Expected Proposal B (more critiques), got {approved[0].title}"
+        )
