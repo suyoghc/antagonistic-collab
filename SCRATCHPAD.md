@@ -6,31 +6,30 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ## Current focus — 2026-03-14
 
-Implementing concrete model predictions in divergence ranking. The goal: agents see per-model predicted accuracies per structure so they can propose structures that favor their model.
+Testing whether updated proposal prompt + concrete predictions fix RULEX validation. Run _07 in progress.
 
-### Context
-- Divergence-driven selection (D12) works but agents don't propose strategically
-- Rule_Agent proposes Type_II (lowest divergence) every cycle because it sounds interesting for rule learning
-- The fix: show "GCM: 0.60, RULEX: 0.95, SUSTAIN: 0.55" per structure so agents know their advantage
+### Progress table (RULEX as ground truth)
 
-### Implementation plan
-1. Modify `compute_divergence_map()` to include per-model mean accuracy in each structure entry
-2. Update `_divergence_context()` to show per-model predictions alongside divergence scores
-3. TDD: tests first, then implementation
+| Run | Changes | Gap | Winner |
+|---|---|---|---|
+| _03 | round-robin | 16.7% | Exemplar (wrong) |
+| _04 | divergence-driven | 5.5% | Exemplar (wrong) |
+| _05 | + concrete preds | crashed (w_i param) | — |
+| _06 | + param filter | 8.5% | Exemplar (wrong) |
+| _07 | + updated prompt | pending | pending |
 
-### Status of M3
+### What changed in each run:
+- **_04**: Moderator picks highest-divergence structure from proposals
+- **_05/06**: Agents see per-model accuracy in divergence ranking
+- **_07**: Prompt explicitly tells agents to pick structures where their model has highest predicted accuracy
 
-| Ground Truth | Winner | Correct? |
-|---|---|---|
-| GCM | Exemplar_Agent (0.4334) | Yes |
-| SUSTAIN | Clustering_Agent (0.4432) | Yes |
-| RULEX | Exemplar_Agent (0.3872) | No — agents don't propose RULEX-favorable structures |
+### Key observation:
+Rule_Agent won cycle 0 of run _06 on `linear_separable_4d` (RMSE 0.312 vs 0.342). The system can identify the correct model on favorable structures. The challenge is getting enough favorable structures selected across 3 cycles.
 
-### Run inventory:
-- `runs/True_GCM_LLM_gpt-4o_COLLAB_Exemplar-Rule-Clustering_03/` — GCM correct
-- `runs/True_SUSTAIN_LLM_gpt-4o_COLLAB_Exemplar-Rule-Clustering_02/` — SUSTAIN correct
-- `runs/True_RULEX_LLM_gpt-4o_COLLAB_Exemplar-Rule-Clustering_03/` — RULEX incorrect (round-robin)
-- `runs/True_RULEX_LLM_gpt-4o_COLLAB_Exemplar-Rule-Clustering_04/` — RULEX incorrect (divergence-driven, gap narrowed)
+### If _07 still fails:
+- Consider whether this is a fundamental GCM flexibility issue — GCM is genuinely more flexible than RULEX on most structures
+- May need 5+ cycles to accumulate enough evidence on RULEX-favorable structures
+- Or need to investigate whether the LOO accuracy metric for RULEX is computed correctly (stochastic model with seed=42 may not represent expected behavior)
 
 ---
 
@@ -39,3 +38,4 @@ Implementing concrete model predictions in divergence ranking. The goal: agents 
 - **Pre-LOO prediction** — training and testing on same items gives GCM self-similarity bias (D11). Always use LOO.
 - **Round-robin experiment selection** — doesn't optimize for discriminability, disadvantages models that are weak on common structures (RULEX on Type_VI).
 - **Divergence ranking without per-model predictions** — agents can't interpret abstract divergence scores. They need to see which model wins on each structure.
+- **Trusting LLM param overrides** — LLM agents invent parameter names (e.g., `w_i`). Always filter through `inspect.signature`.

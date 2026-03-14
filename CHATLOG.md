@@ -171,4 +171,29 @@ Human-readable summary of each Claude Code session on this project.
 
 ---
 
+## Session 9 — 2026-03-14
+
+**Commits:** `19e8756`, `e8e9ce2`, `5e66a70`, `1677fec`, `1d4b903`, `1029ddb`, `7ade636`
+
+**What we did:**
+- Fixed 2 remaining test failures from divergence-driven selection (D12), merged to main
+- Implemented concrete model predictions in divergence ranking — agents now see per-model predicted accuracy per structure
+- Discovered and fixed crash: LLM agents propose param_overrides with invented parameter names (e.g., `w_i`). Added `inspect.signature` filtering.
+- Updated proposal prompt to direct agents toward structures where their model has highest accuracy
+- Ran 4 RULEX validation runs (runs _04 through _07) with progressive improvements
+- Documented Phase 5 findings in LESSONS_LEARNED.md (5.1–5.4)
+- 122 tests passing, ruff clean
+
+**Key findings:**
+- Divergence-driven selection works: picks higher-divergence structures (0.444–0.619 vs arbitrary)
+- Concrete predictions + updated prompt changed agent behavior: Rule_Agent proposed Type_I for first time
+- RULEX gap narrowed from 16.7% to 4.7% across 4 runs, but GCM still wins — appears to be a genuine model flexibility difference
+- This may be a real scientific finding: GCM is more parsimonious even for rule-generated data
+
+**Key discussion:**
+- User asked whether to use Della — not needed, compute is on API side
+- Central insight: information design for LLM agents matters as much as algorithm design. Showing the right numbers in the right format changes behavior.
+
+---
+
 *This log is maintained manually. Update it at the end of each session.*
