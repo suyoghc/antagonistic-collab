@@ -316,3 +316,46 @@ The debate generates interesting text (qualitative reasoning, mechanism-level ex
 The models are more similar than different on most category structures. Discrimination requires *specifically chosen* structures where the models make divergent predictions — and the current system doesn't optimize for this.
 
 **Implication:** Model flexibility is a fundamental challenge for adversarial collaboration between cognitive models. When all models can accommodate most data patterns (albeit through different mechanisms), the discriminating experiments are rare and must be deliberately sought. This mirrors the real scientific debate between these models (Nosofsky & Johansen 2000, Love et al. 2004): decades of research have focused on finding the specific conditions where the models disagree. The system needs to replicate this strategic experiment selection, not just run arbitrary experiments.
+
+---
+
+## Phase 5: Divergence-driven experiment selection (2026-03-14)
+
+Replaced round-robin batch-mode arbitration with divergence-driven selection (D12). The moderator now picks the proposal whose category structure has the highest max pairwise divergence between models, falling back to critique count on ties. Also expanded `compute_divergence_map()` to use all 11 `STRUCTURE_REGISTRY` structures.
+
+### 5.1 Divergence-driven selection works, but agents don't propose strategically
+
+**Expected:** With the moderator selecting the most diagnostic structure from proposals, RULEX would have a better chance of winning when it's the ground truth model — the moderator would avoid RULEX-unfavorable structures.
+
+**Actual:** 3-cycle RULEX validation with divergence-driven selection:
+
+| Cycle | Structure Selected | Divergence | Exemplar RMSE | Rule RMSE | Clustering RMSE |
+|---|---|---|---|---|---|
+| 0 | Type_VI | 0.444 | 0.4896 | 0.5354 | **0.4514** |
+| 1 | linear_separable_4d | 0.513 | **0.4151** | 0.4414 | 0.5488 |
+| 2 | linear_separable_4d | 0.513 | **0.2569** | 0.2484 | 0.6172 |
+| **Final** | | | **0.3872** | 0.4084 | 0.5720 |
+
+RULEX still lost, but the gap narrowed from 16.7% (0.4417 vs 0.5153 in Phase 4) to 5.5% (0.3872 vs 0.4084). Notably, Rule_Agent had the lowest single-experiment RMSE in cycle 2 (0.2484 vs 0.2569).
+
+The divergence-driven selection did its job — it picked higher-divergence structures (0.444, 0.513, 0.513) instead of low-divergence ones. But the problem shifted from the moderator to the agents:
+
+- **Rule_Agent proposed Type_II in every cycle** (divergence = 0.160, the lowest of all 11 structures)
+- **No agent ever proposed Type_I** (simple rule, RULEX's strongest case)
+- **`linear_separable_2d`** (highest divergence at 0.619) was never proposed by any agent
+
+**Implication:** The bottleneck has moved from moderator selection to agent proposal quality. Agents don't understand which structures favor their model. They choose structures by narrative appeal ("Type_II is interesting for rule learning because of XOR") rather than by quantitative advantage. The divergence ranking tells agents *which structures are most diagnostic* but not *which model wins* on each structure. An agent seeing "Type_I — divergence 0.341" doesn't know whether Type_I favors RULEX, GCM, or SUSTAIN.
+
+### 5.2 The information gap: divergence ≠ advantage
+
+**Expected:** Agents would use the divergence ranking to choose structures that discriminate well.
+
+**Actual:** The divergence ranking shows max pairwise divergence (e.g., "linear_separable_2d — 0.619") but not the direction. An agent needs to know: "On Type_I, RULEX predicts 0.95 while GCM predicts 0.60 — this structure favors me." Without this, the ranking is a list of numbers with no actionable meaning for a specific agent.
+
+The fix is to show concrete per-model predictions in the divergence context:
+```
+Type_I — GCM: 0.60, RULEX: 0.95, SUSTAIN: 0.55 (max divergence: 0.40)
+→ Rule_Agent would immediately see this is their strongest structure
+```
+
+**Implication:** Information design matters. Providing the right abstraction level is crucial for LLM agents. Raw divergence scores are too abstract; per-model predictions are actionable. This is analogous to the real scientific problem: a researcher choosing experiments needs to know their model's predictions, not just that "the models differ." The fix is straightforward — the data is already computed in `compute_divergence_map()`, it just needs to be surfaced per-model in the prompt.
