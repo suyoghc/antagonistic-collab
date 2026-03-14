@@ -2805,3 +2805,118 @@ class TestDivergenceDrivenSelection:
         assert approved[0].title == "Proposal B", (
             f"Expected Proposal B (more critiques), got {approved[0].title}"
         )
+
+
+# =========================================================================
+# Concrete model predictions in divergence ranking — 2026-03-14
+# =========================================================================
+
+
+class TestConcreteModelPredictions:
+    """
+    Bug: Agents see divergence scores but not per-model predictions.
+    Rule_Agent proposes Type_II (lowest divergence) every cycle because
+    it can't see that RULEX dominates on Type_I. The divergence context
+    should show per-model accuracies per structure in the ranked summary.
+    """
+
+    def _make_protocol(self):
+        return DebateProtocol(
+            agent_configs=default_agent_configs(),
+            state=EpistemicState(domain="test"),
+        )
+
+    def test_divergence_map_contains_per_model_accuracy(self):
+        """compute_divergence_map() should include accuracy per agent per structure."""
+        protocol = self._make_protocol()
+        div_map = protocol.compute_divergence_map()
+
+        for struct_name, data in div_map.items():
+            assert "predictions" in data, f"{struct_name} missing 'predictions'"
+            for agent_name, preds in data["predictions"].items():
+                assert "accuracy" in preds, (
+                    f"{struct_name}/{agent_name} missing 'accuracy'"
+                )
+                assert 0.0 <= preds["accuracy"] <= 1.0, (
+                    f"{struct_name}/{agent_name} accuracy out of range: "
+                    f"{preds['accuracy']}"
+                )
+
+    def test_divergence_context_shows_per_model_predictions(self):
+        """
+        The ranked summary in _divergence_context() should include
+        per-model predictions (e.g., 'Exemplar_Agent: 0.85') for each
+        structure, not just the divergence score.
+        """
+        protocol = self._make_protocol()
+        context = protocol._divergence_context()
+
+        # The ranked section should contain agent names with accuracy values
+        # Check that all three agent names appear in the ranked summary
+        agent_names = [a.name for a in protocol.agent_configs]
+        for agent_name in agent_names:
+            assert agent_name in context, (
+                f"Agent '{agent_name}' not found in divergence context"
+            )
+
+        # Check that accuracy values appear near agent names in the ranked
+        # section (format: "AgentName: 0.XXX")
+        import re
+
+        # Find all "AgentName: 0.XXX" patterns in the ranked section
+        ranked_section = context.split("Ranked by Maximum Divergence")[1]
+        accuracy_pattern = re.findall(r"\w+_Agent: \d\.\d{2,}", ranked_section)
+        assert len(accuracy_pattern) >= 3, (
+            f"Expected at least 3 agent accuracy entries in ranked section, "
+            f"found {len(accuracy_pattern)}: {accuracy_pattern}"
+        )
+
+    def test_divergence_context_identifies_best_model_per_structure(self):
+        """
+        For each structure in the ranked summary, agents should be able
+        to see which model has the highest accuracy.
+        """
+        protocol = self._make_protocol()
+        div_map = protocol.compute_divergence_map()
+        context = protocol._divergence_context(div_map)
+
+        # Verify that for Type_I (simple rule), the ranked section contains
+        # per-model info that would help Rule_Agent identify it as favorable
+        ranked_section = context.split("Ranked by Maximum Divergence")[1]
+        assert "Type_I" in ranked_section
+
+        # Get actual predictions for Type_I
+        type_i_preds = div_map["Type_I"]["predictions"]
+        agent_accuracies = {
+            name: preds["accuracy"] for name, preds in type_i_preds.items()
+        }
+
+        # All agents' accuracies should appear in the ranked section
+        for agent, acc in agent_accuracies.items():
+            acc_str = f"{acc:.2f}"
+            assert acc_str in ranked_section, (
+                f"Accuracy {acc_str} for {agent} on Type_I not found in ranked section"
+            )
+
+    def test_per_model_predictions_differ_across_structures(self):
+        """
+        Per-model accuracies should vary across structures. If they don't,
+        the information isn't helpful for strategic proposal selection.
+        """
+        protocol = self._make_protocol()
+        div_map = protocol.compute_divergence_map()
+
+        # Collect accuracies for one agent across all structures
+        exemplar_accs = []
+        for struct_name, data in div_map.items():
+            for agent_name, preds in data["predictions"].items():
+                if "Exemplar" in agent_name:
+                    exemplar_accs.append(preds["accuracy"])
+                    break
+
+        # Should have variation (at least 3 distinct values across 11 structures)
+        distinct = len(set(round(a, 3) for a in exemplar_accs))
+        assert distinct >= 3, (
+            f"Expected >=3 distinct accuracy values for Exemplar_Agent, "
+            f"got {distinct}: {exemplar_accs}"
+        )

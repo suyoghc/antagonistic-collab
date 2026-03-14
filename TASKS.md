@@ -26,7 +26,7 @@
 - [ ] **[P2] Fix moderator reject path** — "reject all" prints a message but doesn't loop back to proposals; burns the cycle instead
 - [x] **[P2] SUSTAIN.predict_learning_curve() ignores test_items/test_labels** — fixed: now evaluates test items at each block boundary (matches GCM contract)
 - [ ] **[P3] Fix --demo order-sensitivity** — `sys.argv[1] == "--demo"` fails when other flags precede it
-- [ ] **Show concrete model predictions in divergence ranking** — instead of abstract divergence scores, show each model's predicted accuracy per structure (e.g., "GCM: 0.85, RULEX: 0.40, SUSTAIN: 0.44") so agents can see what the divergence actually means for their model
+- [x] **Show concrete model predictions in divergence ranking** — ranked summary now shows per-model predicted accuracy (e.g., "Exemplar_Agent: 0.75, Rule_Agent: 0.80, Clustering_Agent: 0.50") so agents can see their advantage per structure
 
 ### Done (code review fixes, 2026-03-13)
 - [x] Fix format crash: :.3f applied to 'N/A' string on missing mean_accuracy (runner.py:647)

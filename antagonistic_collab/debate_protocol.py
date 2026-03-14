@@ -655,6 +655,10 @@ class DebateProtocol:
             lines.append(f"  {rank}. `{name}` — max divergence = {div:.3f}")
             if desc:
                 lines.append(f"     {desc}")
+            # Show per-model predicted accuracy so agents can see their advantage
+            preds = div_map[name]["predictions"]
+            acc_parts = [f"{agent}: {p['accuracy']:.2f}" for agent, p in preds.items()]
+            lines.append(f"     Predicted accuracy: {', '.join(acc_parts)}")
         lines.append("")
 
         return "\n".join(lines)
