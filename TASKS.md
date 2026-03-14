@@ -28,9 +28,9 @@
 - [x] **Validate full_pool mode end-to-end** — 2-cycle real run with Princeton/GPT-4o confirms correct convergence: Exemplar_Agent wins (RMSE 0.139) when GCM is ground truth. EIG selects different structures across cycles without diversity penalty.
 
 ### Up Next (M3 cont. — full_pool integration gaps)
-- [ ] **Wire learning curves into run_execution()** — compute `compute_learning_curve_predictions()` during execution, simulate "observed" curve from ground truth model, pass curves to `update_posterior_from_experiment()`
-- [ ] **Feed novel structures back into EIG pool** — after `run_interpretation_debate()`, validate and register novel structures in `protocol.temporary_structures` for next cycle's `generate_full_candidate_pool()`
-- [ ] **Include learning curve + posterior context in interpretation debate** — agents should see curve comparison table and EIG landscape in their interpretation prompt
+- [x] **Wire learning curves into run_execution()** — compute `compute_learning_curve_predictions()` during execution, pass curves to `update_posterior_from_experiment()`, store on `protocol.state.last_execution_curves` (D23)
+- [x] **Feed novel structures back into EIG pool** — after `run_interpretation_debate()`, validate and register novel structures in `protocol.temporary_structures` for next cycle's `generate_full_candidate_pool()` (D23)
+- [x] **Include learning curve + posterior context in interpretation debate** — agents see curve comparison table (pattern, final accuracy, max jump, onset block) in their interpretation prompt (D23)
 - [ ] **5-cycle comparative validation** — run `--mode full_pool` vs `--mode legacy` for all 3 ground truth models, compare convergence speed and final RMSE gap
 - [ ] **Prompt novel structure generation** — add few-shot examples to interpretation debate prompt showing valid `novel_structure` format to encourage agents to propose new structures
 

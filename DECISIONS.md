@@ -468,3 +468,23 @@ Pattern covered `debate_cycle_*.json` but not `.md` transcripts.
 **Tests:** 4 regression tests, 198 total passing, ruff clean.
 
 **Status:** Done.
+
+---
+
+## D23: Wire learning curves + novel structures into pipeline — 2026-03-14
+
+**Problem:** Phase B (learning curves) and Phase C (novel structures) from D19 were implemented but not connected to the live pipeline. `run_execution()` didn't compute curves, `update_posterior_from_experiment()` was called without the `learning_curves` param, interpretation debate didn't show curve data to agents, and novel structures proposed by agents were captured but never validated/registered.
+
+**Decision:** Four integration changes:
+1. `run_execution()` computes learning curves after synthetic data, extracts features, passes `learning_curves=` to Bayesian update, stores on `protocol.state.last_execution_curves`
+2. `run_interpretation_debate()` includes learning curve comparison in agent context (pattern/final_accuracy/max_jump/onset_block)
+3. `run_interpretation_debate()` validates novel structures via `validate_novel_structure()` and registers valid ones in `protocol.temporary_structures`
+4. `compute_learning_curve_predictions()` checks `temporary_structures` in addition to `STRUCTURE_REGISTRY`
+
+**Alternatives:**
+- Could have deferred novel structure registration to a separate PR — decided to bundle since the code changes are minimal and independent
+- Could have weighted curve evidence differently — kept 0.5x default from D19 Phase B design
+
+**Tests:** 7 new regression tests, 205 total passing, ruff clean.
+
+**Status:** Done.
