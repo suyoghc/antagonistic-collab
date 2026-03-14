@@ -4983,3 +4983,157 @@ class TestTemporaryStructures:
         assert len(protocol.temporary_structures) == 1
         protocol.temporary_structures = {}
         assert len(protocol.temporary_structures) == 0
+
+
+# =========================================================================
+# Full-pool mode integration test
+# =========================================================================
+
+
+class TestFullPoolIntegration:
+    """End-to-end test: 2 cycles in full_pool mode with mocked LLM.
+
+    Verifies the entire pipeline: commitment → divergence → EIG selection →
+    execution → interpretation debate → interpretation critique → audit,
+    for 2 consecutive cycles.
+    """
+
+    def _make_mock_response(self):
+        """Return a callable that produces phase-appropriate mock responses."""
+        call_count = [0]
+
+        def mock_call_agent(client, system_prompt, user_message, **kwargs):
+            call_count[0] += 1
+            msg = user_message.lower()
+
+            if "commitment" in msg or "register your theory" in msg:
+                return json.dumps(
+                    {
+                        "core_claims": ["Test claim"],
+                        "term_glossary": {"attention": "w_i"},
+                    }
+                )
+            elif "divergence" in msg:
+                return "The divergence map shows interesting patterns. Type_II has the highest divergence."
+            elif "pre-data prediction" in msg:
+                return json.dumps(
+                    {
+                        "reasoning": "My model handles this structure well.",
+                        "confidence": "medium",
+                        "param_overrides": {},
+                    }
+                )
+            elif "interpretation debate" in msg:
+                return json.dumps(
+                    {
+                        "interpretation": "Results support my model's predictions.",
+                        "confounds_flagged": ["Small sample size"],
+                        "hypothesis": "Next we should test a harder structure.",
+                        "novel_structure": None,
+                        "revision": None,
+                    }
+                )
+            elif "interpretation critique" in msg or "challenge" in msg:
+                return "I dispute the other agent's claim. My model offers a better explanation."
+            elif "audit" in msg or "auditor" in msg:
+                return "Cycle summary: Models were tested. Divergence remains."
+            else:
+                return "Generic response."
+
+        return mock_call_agent, call_count
+
+    def test_two_cycle_full_pool_run(self):
+        """Run 2 full cycles in full_pool mode and verify pipeline integrity."""
+        import antagonistic_collab.runner as runner_mod
+        from antagonistic_collab.runner import run_cycle
+
+        state = EpistemicState(domain="categorization")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+        transcript = []
+
+        mock_fn, call_count = self._make_mock_response()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Need _BATCH_MODE=True for Bayesian posterior updates
+            old_batch = runner_mod._BATCH_MODE
+            runner_mod._BATCH_MODE = True
+            try:
+                with patch.object(runner_mod, "call_agent", side_effect=mock_fn):
+                    # --- Cycle 0 ---
+                    run_cycle(
+                        protocol,
+                        client=None,
+                        transcript=transcript,
+                        true_model="GCM",
+                        output_dir=tmpdir,
+                        metadata={
+                            "true_model": "GCM",
+                            "llm_model": "mock",
+                            "backend": "mock",
+                        },
+                        mode="full_pool",
+                    )
+
+                    assert protocol.state.cycle == 1, (
+                        f"Cycle should be 1 after first run, got {protocol.state.cycle}"
+                    )
+                    # Should have 3 theories registered
+                    assert len(protocol.state.theories) == 3
+
+                    # Should have 1 executed experiment
+                    executed_c0 = [
+                        e
+                        for e in protocol.state.experiments
+                        if e.cycle == 0 and e.status == "executed"
+                    ]
+                    assert len(executed_c0) == 1
+
+                    # Should have hypotheses from interpretation debate
+                    assert len(protocol.state.agent_hypotheses) >= 1
+
+                    # Bayesian posterior should exist
+                    assert protocol.state.model_posterior is not None
+                    assert "log_probs" in protocol.state.model_posterior
+
+                    # --- Cycle 1 ---
+                    run_cycle(
+                        protocol,
+                        client=None,
+                        transcript=transcript,
+                        true_model="GCM",
+                        output_dir=tmpdir,
+                        metadata={
+                            "true_model": "GCM",
+                            "llm_model": "mock",
+                            "backend": "mock",
+                        },
+                        mode="full_pool",
+                    )
+
+                    assert protocol.state.cycle == 2, (
+                        f"Cycle should be 2 after second run, got {protocol.state.cycle}"
+                    )
+
+                    # Should have 2 executed experiments total
+                    executed_all = [
+                        e for e in protocol.state.experiments if e.status == "executed"
+                    ]
+                    assert len(executed_all) == 2
+
+                    # Hypotheses should accumulate across cycles
+                    assert len(protocol.state.agent_hypotheses) >= 2
+
+                    # Transcript should have entries from both cycles
+                    assert len(transcript) > 0
+
+                    # Check output files exist
+                    cycle_files = os.listdir(tmpdir)
+                    assert any("cycle_0" in f for f in cycle_files)
+                    assert any("cycle_1" in f for f in cycle_files)
+
+            finally:
+                runner_mod._BATCH_MODE = old_batch
+
+        # Sanity: LLM was actually called (not bypassed)
+        assert call_count[0] > 0, "No LLM calls were made"

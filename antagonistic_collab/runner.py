@@ -1425,7 +1425,10 @@ def run_cycle(
     protocol.advance_phase(result)
 
     if mode == "full_pool":
-        # Full-pool mode: EIG selection replaces phases 3-6
+        # Full-pool mode: EIG selection replaces phases 3-6.
+        # Skip the state machine forward to HUMAN_ARBITRATION so that
+        # advance_phase correctly transitions to EXECUTION.
+        protocol.skip_to_phase(Phase.HUMAN_ARBITRATION)
         result = run_full_pool_selection(protocol, transcript)
         protocol.advance_phase(result)
     else:
