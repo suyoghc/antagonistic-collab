@@ -894,7 +894,6 @@ def run_execution(
                 "response": response,
                 "llm_reasoning": llm_reasoning,
                 "llm_confidence": llm_confidence,
-                "model_predicted": predicted,
                 "predicted": predicted,
             }
         )

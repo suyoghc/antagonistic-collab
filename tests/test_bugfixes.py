@@ -5307,3 +5307,176 @@ class TestSUSTAINPartialBlockLabel:
         assert len(block_labels) == len(set(block_labels)), (
             f"Duplicate block labels: {block_labels}"
         )
+
+
+# =========================================================================
+# Codex review round 4 — regression tests (D22)
+# =========================================================================
+
+
+class TestRULEXGroundTruthDeterminism:
+    """Bug 1: _synthetic_runner() must produce deterministic RULEX ground truth.
+
+    RULEX.predict() defaults seed=None, making rule search stochastic.
+    _synthetic_runner() didn't set a seed for RULEX, so the same experiment
+    could produce different ground truth data between runs.
+    """
+
+    def test_rulex_ground_truth_is_deterministic(self):
+        """Same experiment with RULEX ground truth must produce identical data."""
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        # Use Type_VI — hardest structure for RULEX, stochastic search matters
+        design = {"structure_name": "Type_VI", "condition": "baseline"}
+
+        # Run 5 times — without seed, at least one should differ
+        results = []
+        for _ in range(5):
+            data = protocol.experiment_runner(design, true_model="RULEX", cycle=0)
+            # Get the raw item probabilities (before noise), which are model-dependent
+            results.append(tuple(sorted(data.get("item_accuracies", {}).items())))
+
+        # All runs must be identical (deterministic seed)
+        assert len(set(results)) == 1, (
+            f"RULEX ground truth is non-deterministic across 5 runs "
+            f"({len(set(results))} unique results)"
+        )
+
+
+class TestRULEXLearningCurveDeterminism:
+    """Bug 2: predict_learning_curve() must forward seed to find_best_rule().
+
+    predict_learning_curve() calls find_best_rule() with explicit keyword
+    args but omits seed, even though it may be in **params. This makes
+    RULEX learning curves non-deterministic.
+    """
+
+    def test_rulex_learning_curve_is_deterministic(self):
+        """Same inputs with seed must produce identical learning curves."""
+        from antagonistic_collab.models.rulex import RULEX
+
+        model = RULEX()
+        stimuli = [[0, 0, 0], [1, 1, 1], [1, 0, 0], [0, 1, 1]]
+        labels = [0, 1, 1, 0]
+        training_seq = list(zip(stimuli, labels))
+
+        curve1 = model.predict_learning_curve(
+            training_seq,
+            test_items=np.array(stimuli),
+            test_labels=np.array(labels),
+            block_size=2,
+            seed=42,
+        )
+        curve2 = model.predict_learning_curve(
+            training_seq,
+            test_items=np.array(stimuli),
+            test_labels=np.array(labels),
+            block_size=2,
+            seed=42,
+        )
+
+        accs1 = [e["accuracy"] for e in curve1]
+        accs2 = [e["accuracy"] for e in curve2]
+        assert accs1 == accs2, (
+            f"RULEX learning curve non-deterministic with same seed:\n"
+            f"  run1={accs1}\n  run2={accs2}"
+        )
+
+    def test_rulex_learning_curve_seed_actually_used(self):
+        """Different seeds should (with high probability) produce different curves."""
+        from antagonistic_collab.models.rulex import RULEX
+
+        model = RULEX()
+        # Use a structure where rule search randomness matters
+        stimuli = [
+            [0, 0, 0, 0],
+            [1, 1, 1, 1],
+            [1, 0, 1, 0],
+            [0, 1, 0, 1],
+            [1, 1, 0, 0],
+            [0, 0, 1, 1],
+        ]
+        labels = [0, 1, 0, 1, 1, 0]
+        training_seq = list(zip(stimuli, labels))
+
+        curves = []
+        for seed in [1, 2, 3, 4, 5]:
+            curve = model.predict_learning_curve(
+                training_seq,
+                test_items=np.array(stimuli),
+                test_labels=np.array(labels),
+                block_size=2,
+                seed=seed,
+            )
+            curves.append(tuple(e["accuracy"] for e in curve))
+
+        # With 5 different seeds on a complex structure, at least 2 should differ
+        unique_curves = set(curves)
+        assert len(unique_curves) >= 2, (
+            "All 5 seeds produced identical curves — seed likely not forwarded"
+        )
+
+
+class TestRedundantPredictedKey:
+    """Bug 4: execution messages have both 'model_predicted' and 'predicted'
+    with the same value. One should be removed.
+    """
+
+    def test_no_duplicate_predicted_keys(self):
+        """Execution prediction messages should not have both keys."""
+        import antagonistic_collab.runner as runner_mod
+        from antagonistic_collab.runner import run_execution
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+        transcript = []
+
+        # Register theories
+        for a in agents:
+            try:
+                protocol.state.register_theory(
+                    TheoryCommitment(
+                        name=a.theory_name,
+                        agent_name=a.name,
+                        core_claims=a.model_class.core_claims,
+                        model_name=a.model_class.name,
+                        model_params=a.default_params,
+                    )
+                )
+            except ValueError:
+                pass
+
+        # Create and approve an experiment
+        exp = protocol.state.propose_experiment(
+            proposed_by=agents[0].name,
+            title="Test",
+            design_spec={"structure_name": "Type_I", "condition": "baseline"},
+            rationale="test",
+        )
+        protocol.state.approve_experiment(exp.experiment_id)
+        protocol.skip_to_phase(Phase.EXECUTION)
+
+        def fake_call(*a, **kw):
+            return json.dumps(
+                {"reasoning": "test", "confidence": "medium", "param_overrides": {}}
+            )
+
+        old_batch = runner_mod._BATCH_MODE
+        runner_mod._BATCH_MODE = True
+        try:
+            with patch.object(runner_mod, "call_agent", side_effect=fake_call):
+                run_execution(protocol, None, transcript, true_model="GCM")
+        finally:
+            runner_mod._BATCH_MODE = old_batch
+
+        # Check prediction messages don't have both keys
+        pred_msgs = [m for m in transcript if m.get("phase") == "EXECUTION_PREDICT"]
+        for msg in pred_msgs:
+            has_model_predicted = "model_predicted" in msg
+            has_predicted = "predicted" in msg
+            assert not (has_model_predicted and has_predicted), (
+                f"Message has both 'model_predicted' and 'predicted': {list(msg.keys())}"
+            )

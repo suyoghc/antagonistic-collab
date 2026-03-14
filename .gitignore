@@ -8,6 +8,7 @@ build/
 .pytest_cache/
 demo_state.json
 debate_cycle_*.json
+debate_cycle_*.md
 epistemic_state_cycle_*.json
 .env
 runs/

@@ -1041,7 +1041,12 @@ class DebateProtocol:
             overrides = CONDITION_EFFECTS[condition].get("SUSTAIN", {})
         elif true_model == "RULEX":
             model = RULEX()
-            params = {"p_single": 0.5, "p_conj": 0.3, "error_tolerance": 0.1}
+            params = {
+                "p_single": 0.5,
+                "p_conj": 0.3,
+                "error_tolerance": 0.1,
+                "seed": 42,
+            }
             overrides = CONDITION_EFFECTS[condition].get("RULEX", {})
         else:
             raise ValueError(f"Unknown model: {true_model}")

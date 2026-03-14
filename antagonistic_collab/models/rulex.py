@@ -351,6 +351,7 @@ class RULEX:
                 p_conj=p["p_conj"],
                 max_search_steps=p["max_search_steps"],
                 error_tolerance=p["error_tolerance"],
+                seed=p.get("seed"),
             )
 
             if rule_result["rule"] is None:
