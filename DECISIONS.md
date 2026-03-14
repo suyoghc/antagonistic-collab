@@ -185,4 +185,25 @@ Also expanded `compute_divergence_map()` to use the full `STRUCTURE_REGISTRY` (w
 
 **Tests:** Updated `test_batch_mode_rotates_proposals` → `test_batch_mode_divergence_driven`, fixed div map key lookups, 115 total passing.
 
-**Status:** Done. Re-running RULEX validation to verify Rule_Agent now wins.
+**Status:** Done. RULEX gap narrowed from 16.7% to 5.5% but Exemplar_Agent still won. See D13.
+
+---
+
+## D13: Concrete model predictions in divergence ranking + param filter — 2026-03-14
+
+**Problem 1:** Agents saw divergence scores (e.g., "linear_separable_2d — 0.619") but couldn't tell which model wins on each structure. Rule_Agent kept proposing Type_II (lowest divergence, 0.160) because it couldn't see that RULEX dominates on linear_separable structures.
+
+**Decision:** Added per-model predicted accuracy to the ranked summary:
+```
+1. `linear_separable_2d` — max divergence = 0.619
+   Predicted accuracy: Exemplar_Agent: 0.55, Rule_Agent: 0.65, Clustering_Agent: 0.50
+```
+Also updated the proposal prompt to explicitly direct agents toward structures where their model has the highest accuracy.
+
+**Problem 2:** LLM agents proposed param_overrides with invented parameter names (e.g., `w_i` for GCM) that crashed `model.predict()` with `TypeError`. Discovered during RULEX validation run _05.
+
+**Decision:** Filter params using `inspect.signature(model.predict)` before calling — only pass keys that the method actually accepts. Valid overrides still work, invalid ones are silently dropped.
+
+**Tests:** 7 new regression tests, 122 total passing.
+
+**Status:** Done. Re-running RULEX validation to check if agents now propose better structures.
