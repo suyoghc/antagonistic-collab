@@ -31,6 +31,8 @@ import re
 import time
 from typing import Optional
 
+import numpy as np
+
 # Lazy imports for LLM backends — at least one must be available.
 try:
     import anthropic
@@ -619,75 +621,120 @@ def run_human_arbitration(protocol: DebateProtocol, transcript: list) -> PhaseRe
         print(f"  [{i}] {p.title} (by {p.proposed_by}, {n_critiques} critiques)")
 
     if _BATCH_MODE:
-        # Divergence-driven selection with diversity penalty: pick the
-        # proposal whose structure has the highest *effective* divergence.
-        # Structures tested in prior cycles get penalized (halved per use)
-        # to ensure diverse experiment selection across the debate.
-        div_map = protocol.compute_divergence_map()
+        # Experiment selection strategy: Bayesian EIG or heuristic fallback
+        selection_method = _SELECTION_METHOD
 
-        # Count how many times each structure (and structure+condition pair)
-        # has been tested in prior cycles. Two-tier penalty:
-        #   - Exact structure+condition repeat: full penalty (2x per use)
-        #   - Same structure, different condition: partial penalty (1.5x per use)
-        struct_counts: dict[str, int] = {}
-        pair_counts: dict[tuple[str, str], int] = {}
-        for exp in protocol.state.experiments:
+        if selection_method == "bayesian":
+            # --- Bayesian information-gain selection ---
+            from .bayesian_selection import ModelPosterior, select_experiment
+
+            model_names = [a.name for a in protocol.agent_configs]
             if (
-                exp.status in ("executed", "approved")
-                and exp.cycle < protocol.state.cycle
+                protocol.state.model_posterior
+                and "log_probs" in protocol.state.model_posterior
             ):
-                ds = exp.design_spec if isinstance(exp.design_spec, dict) else {}
-                sn = ds.get("structure_name", "")
-                cond = ds.get("condition", "baseline")
-                if sn:
-                    struct_counts[sn] = struct_counts.get(sn, 0) + 1
-                    pair_counts[(sn, cond)] = pair_counts.get((sn, cond), 0) + 1
-
-        def _effective_divergence(proposal) -> float:
-            """Get divergence with diversity penalty for repeated structures.
-
-            Penalty is two-tiered:
-            - Exact (structure, condition) repeats: 2x decay per prior use
-            - Same structure, new condition: 1.5x decay per prior use
-            This means re-running Type_VI/baseline 3 times is penalized more
-            harshly than running Type_VI under 3 different conditions.
-            """
-            design = (
-                proposal.design_spec if isinstance(proposal.design_spec, dict) else {}
-            )
-            struct_name = design.get("structure_name", "")
-            condition = design.get("condition", "baseline")
-            if struct_name in div_map:
-                divs = div_map[struct_name].get("divergences", {})
-                raw_div = max((d["mean_abs_diff"] for d in divs.values()), default=0.0)
+                posterior = ModelPosterior.from_dict(protocol.state.model_posterior)
             else:
-                raw_div = 0.0
-            # Two-tier penalty
-            n_exact = pair_counts.get((struct_name, condition), 0)
-            n_struct = struct_counts.get(struct_name, 0)
-            n_other_cond = n_struct - n_exact  # same struct, different condition
-            penalty = (2**n_exact) * (1.5**n_other_cond)
-            return raw_div / penalty
+                posterior = ModelPosterior.uniform(model_names)
 
-        ranked = sorted(
-            range(len(current_proposals)),
-            key=lambda i: (
-                -_effective_divergence(current_proposals[i]),
-                -len(current_proposals[i].critique_log),
-            ),
-        )
-        best = ranked[0]
-        best_struct = ""
-        if isinstance(current_proposals[best].design_spec, dict):
-            best_struct = current_proposals[best].design_spec.get("structure_name", "")
-        best_div = _effective_divergence(current_proposals[best])
-        n_prior = struct_counts.get(best_struct, 0)
-        choice = f"approve {best}"
-        print(
-            f"\n[BATCH MODE] Auto-selecting: {choice} "
-            f"(divergence-driven: {best_struct} eff_div={best_div:.3f}"
-            f"{f', struct tested {n_prior}x before' if n_prior else ''})"
-        )
+            best, eig_scores = select_experiment(
+                protocol,
+                posterior,
+                current_proposals,
+                n_subjects=20,
+                n_sim=200,
+                seed=42,
+            )
+            best_struct = ""
+            if isinstance(current_proposals[best].design_spec, dict):
+                best_struct = current_proposals[best].design_spec.get(
+                    "structure_name", ""
+                )
+            choice = f"approve {best}"
+
+            # Print EIG ranking for transparency
+            print("\n  EIG ranking:")
+            ranked_by_eig = sorted(
+                range(len(current_proposals)),
+                key=lambda i: -eig_scores[i],
+            )
+            for rank, idx in enumerate(ranked_by_eig):
+                ds = (
+                    current_proposals[idx].design_spec
+                    if isinstance(current_proposals[idx].design_spec, dict)
+                    else {}
+                )
+                sn = ds.get("structure_name", "?")
+                marker = " ← SELECTED" if idx == best else ""
+                print(
+                    f"    {rank + 1}. [{idx}] {sn} — EIG={eig_scores[idx]:.4f}{marker}"
+                )
+
+            print(
+                f"\n[BATCH MODE] Auto-selecting: {choice} "
+                f"(bayesian EIG: {best_struct} EIG={eig_scores[best]:.4f})"
+            )
+
+        else:
+            # --- Heuristic fallback: divergence-driven with diversity penalty ---
+            div_map = protocol.compute_divergence_map()
+
+            struct_counts: dict[str, int] = {}
+            pair_counts: dict[tuple[str, str], int] = {}
+            for exp in protocol.state.experiments:
+                if (
+                    exp.status in ("executed", "approved")
+                    and exp.cycle < protocol.state.cycle
+                ):
+                    ds = exp.design_spec if isinstance(exp.design_spec, dict) else {}
+                    sn = ds.get("structure_name", "")
+                    cond = ds.get("condition", "baseline")
+                    if sn:
+                        struct_counts[sn] = struct_counts.get(sn, 0) + 1
+                        pair_counts[(sn, cond)] = pair_counts.get((sn, cond), 0) + 1
+
+            def _effective_divergence(proposal) -> float:
+                design = (
+                    proposal.design_spec
+                    if isinstance(proposal.design_spec, dict)
+                    else {}
+                )
+                struct_name = design.get("structure_name", "")
+                condition = design.get("condition", "baseline")
+                if struct_name in div_map:
+                    divs = div_map[struct_name].get("divergences", {})
+                    raw_div = max(
+                        (d["mean_abs_diff"] for d in divs.values()), default=0.0
+                    )
+                else:
+                    raw_div = 0.0
+                n_exact = pair_counts.get((struct_name, condition), 0)
+                n_struct = struct_counts.get(struct_name, 0)
+                n_other_cond = n_struct - n_exact
+                penalty = (2**n_exact) * (1.5**n_other_cond)
+                return raw_div / penalty
+
+            ranked = sorted(
+                range(len(current_proposals)),
+                key=lambda i: (
+                    -_effective_divergence(current_proposals[i]),
+                    -len(current_proposals[i].critique_log),
+                ),
+            )
+            best = ranked[0]
+            best_struct = ""
+            if isinstance(current_proposals[best].design_spec, dict):
+                best_struct = current_proposals[best].design_spec.get(
+                    "structure_name", ""
+                )
+            best_div = _effective_divergence(current_proposals[best])
+            n_prior = struct_counts.get(best_struct, 0)
+            choice = f"approve {best}"
+            print(
+                f"\n[BATCH MODE] Auto-selecting: {choice} "
+                f"(heuristic: {best_struct} eff_div={best_div:.3f}"
+                f"{f', struct tested {n_prior}x before' if n_prior else ''})"
+            )
     else:
         print("\nOptions:")
         print("  approve <N>          — Approve proposal N as-is")
@@ -872,6 +919,31 @@ def run_execution(
                 print(f"  {agent_name}: RMSE = {mean:.4f}")
             else:
                 print(f"  {agent_name}: not yet scored")
+
+    # --- Bayesian posterior update ---
+    if _BATCH_MODE and struct_name:
+        from .bayesian_selection import ModelPosterior, update_posterior_from_experiment
+
+        model_names = [a.name for a in protocol.agent_configs]
+        if (
+            protocol.state.model_posterior
+            and "log_probs" in protocol.state.model_posterior
+        ):
+            posterior = ModelPosterior.from_dict(protocol.state.model_posterior)
+        else:
+            posterior = ModelPosterior.uniform(model_names)
+
+        posterior = update_posterior_from_experiment(
+            posterior, protocol, data, struct_name, condition, protocol.state.cycle
+        )
+        protocol.state.model_posterior = posterior.to_dict()
+
+        print("\n  Bayesian posterior update:")
+        for i, name in enumerate(posterior.model_names):
+            print(f"    P({name}) = {posterior.probs[i]:.4f}")
+        print(
+            f"    Entropy = {posterior.entropy:.4f} (max = {np.log(len(model_names)):.4f})"
+        )
 
     messages.append(
         {
@@ -1488,6 +1560,12 @@ def main():
         default=2,
         help="Number of adversarial critique rounds per cycle",
     )
+    parser.add_argument(
+        "--selection",
+        choices=["bayesian", "heuristic"],
+        default="bayesian",
+        help="Experiment selection method: bayesian (EIG) or heuristic (diversity penalty)",
+    )
     args = parser.parse_args()
 
     # Resolve model default based on backend
@@ -1510,7 +1588,10 @@ def main():
     print(f"Mode: {'batch' if args.batch else 'interactive'}")
     print(f"Backend: {args.backend}")
     print(f"LLM: {args.model}")
-    print(f"Cycles: {args.cycles}, True model: {args.true_model}\n")
+    print(
+        f"Cycles: {args.cycles}, True model: {args.true_model}, "
+        f"Selection: {args.selection}\n"
+    )
 
     # Patch call_agent to use the specified model
     global _LLM_MODEL
@@ -1520,6 +1601,9 @@ def main():
     if args.batch:
         global _BATCH_MODE
         _BATCH_MODE = True
+
+    global _SELECTION_METHOD
+    _SELECTION_METHOD = args.selection
 
     # Auto-generate output directory if not explicitly set
     if args.output_dir == ".":
@@ -1609,6 +1693,7 @@ def main():
 # Module-level flags for batch mode and model selection
 _BATCH_MODE = False
 _LLM_MODEL = "claude-sonnet-4-20250514"
+_SELECTION_METHOD = "bayesian"  # "bayesian" or "heuristic"
 
 
 if __name__ == "__main__":

@@ -11,13 +11,14 @@ Build an antagonistic collaboration framework where LLM agents representing comp
 ## Architecture
 
 ```
-runner.py          — CLI entry point, LLM calls, phase orchestration
-debate_protocol.py — 9-phase protocol logic, synthetic data generation
-epistemic_state.py — Theory commitments, experiments, predictions, scoring
+runner.py              — CLI entry point, LLM calls, phase orchestration
+debate_protocol.py     — 9-phase protocol logic, synthetic data generation
+epistemic_state.py     — Theory commitments, experiments, predictions, scoring
+bayesian_selection.py  — Bayesian EIG experiment selection (D18)
 models/
-  gcm.py           — Generalized Context Model (Nosofsky 1986)
-  sustain.py       — SUSTAIN clustering model (Love, Medin & Gureckis 2004)
-  rulex.py         — RULEX rule-based model (Nosofsky, Palmeri & McKinley 1994)
+  gcm.py               — Generalized Context Model (Nosofsky 1986)
+  sustain.py           — SUSTAIN clustering model (Love, Medin & Gureckis 2004)
+  rulex.py             — RULEX rule-based model (Nosofsky, Palmeri & McKinley 1994)
   category_structures.py — Shepard types, 5-4 structure, rule+exception, etc.
 ```
 

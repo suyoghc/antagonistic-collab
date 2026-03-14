@@ -308,3 +308,33 @@ Untested structures with moderate divergence can now beat heavily-tested high-di
 Rule_Agent now wins. Gap is small (1.8%) vs GCM (15.1%) and SUSTAIN (32.2%) — this is the genuine GCM flexibility confound, not a system bug.
 
 **Status:** Done.
+
+---
+
+## D18: Bayesian information-gain experiment selection — 2026-03-14
+
+**Problem:** The heuristic diversity penalty (D17) halves divergence per prior use, which doesn't account for what was *learned* from prior experiments. It can't reason about which untested structure would best discriminate between models given accumulated evidence. For example, it penalizes Type_VI equally after observing it once regardless of whether that observation was highly informative or not.
+
+**Decision:** Replace heuristic with principled Bayesian adaptive design:
+
+1. **`ModelPosterior`** dataclass — stores log-probabilities over 3 models, supports Bayesian update, serialization, entropy computation
+2. **`compute_log_likelihood()`** — item-level binomial log-PMF, clips predictions to [0.01, 0.99] to avoid -inf
+3. **`compute_eig()`** — Monte Carlo expected information gain: for each model as hypothetical ground truth (weighted by prior), simulates 200 datasets, computes posterior entropy, returns `EIG = H_current - E[H_posterior]`
+4. **`select_experiment()`** — evaluates EIG for each candidate proposal, returns best index + all scores
+5. **`update_posterior_from_experiment()`** — after execution, computes log-likelihoods under all models and updates posterior
+
+**Integration points:**
+- `EpistemicState.model_posterior` field stores serialized posterior across cycles
+- `run_human_arbitration()` (batch mode) uses EIG to select experiments, prints EIG ranking
+- `run_execution()` updates posterior after scoring predictions, prints P(model) + entropy
+- `summary_for_agent()` shows Bayesian posterior to agents for context
+- `--selection bayesian|heuristic` flag (default: bayesian) for backward compatibility
+
+**Alternatives considered:**
+- (A) Improve heuristic penalty formula — doesn't solve the fundamental problem of not reasoning about information
+- (B) Mutual information instead of EIG — equivalent under Jensen's inequality, but EIG is more intuitive
+- (C) Analytical EIG (conjugate models) — binomial-beta conjugate exists but requires per-model per-item tracking, Monte Carlo is simpler and generalizes
+
+**Tests:** 12 new regression tests, 158 total passing. Covers: prior initialization, posterior update, serialization roundtrip, log-likelihood ordering, clipping, EIG non-negativity, EIG near zero when certain, EIG discriminability ordering, determinism with seed, select_experiment validity, EpistemicState field + JSON roundtrip.
+
+**Status:** Done. Pending: 5-cycle validation runs to compare with heuristic results.

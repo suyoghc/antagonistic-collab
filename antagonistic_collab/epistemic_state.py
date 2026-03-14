@@ -193,6 +193,7 @@ class EpistemicState:
     disputes: list[Dispute] = field(default_factory=list)
     cycle: int = 0
     log: list[dict] = field(default_factory=list)  # free-form event log
+    model_posterior: Optional[dict] = None  # Bayesian posterior over models
 
     # --- Theory management ---
 
@@ -649,6 +650,22 @@ class EpistemicState:
                     lines.append(
                         f"  {agent}{marker}: {stats['n_predictions']} predictions, not yet scored"
                     )
+            lines.append("")
+
+        # Bayesian model posterior (if available)
+        if self.model_posterior and "log_probs" in self.model_posterior:
+            import numpy as _np
+
+            lp = _np.array(self.model_posterior["log_probs"])
+            probs = _np.exp(lp - _np.max(lp))
+            probs = probs / probs.sum()
+            entropy = -float(_np.sum(probs * _np.log(probs + 1e-30)))
+            model_names = self.model_posterior.get("model_names", [])
+            lines.append("### Bayesian Model Posterior")
+            for i, p in enumerate(probs):
+                name = model_names[i] if i < len(model_names) else f"model_{i}"
+                lines.append(f"  P({name}) = {p:.4f}")
+            lines.append(f"  Entropy = {entropy:.4f} (max = {_np.log(len(probs)):.4f})")
             lines.append("")
 
         # Established facts

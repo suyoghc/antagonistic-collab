@@ -43,6 +43,12 @@ from antagonistic_collab.debate_protocol import (
 from antagonistic_collab.models.sustain import SUSTAIN
 from antagonistic_collab.models.gcm import GCM
 from antagonistic_collab.models.category_structures import rule_plus_exception
+from antagonistic_collab.bayesian_selection import (
+    ModelPosterior,
+    compute_log_likelihood,
+    compute_eig,
+    select_experiment,
+)
 
 
 # =========================================================================
@@ -1703,6 +1709,7 @@ class TestBatchModeRotation:
         agents = default_agent_configs()
         return DebateProtocol(state, agents)
 
+    @patch("antagonistic_collab.runner._SELECTION_METHOD", "heuristic")
     @patch("antagonistic_collab.runner._BATCH_MODE", True)
     def test_batch_mode_divergence_driven(self):
         """
@@ -1740,6 +1747,7 @@ class TestBatchModeRotation:
             f"structure, got {approved[0].design_spec.get('structure_name')}"
         )
 
+    @patch("antagonistic_collab.runner._SELECTION_METHOD", "heuristic")
     @patch("antagonistic_collab.runner._BATCH_MODE", True)
     def test_batch_mode_critique_tiebreak(self):
         """
@@ -1781,6 +1789,7 @@ class TestBatchModeRotation:
             "proposal with the most critiques (more refined), but it didn't."
         )
 
+    @patch("antagonistic_collab.runner._SELECTION_METHOD", "heuristic")
     @patch("antagonistic_collab.runner._BATCH_MODE", True)
     def test_batch_mode_single_proposal(self):
         """
@@ -3778,6 +3787,7 @@ class TestStructureDiversity:
         agents = default_agent_configs()
         return DebateProtocol(state, agents)
 
+    @patch("antagonistic_collab.runner._SELECTION_METHOD", "heuristic")
     @patch("antagonistic_collab.runner._BATCH_MODE", True)
     def test_previously_tested_structure_penalized(self):
         """
@@ -3829,6 +3839,7 @@ class TestStructureDiversity:
             f"Got: {approved_struct}"
         )
 
+    @patch("antagonistic_collab.runner._SELECTION_METHOD", "heuristic")
     @patch("antagonistic_collab.runner._BATCH_MODE", True)
     def test_untested_structure_preferred(self):
         """
@@ -3862,6 +3873,7 @@ class TestStructureDiversity:
             "With no prior experiments, highest divergence should still win"
         )
 
+    @patch("antagonistic_collab.runner._SELECTION_METHOD", "heuristic")
     @patch("antagonistic_collab.runner._BATCH_MODE", True)
     def test_structure_tested_twice_penalized_more(self):
         """
@@ -3909,6 +3921,7 @@ class TestStructureDiversity:
             f"Type_VI tested 2x should be heavily penalized, got: {approved_struct}"
         )
 
+    @patch("antagonistic_collab.runner._SELECTION_METHOD", "heuristic")
     @patch("antagonistic_collab.runner._BATCH_MODE", True)
     def test_different_condition_penalized_less_than_same(self):
         """
@@ -3956,3 +3969,196 @@ class TestStructureDiversity:
             f"New condition should be penalized less than exact repeat, "
             f"got condition={approved[0].design_spec.get('condition')}"
         )
+
+
+# =========================================================================
+# Bayesian Information-Gain Selection  (bayesian_selection.py)
+# =========================================================================
+
+
+class TestBayesianSelection:
+    """Tests for Bayesian experiment selection (D18)."""
+
+    # --- ModelPosterior basics ---
+
+    def test_uniform_prior(self):
+        """Uniform prior over 3 models: each P=1/3, entropy=ln(3)."""
+        post = ModelPosterior.uniform(["GCM", "SUSTAIN", "RULEX"])
+        probs = post.probs
+        assert probs.shape == (3,)
+        np.testing.assert_allclose(probs, [1 / 3, 1 / 3, 1 / 3], atol=1e-10)
+        expected_entropy = np.log(3)
+        assert abs(post.entropy - expected_entropy) < 1e-10
+
+    def test_posterior_update_shifts_toward_likely_model(self):
+        """Strong GCM evidence → P(GCM) > 0.99."""
+        post = ModelPosterior.uniform(["GCM", "SUSTAIN", "RULEX"])
+        # Strongly favor model 0 (GCM)
+        post.update(np.array([0.0, -50.0, -50.0]))
+        assert post.probs[0] > 0.99
+        assert post.probs[1] < 0.01
+        assert post.probs[2] < 0.01
+
+    def test_posterior_serialization_roundtrip(self):
+        """to_dict/from_dict preserves state."""
+        post = ModelPosterior.uniform(["GCM", "SUSTAIN", "RULEX"])
+        post.update(np.array([-1.0, 0.0, -2.0]))
+        post.history.append({"cycle": 0, "entropy": post.entropy})
+
+        d = post.to_dict()
+        restored = ModelPosterior.from_dict(d)
+
+        np.testing.assert_allclose(restored.log_probs, post.log_probs)
+        assert restored.model_names == post.model_names
+        assert len(restored.history) == 1
+        np.testing.assert_allclose(restored.probs, post.probs, atol=1e-10)
+
+    # --- compute_log_likelihood ---
+
+    def test_log_likelihood_better_match_higher(self):
+        """Matching predictions should score higher than mismatched."""
+        observed = np.array([0.8, 0.2, 0.9, 0.1])
+        good_pred = np.array([0.8, 0.2, 0.9, 0.1])
+        bad_pred = np.array([0.2, 0.8, 0.1, 0.9])
+
+        ll_good = compute_log_likelihood(observed, good_pred, n_subjects=20)
+        ll_bad = compute_log_likelihood(observed, bad_pred, n_subjects=20)
+        assert ll_good > ll_bad, (
+            f"Good predictions should have higher LL: {ll_good} vs {ll_bad}"
+        )
+
+    def test_log_likelihood_clipping(self):
+        """P=0.0 and P=1.0 predictions don't produce -inf."""
+        observed = np.array([0.5, 0.5])
+        extreme_pred = np.array([0.0, 1.0])
+        ll = compute_log_likelihood(observed, extreme_pred, n_subjects=20)
+        assert np.isfinite(ll), f"Log-likelihood should be finite, got {ll}"
+
+    # --- compute_eig ---
+
+    def test_eig_nonnegative(self):
+        """EIG >= 0 always (information can't decrease in expectation)."""
+        post = ModelPosterior.uniform(["GCM", "SUSTAIN", "RULEX"])
+        preds = {
+            "GCM": np.array([0.8, 0.6, 0.3]),
+            "SUSTAIN": np.array([0.5, 0.5, 0.5]),
+            "RULEX": np.array([0.9, 0.1, 0.9]),
+        }
+        eig = compute_eig(preds, post, n_subjects=20, n_sim=100, seed=42)
+        assert eig >= 0.0, f"EIG should be non-negative, got {eig}"
+
+    def test_eig_near_zero_when_certain(self):
+        """Concentrated posterior → EIG ≈ 0 (already decided)."""
+        post = ModelPosterior(
+            log_probs=np.array([0.0, -100.0, -100.0]),
+            model_names=["GCM", "SUSTAIN", "RULEX"],
+        )
+        preds = {
+            "GCM": np.array([0.8, 0.6]),
+            "SUSTAIN": np.array([0.5, 0.5]),
+            "RULEX": np.array([0.9, 0.1]),
+        }
+        eig = compute_eig(preds, post, n_subjects=20, n_sim=100, seed=42)
+        assert eig < 0.01, f"EIG should be near zero when certain, got {eig}"
+
+    def test_eig_higher_for_discriminating_structure(self):
+        """High-divergence structure should have higher EIG than low-divergence."""
+        post = ModelPosterior.uniform(["GCM", "SUSTAIN", "RULEX"])
+
+        # High divergence: models disagree substantially
+        high_div = {
+            "GCM": np.array([0.9, 0.1, 0.9, 0.1]),
+            "SUSTAIN": np.array([0.5, 0.5, 0.5, 0.5]),
+            "RULEX": np.array([0.1, 0.9, 0.1, 0.9]),
+        }
+        eig_high = compute_eig(high_div, post, n_subjects=20, n_sim=200, seed=42)
+
+        # Low divergence: models agree
+        low_div = {
+            "GCM": np.array([0.6, 0.6, 0.6, 0.6]),
+            "SUSTAIN": np.array([0.6, 0.6, 0.6, 0.6]),
+            "RULEX": np.array([0.6, 0.6, 0.6, 0.6]),
+        }
+        eig_low = compute_eig(low_div, post, n_subjects=20, n_sim=200, seed=42)
+
+        assert eig_high > eig_low, (
+            f"Discriminating structure should have higher EIG: {eig_high} vs {eig_low}"
+        )
+
+    def test_eig_deterministic_with_seed(self):
+        """Same seed → same EIG result."""
+        post = ModelPosterior.uniform(["GCM", "SUSTAIN", "RULEX"])
+        preds = {
+            "GCM": np.array([0.8, 0.3]),
+            "SUSTAIN": np.array([0.5, 0.5]),
+            "RULEX": np.array([0.2, 0.7]),
+        }
+        eig1 = compute_eig(preds, post, n_subjects=20, n_sim=100, seed=99)
+        eig2 = compute_eig(preds, post, n_subjects=20, n_sim=100, seed=99)
+        assert eig1 == eig2, f"Same seed should give same EIG: {eig1} vs {eig2}"
+
+    # --- select_experiment ---
+
+    def test_select_experiment_returns_valid_index(self):
+        """select_experiment returns an index within the candidates list."""
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        post = ModelPosterior.uniform([a.name for a in agents])
+
+        # Create two candidate proposals with different structures
+        state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Type_I test",
+            design_spec={"structure_name": "Type_I", "condition": "baseline"},
+            rationale="test",
+        )
+        state.propose_experiment(
+            proposed_by="Rule_Agent",
+            title="Type_VI test",
+            design_spec={"structure_name": "Type_VI", "condition": "baseline"},
+            rationale="test",
+        )
+        candidates = [e for e in state.experiments if e.status == "proposed"]
+
+        best_idx, scores = select_experiment(
+            protocol, post, candidates, n_subjects=20, n_sim=50, seed=42
+        )
+        assert 0 <= best_idx < len(candidates)
+        assert len(scores) == len(candidates)
+        assert all(s >= 0.0 for s in scores)
+
+    # --- EpistemicState integration ---
+
+    def test_posterior_stored_in_epistemic_state(self):
+        """model_posterior field exists and can be set."""
+        state = EpistemicState(domain="test")
+        assert state.model_posterior is None
+
+        post = ModelPosterior.uniform(["GCM", "SUSTAIN", "RULEX"])
+        state.model_posterior = post.to_dict()
+        assert state.model_posterior is not None
+        assert "log_probs" in state.model_posterior
+
+    def test_posterior_survives_json_roundtrip(self):
+        """EpistemicState serialization preserves model_posterior."""
+        import json
+        import tempfile
+
+        state = EpistemicState(domain="test")
+        post = ModelPosterior.uniform(["GCM", "SUSTAIN", "RULEX"])
+        post.update(np.array([-1.0, 0.0, -2.0]))
+        state.model_posterior = post.to_dict()
+
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+            path = f.name
+        try:
+            state.to_json(path)
+            with open(path) as f:
+                loaded = json.load(f)
+            assert "model_posterior" in loaded
+            restored = ModelPosterior.from_dict(loaded["model_posterior"])
+            np.testing.assert_allclose(restored.probs, post.probs, atol=1e-10)
+        finally:
+            os.unlink(path)

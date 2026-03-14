@@ -6,7 +6,7 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ## Current focus — 2026-03-14
 
-Implemented two-tier diversity penalty (D17). RULEX re-validation running. Analyzing whether the heuristic is sufficient or if the GCM flexibility problem is fundamental.
+Implemented Bayesian information-gain experiment selection (D18). Replaces heuristic diversity penalty with principled adaptive design. Heuristic retained as `--selection heuristic` fallback. Ready for 5-cycle validation runs to compare with heuristic results.
 
 ### 5-cycle validation results (pre-diversity-penalty)
 
