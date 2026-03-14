@@ -29,6 +29,10 @@
 - [ ] **[P3] Fix --demo order-sensitivity** — `sys.argv[1] == "--demo"` fails when other flags precede it
 - [x] **Show concrete model predictions in divergence ranking** — ranked summary now shows per-model predicted accuracy (e.g., "Exemplar_Agent: 0.75, Rule_Agent: 0.80, Clustering_Agent: 0.50") so agents can see their advantage per structure
 
+### Done (Codex review, 2026-03-14)
+- [x] **Malformed param override values crash execution** — try/except fallback to default params on ValueError/TypeError
+- [x] **SUSTAIN drops final partial block** — predict_learning_curve now includes partial block, matches GCM/RULEX curve length
+
 ### Done (code review fixes, 2026-03-13)
 - [x] Fix format crash: :.3f applied to 'N/A' string on missing mean_accuracy (runner.py:647)
 - [x] Validate design_spec is dict before .get() calls (runner.py:593)

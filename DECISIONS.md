@@ -207,3 +207,19 @@ Also updated the proposal prompt to explicitly direct agents toward structures w
 **Tests:** 7 new regression tests, 122 total passing.
 
 **Status:** Done. Re-running RULEX validation to check if agents now propose better structures.
+
+---
+
+## D14: Malformed param override fallback + SUSTAIN partial block — 2026-03-14
+
+**Problem 1 (Codex P1):** `compute_model_predictions()` filters unknown param *keys* but not malformed *values*. An LLM override like `attention_weights=[0.5,0.5,0.5]` on a 4D structure causes `ValueError: operands could not be broadcast together with shapes (3,) (4,)`. Similarly, `c="high"` causes `TypeError`. One bad suggestion aborts the entire execution phase.
+
+**Decision:** Wrap `model.predict()` in `try/except (ValueError, TypeError)`. On first failure, switch to default params for all remaining items in the LOO loop. This avoids silently corrupting individual item predictions while still completing the run.
+
+**Problem 2 (Codex P2):** `SUSTAIN.predict_learning_curve()` iterates `range(block_size, len(seq)+1, block_size)`, which skips the final partial block when `len(seq) % block_size != 0`. For a 10-item sequence with block_size=4, SUSTAIN produces 2 blocks (at 4, 8) while GCM produces 3 (at 4, 8, 10). This makes curve lengths disagree between models.
+
+**Decision:** After building the complete-block list, append `len(training_sequence)` if there's a remainder. Now all three models produce curves of the same length.
+
+**Tests:** 6 new regression tests, 128 total passing.
+
+**Status:** Done.
