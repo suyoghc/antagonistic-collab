@@ -23,6 +23,8 @@
 - [x] **Investigate GCM flexibility confound** — With diversity penalty, Rule_Agent now wins on RULEX-generated data (RMSE 0.433 vs 0.441). Gap is small (1.8%) vs GCM/SUSTAIN (15-32%) — this is genuine model flexibility, not a system bug. GCM approximates rule-like behavior through attention weights (consistent with Nosofsky 1991).
 - [x] **Bayesian information-gain experiment selection** — Replaced heuristic diversity penalty with principled adaptive design (D18). `ModelPosterior` maintains Bayesian posterior over models; `compute_eig()` uses Monte Carlo expected information gain to select experiments. Heuristic retained as `--selection heuristic` fallback. 12 new tests, 158 total passing.
 
+- [x] **Debate-as-hypothesis-generator architecture (D19)** — Three-phase refactor: (A) Full-pool EIG over 55 candidates replaces agent proposals, (B) Learning curves as second evidence channel, (C) Novel structure generation from LLM debate. Legacy 9-phase flow preserved as `--mode legacy`. 31 new tests, 189 total passing.
+
 ### Queued (from Codex review, 2026-03-13)
 - [x] **[P1] Implement Phase 5 (Design Revision)** — agents now revise proposals based on critiques, updating design_spec via state.revise_proposal()
 - [x] **[P2] Fix moderator reject path** — rejection now loops back to proposal→critique→revision→arbitration (up to 3 attempts), rejected proposals marked with status="rejected"

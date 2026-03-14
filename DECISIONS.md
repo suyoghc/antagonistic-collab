@@ -338,3 +338,52 @@ Rule_Agent now wins. Gap is small (1.8%) vs GCM (15.1%) and SUSTAIN (32.2%) — 
 **Tests:** 12 new regression tests, 158 total passing. Covers: prior initialization, posterior update, serialization roundtrip, log-likelihood ordering, clipping, EIG non-negativity, EIG near zero when certain, EIG discriminability ordering, determinism with seed, select_experiment validity, EpistemicState field + JSON roundtrip.
 
 **Status:** Done. Pending: 5-cycle validation runs to compare with heuristic results.
+
+---
+
+## D19: Debate-as-hypothesis-generator architecture — 2026-03-14
+
+**Problem:** With Bayesian EIG implemented (D18), the LLM debate is redundant for experiment *selection* — EIG can search 55 candidates (11 structures × 5 conditions) faster and better than 3 agents proposing from a menu. The debate should shift to where LLMs genuinely add value: generating hypotheses, interpreting results, detecting confounds, and proposing novel experiments beyond the fixed registry. Additionally, the 1.8% GCM-RULEX gap (D17) suggests a second evidence channel is needed to break ties.
+
+**Decision:** Three-phase refactor:
+
+**Phase A: Full-pool EIG + Interpretation Debate**
+1. `generate_full_candidate_pool()` — all 55 structure×condition pairs
+2. `select_from_pool()` — EIG over full pool without ExperimentRecords
+3. `run_full_pool_selection()` — creates+approves winning experiment, prints top-10 EIG landscape
+4. `run_interpretation_debate()` — agents produce structured JSON: interpretation, confounds, hypotheses, optional novel_structure proposals, optional theory revision
+5. `run_interpretation_critique()` — agents challenge each other's interpretations
+6. `run_cycle()` accepts `mode="full_pool"|"legacy"` — legacy preserves 9-phase flow
+7. `EpistemicState.agent_hypotheses` field stores hypotheses across cycles
+
+**Phase B: Learning Curves as Second Evidence Channel**
+1. `DebateProtocol.compute_learning_curve_predictions()` — runs all 3 models' `predict_learning_curve()` on a structure with n_epochs passes
+2. `extract_curve_features()` — extracts: final_accuracy, onset_block, max_jump, n_big_jumps, monotonic, mean_slope, learning_pattern (gradual|sudden|stepwise)
+3. `update_posterior_from_experiment()` extended: optional `learning_curves` parameter; curve RMSE converted to log-likelihood-like score, weighted at 0.5× accuracy evidence
+
+**Phase C: Novel Structure Generation**
+1. `validate_novel_structure()` — checks 2D stimuli, matching labels, 4–32 items, ≤8 dims, ≥2 categories
+2. `DebateProtocol.temporary_structures` dict — per-cycle storage for novel structures from agents
+3. `generate_full_candidate_pool()` accepts `extra_structures` parameter
+4. `run_full_pool_selection()` merges temporary_structures into pool
+
+**New phase flow (full_pool mode):**
+```
+Cycle N:
+  1. Commitment (cycle 0 only)
+  2. Divergence Mapping
+  3. Full-Pool Bayesian Selection (replaces phases 3-6)
+  4. Execution (+ learning curve comparison)
+  5. Interpretation Debate (replaces fire-and-forget interpretation)
+  6. Interpretation Critique (new)
+  7. Audit
+```
+
+**Alternatives considered:**
+- (A) Keep proposals but make EIG a tiebreaker — still wastes LLM calls on experiment selection when EIG does it better
+- (B) Remove LLM from the loop entirely — misses the value of hypothesis generation and confound detection
+- (C) Separate learning curves into an independent system — loses the integration with Bayesian posterior updates
+
+**Tests:** 31 new regression tests (12 Phase A + 9 Phase B + 10 Phase C), 189 total passing. ruff clean.
+
+**Status:** Done. Pending: 5-cycle validation runs with `--mode full_pool` to compare convergence.

@@ -6,7 +6,14 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ## Current focus — 2026-03-14
 
-Implemented Bayesian information-gain experiment selection (D18). Replaces heuristic diversity penalty with principled adaptive design. Heuristic retained as `--selection heuristic` fallback. Ready for 5-cycle validation runs to compare with heuristic results.
+Implemented debate-as-hypothesis-generator architecture (D19). Three-phase refactor:
+- **Phase A:** Full-pool EIG over 55 candidates replaces agent proposals. Agents shift to interpreting results and generating hypotheses.
+- **Phase B:** Learning curves as second evidence channel. GCM=gradual, RULEX=sudden, SUSTAIN=stepwise (on Type_I, all models are fast — patterns clearer on harder structures).
+- **Phase C:** Novel structure generation. LLM agents can propose new structures during interpretation; validated and added to next cycle's EIG pool.
+
+Legacy 9-phase flow preserved as `--mode legacy` (default). New flow: `--mode full_pool`.
+
+**Next:** 5-cycle validation runs with `--mode full_pool` to compare convergence with legacy mode.
 
 ### 5-cycle validation results (pre-diversity-penalty)
 

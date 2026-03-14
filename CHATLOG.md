@@ -226,4 +226,27 @@ Human-readable summary of each Claude Code session on this project.
 
 ---
 
+## Session 11 — 2026-03-14
+
+**Commits:** `1242b29`, `32e1284`, `68bc770`
+
+**What we did:**
+- Implemented the debate-as-hypothesis-generator architecture (D19) in three TDD phases:
+  - **Phase A (12 tests):** Full-pool EIG selection over 55 candidates, interpretation debate with structured JSON output (hypothesis, confounds, novel structures), interpretation critique, `--mode full_pool|legacy` flag
+  - **Phase B (9 tests):** Learning curves as second evidence channel — `compute_learning_curve_predictions()`, `extract_curve_features()` (gradual/sudden/stepwise classification), curve evidence in Bayesian posterior updates
+  - **Phase C (10 tests):** Novel structure generation — `validate_novel_structure()`, `temporary_structures` dict, integration with EIG pool
+- All 189 tests passing, ruff clean at each phase
+- Updated TASKS.md, DECISIONS.md, SCRATCHPAD.md
+
+**Key findings:**
+- On simple structures (Type_I), all models learn too fast for gradual/sudden/stepwise patterns to cleanly differentiate — harder structures needed for curve-based discrimination
+- Full-pool EIG eliminates LLM calls from experiment selection, shifting agents to where they add real value: interpreting results and generating hypotheses
+- Novel structure validation ensures LLM-proposed structures are executable (4-32 items, ≤8 dims, ≥2 categories)
+
+**Key discussion:**
+- Architecture redesign motivated by D18 (EIG already does selection better than LLMs) and D17 (1.8% GCM-RULEX gap needs a second evidence channel)
+- Legacy flow preserved as default for backward compatibility
+
+---
+
 *This log is maintained manually. Update it at the end of each session.*

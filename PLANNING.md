@@ -28,10 +28,20 @@ models/
 2. Divergence mapping — identify where models disagree most
 3. Experiment proposal — each agent proposes a discriminating experiment
 4. Adversarial critique — agents critique each other's proposals (2 rounds)
-5. Human arbitration — moderator selects experiment (batch: round-robin)
-6. Execution — synthetic data generated, predictions scored
-7. Interpretation — agents interpret results, propose theory revisions
-8. Audit — impartial auditor summarizes cycle, checks convergence
+5. Design revision — agents revise proposals based on critiques
+6. Human arbitration — moderator selects experiment (batch: EIG or heuristic)
+7. Execution — synthetic data generated, predictions scored
+8. Interpretation — agents interpret results, propose theory revisions
+9. Audit — impartial auditor summarizes cycle, checks convergence
+
+### Full-pool mode (`--mode full_pool`)
+1. Commitment (cycle 0 only)
+2. Divergence mapping
+3. Full-pool Bayesian selection — EIG over all 55+ candidates (no LLM calls)
+4. Execution + learning curve comparison
+5. Interpretation debate — structured JSON: interpretation, confounds, hypotheses, novel structures
+6. Interpretation critique — agents challenge each other
+7. Audit
 
 ## Milestones
 
