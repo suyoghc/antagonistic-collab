@@ -63,7 +63,8 @@ models/
 - Full-pool EIG mode validated end-to-end — **DONE** (2-cycle, correct convergence, 36% fewer LLM calls)
 - Learning curves wired into execution + Bayesian update — **DONE** (D23)
 - Novel structures validated/registered from interpretation debate — **DONE** (D23)
-- Remaining: 5-cycle comparative validation (full_pool vs legacy), novel structure prompting
+- Novel structure prompting with few-shot examples — **DONE** (D24)
+- 5-cycle comparative validation (full_pool vs legacy, all 3 ground truths) — **DONE** (all correct, full_pool RULEX gap 68% vs legacy 2.4%)
 
 ### M4: Multi-model ground truth
 - Run with each model as ground truth (GCM, SUSTAIN, RULEX)

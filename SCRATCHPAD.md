@@ -21,10 +21,28 @@ Legacy 9-phase flow preserved as `--mode legacy` (default). New flow: `--mode fu
 - Exemplar_Agent RMSE=0.139, Rule_Agent=0.352, Clustering_Agent=0.298
 - Correct agent wins decisively
 
+**Status update — 2026-03-14 evening:**
+- 5-cycle comparative validation COMPLETE. Full_pool mode correct in all 3 conditions.
+- Novel structure prompting COMPLETE (D24). Agents propose valid structures in every cycle.
+- D25 crash fix: summary_for_agent on non-string predictions.
+- All M3 tasks complete. 207 tests passing.
+
+### 5-cycle comparative validation results
+
+| Ground Truth | Mode | Winner | RMSE | 2nd | RMSE | Gap | Correct? |
+|---|---|---|---|---|---|---|---|
+| GCM | full_pool | Exemplar | 0.161 | Clustering | 0.242 | 34% | YES |
+| GCM | legacy | Exemplar | 0.255 | Clustering | 0.404 | 37% | YES |
+| SUSTAIN | full_pool | Clustering | 0.270 | Rule | 0.465 | 42% | YES |
+| SUSTAIN | legacy | Clustering | 0.361 | Rule/Exemplar | 0.546 | 34% | YES |
+| RULEX | full_pool | Rule | 0.119 | Clustering | 0.366 | 68% | YES |
+| RULEX | legacy | Rule | 0.429 | Exemplar | 0.440 | 2.4% | YES |
+
+**Key finding:** Learning curves solved the GCM-RULEX discrimination problem. Gap went from 2.4% to 68%.
+
 **Next:**
-- 5-cycle comparative validation: `--mode full_pool` vs `--mode legacy` for all 3 ground truths
-- Prompt novel structure generation (few-shot examples in interpretation debate)
 - Update CHATLOG.md with session 13 summary
+- Consider M4 goals: write-up, analysis of novel structures, cross-condition patterns
 
 ### 5-cycle validation results (pre-diversity-penalty)
 

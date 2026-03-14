@@ -507,3 +507,17 @@ Pattern covered `debate_cycle_*.json` but not `.md` transcripts.
 **Tests:** 1 new regression test, 206 total passing, ruff clean.
 
 **Status:** Done.
+
+---
+
+## D25: Fix summary_for_agent crash on non-string new_predictions — 2026-03-14
+
+**Problem:** `summary_for_agent()` in `epistemic_state.py` crashed with `TypeError: sequence item 0: expected str instance, dict found` during the audit phase. Root cause: LLM agents return structured `new_predictions` (e.g., `{"item": "Type_I", "accuracy": 0.9}`) during interpretation debate revisions, but `summary_for_agent()` assumed predictions were strings and called `'; '.join(...)` on them.
+
+**Fix:** Coerce `new_predictions` items to `str()` before joining: `preds = [str(p) for p in latest["new_predictions"][:2]]`.
+
+**Impact:** This crash blocked all full_pool mode runs from completing cycle 0 → audit. All 3 full_pool validation runs (GCM, SUSTAIN, RULEX) failed at this point.
+
+**Tests:** 1 regression test, 207 total passing, ruff clean.
+
+**Status:** Done.

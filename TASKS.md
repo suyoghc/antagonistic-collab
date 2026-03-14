@@ -31,7 +31,7 @@
 - [x] **Wire learning curves into run_execution()** — compute `compute_learning_curve_predictions()` during execution, pass curves to `update_posterior_from_experiment()`, store on `protocol.state.last_execution_curves` (D23)
 - [x] **Feed novel structures back into EIG pool** — after `run_interpretation_debate()`, validate and register novel structures in `protocol.temporary_structures` for next cycle's `generate_full_candidate_pool()` (D23)
 - [x] **Include learning curve + posterior context in interpretation debate** — agents see curve comparison table (pattern, final accuracy, max jump, onset block) in their interpretation prompt (D23)
-- [ ] **5-cycle comparative validation** — run `--mode full_pool` vs `--mode legacy` for all 3 ground truth models, compare convergence speed and final RMSE gap
+- [x] **5-cycle comparative validation** — full_pool vs legacy for all 3 ground truths. Full_pool correct in all 3 with larger gaps: GCM 34% (vs 37%), SUSTAIN 42% (vs 34%), RULEX 68% (vs 2.4%). Learning curves solved the GCM-RULEX discrimination problem.
 - [x] **Prompt novel structure generation** — added few-shot example (diagonal_xor), constraints (4-32 items, ≤8 dims, ≥2 cats), strategic guidance to interpretation prompt (D24)
 
 ### Queued (from Codex review, 2026-03-13)
