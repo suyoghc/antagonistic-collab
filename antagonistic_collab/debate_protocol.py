@@ -355,8 +355,12 @@ class DebateProtocol:
                 "goal": (
                     "Given the divergence map, propose an experiment that would "
                     "be maximally diagnostic from YOUR theoretical perspective. "
-                    "The design should capitalize on the regions of maximal "
-                    "prediction divergence identified in the previous phase."
+                    "IMPORTANT: Look at the 'Predicted accuracy' line for each "
+                    "structure. Choose a structure where YOUR model has the "
+                    "HIGHEST predicted accuracy relative to other models — this "
+                    "is where your theory's advantage will be most visible in "
+                    "the data. Avoid structures where all models perform "
+                    "similarly or where your model is weakest."
                 ),
                 "required_output": "ExperimentProposal JSON",
                 "context": self.state.summary_for_agent("{agent_name}"),
