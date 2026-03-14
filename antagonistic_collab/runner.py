@@ -1252,10 +1252,21 @@ def run_interpretation_debate(
             f'{{"interpretation": "your analysis of what the results show", '
             f'"confounds_flagged": ["list any confounds or methodological issues"], '
             f'"hypothesis": "what experiment should come next and why", '
-            f'"novel_structure": null or {{"name": "...", "stimuli": [[...]], "labels": [...]}} '
-            f"if you want to propose a new category structure, "
+            f'"novel_structure": null or a structure dict (see example below), '
             f'"revision": null or {{"description": "...", "new_predictions": [...]}} '
-            f"if you want to revise your theory}}"
+            f"if you want to revise your theory}}\n\n"
+            f"### Novel Structure Format\n"
+            f"If none of the existing structures can distinguish the models, you can "
+            f"propose a novel category structure. Constraints: 4-32 items, ≤8 dimensions, "
+            f"≥2 categories. Example:\n"
+            f'{{"novel_structure": {{"name": "diagonal_xor", '
+            f'"stimuli": [[0,0],[0,1],[1,0],[1,1],[0,0.5],[1,0.5]], '
+            f'"labels": [0,1,1,0,0,1]}}}}\n'
+            f"The structure will be validated and, if valid, added to the experiment "
+            f"pool for the next cycle. Design structures that specifically exploit "
+            f"weaknesses in competing models — e.g., random category assignments "
+            f"(no rule exists) to challenge rule-based models, or high-dimensional "
+            f"stimuli to challenge exemplar models."
         )
 
         print(f"\n--- {agent.name} interprets ---")

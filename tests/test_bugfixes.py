@@ -5895,3 +5895,86 @@ class TestLearningCurvesTemporaryStructures:
                 f"{agent_name} produced {len(curve)} blocks — likely fell back to "
                 f"Type_II (8 items) instead of using custom_xor (4 items)"
             )
+
+
+# =========================================================================
+# Novel structure prompting (runner.py)
+# =========================================================================
+
+
+class TestNovelStructurePrompting:
+    """The interpretation debate prompt should include few-shot examples
+    of valid novel structures so agents know the format and constraints."""
+
+    def test_prompt_contains_novel_structure_example(self):
+        """The interpretation prompt should include a concrete example
+        of a valid novel_structure with stimuli and labels."""
+        import antagonistic_collab.runner as runner_mod
+        from antagonistic_collab.runner import run_interpretation_debate
+
+        agents = default_agent_configs()
+        state = EpistemicState(domain="test")
+        protocol = DebateProtocol(state, agents)
+        for a in agents:
+            try:
+                protocol.state.register_theory(
+                    TheoryCommitment(
+                        name=a.theory_name,
+                        agent_name=a.name,
+                        core_claims=a.model_class.core_claims,
+                        model_name=a.model_class.name,
+                        model_params=a.default_params,
+                    )
+                )
+            except ValueError:
+                pass
+
+        exp = protocol.state.propose_experiment(
+            proposed_by=agents[0].name,
+            title="Test",
+            design_spec={"structure_name": "Type_I", "condition": "baseline"},
+            rationale="test",
+        )
+        protocol.state.approve_experiment(exp.experiment_id)
+        protocol.state.record_data(
+            exp.experiment_id,
+            {
+                "mean_accuracy": 0.75,
+                "item_accuracies": {"item_0": 0.8, "item_1": 0.7},
+                "ground_truth_model": "GCM",
+                "structure_name": "Type_I",
+                "condition": "baseline",
+            },
+        )
+        protocol.skip_to_phase(Phase.INTERPRETATION)
+
+        captured_prompts = []
+
+        def fake_call(client, system, prompt):
+            captured_prompts.append(prompt)
+            return json.dumps(
+                {
+                    "interpretation": "test",
+                    "confounds_flagged": [],
+                    "hypothesis": "test",
+                    "novel_structure": None,
+                    "revision": None,
+                }
+            )
+
+        transcript = []
+        with patch.object(runner_mod, "call_agent", side_effect=fake_call):
+            run_interpretation_debate(protocol, None, transcript)
+
+        # Prompt should contain a few-shot example with actual stimuli/labels
+        assert any(
+            "stimuli" in p and "labels" in p and "novel_structure" in p
+            for p in captured_prompts
+        ), (
+            "Prompt should contain a few-shot example of novel_structure with "
+            "stimuli and labels arrays"
+        )
+        # Should mention constraints (4-32 items, ≤8 dims, ≥2 categories)
+        assert any("4" in p and "32" in p for p in captured_prompts), (
+            "Prompt should mention item count constraints (4-32)"
+        )
