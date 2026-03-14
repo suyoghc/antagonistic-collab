@@ -4,14 +4,24 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ---
 
-## Current focus — 2026-03-14
+## Current focus — M4: Analysis & write-up
 
-Implemented debate-as-hypothesis-generator architecture (D19). Three-phase refactor:
-- **Phase A:** Full-pool EIG over 55 candidates replaces agent proposals. Agents shift to interpreting results and generating hypotheses.
-- **Phase B:** Learning curves as second evidence channel. GCM=gradual, RULEX=sudden, SUSTAIN=stepwise (on Type_I, all models are fast — patterns clearer on harder structures).
-- **Phase C:** Novel structure generation. LLM agents can propose new structures during interpretation; validated and added to next cycle's EIG pool.
+M3 (validate convergence) is complete. Full_pool mode correct in all 3 conditions with learning curves solving the GCM-RULEX problem (2.4% → 68% gap).
 
-Legacy 9-phase flow preserved as `--mode legacy` (default). New flow: `--mode full_pool`.
+**Available validation data (in `runs/`):**
+- `validation_full_pool_GCM/` — 5 cycles, Exemplar wins (RMSE 0.161)
+- `validation_full_pool_SUSTAIN/` — 5 cycles, Clustering wins (RMSE 0.270)
+- `validation_full_pool_RULEX/` — 5 cycles, Rule wins (RMSE 0.119)
+- `validation_legacy_GCM/` — 5 cycles, Exemplar wins (RMSE 0.255)
+- `validation_legacy_SUSTAIN/` — 5 cycles, Clustering wins (RMSE 0.361)
+- `validation_legacy_RULEX/` — 5 cycles, Rule wins (RMSE 0.429)
+
+**M4 analysis questions:**
+1. What structures/conditions does EIG select? Is there a pattern?
+2. Do novel structures proposed by agents actually improve discrimination?
+3. How quickly does the Bayesian posterior collapse? Monotonic?
+4. Do interpretations/critiques improve over cycles or stay formulaic?
+5. How much variance is there across replicate runs?
 
 **Status:** Full_pool mode validated end-to-end (2-cycle real run with Princeton/GPT-4o). All integration gaps closed (D23): learning curves wired into execution + Bayesian update, novel structures validated + registered, curve context in interpretation debate, temporary structures in curve computation.
 

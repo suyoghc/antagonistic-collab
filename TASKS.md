@@ -1,6 +1,18 @@
 # Tasks
 
-## Current Milestone: M3 — Validate convergence
+## Current Milestone: M4 — Analysis & write-up
+
+### M4 Tasks
+- [ ] **Analyze EIG selection patterns** — which structures/conditions does EIG pick across 6 validation runs? What makes a good discriminating experiment?
+- [ ] **Analyze novel structures** — are agent-proposed structures valid? Do they enter EIG pool? Do they improve discrimination beyond registry structures?
+- [ ] **Per-cycle convergence trajectories** — how quickly does posterior collapse? Is it monotonic? Compare full_pool vs legacy convergence speed
+- [ ] **Interpretation debate quality audit** — do agents cite data correctly? Do critiques change behavior? Compare interpretation quality between modes
+- [ ] **Replication runs** — run each condition 3× to assess variance in final RMSE gaps
+- [ ] **Write-up** — structured report: intro, methods, results, discussion
+
+---
+
+## Completed: M3 — Validate convergence
 
 ### Blocking
 - [x] **Fix synthetic data generator** — experiments now produce different data depending on category structure and conditions (D6 → D7)

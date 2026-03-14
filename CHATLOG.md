@@ -278,4 +278,37 @@ Human-readable summary of each Claude Code session on this project.
 
 ---
 
+## Session 13 — 2026-03-14
+
+**Commits:** `b663fc1`, `e4c05a2`, `03fd898`, `6958557`, `65dbc98`, `5e37ac1`, `f3fd0d7`
+
+**What we did:**
+- Implemented D23: wired learning curves into `run_execution()` (compute + Bayesian update), novel structures into `run_interpretation_debate()` (validate + register), curve context into interpretation prompts, temporary structures into `compute_learning_curve_predictions()`
+- Implemented D24: few-shot novel structure examples in interpretation debate prompt (constraints, example, strategic guidance)
+- Fixed D25: `summary_for_agent()` crash on non-string `new_predictions` — coerce to `str()` before joining
+- Ran 5-cycle comparative validation: 6 runs (3 ground truths × 2 modes), all correct winners
+- Updated LESSONS_LEARNED.md Phase 8 (8.1–8.4), DECISIONS.md (D23–D25), TASKS.md, SCRATCHPAD.md, PLANNING.md
+- 9 new regression tests (207 total), ruff clean
+
+**Key findings:**
+
+| Ground Truth | full_pool Gap | legacy Gap |
+|---|---|---|
+| GCM | 34% | 37% |
+| SUSTAIN | 42% | 34% |
+| RULEX | **68%** | **2.4%** |
+
+- **Learning curves solved the GCM-RULEX discrimination problem** (2.4% → 68% gap)
+- Full_pool mode correct in all 3 conditions with consistently larger RMSE gaps
+- Novel structures proposed by agents in every cycle with few-shot prompting
+- D25 crash: same pattern as D21 — LLM outputs have unpredictable types, defensive coercion needed
+
+**Key discussion:**
+- M3 milestone complete: all convergence validation tasks done
+- Architecture thesis confirmed: LLMs add value for interpretation/hypothesis generation, not experiment selection
+- Multiple evidence channels (accuracy + curve shape) beat single-channel for model comparison
+- Ready for M4: analysis, write-up, cross-condition patterns
+
+---
+
 *This log is maintained manually. Update it at the end of each session.*

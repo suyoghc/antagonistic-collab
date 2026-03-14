@@ -56,9 +56,9 @@ models/
 - Expand scoring beyond mean_accuracy
 - Agents call their models for predictions (not LLM-guessed)
 
-### M3: Validate convergence (NEARLY COMPLETE)
+### M3: Validate convergence (DONE)
 - Run debates where true model's agent should win — **DONE** (GCM, SUSTAIN, RULEX all correct)
-- Measure whether RMSE gap grows over cycles — **DONE** (15.1% GCM, 32.2% SUSTAIN, 1.8% RULEX at 5 cycles)
+- Measure whether RMSE gap grows over cycles — **DONE** (15.1% GCM, 32.2% SUSTAIN, 1.8% RULEX at 5 cycles with legacy)
 - Check whether critique quality improves or degrades — **DONE** (stable but formulaic)
 - Full-pool EIG mode validated end-to-end — **DONE** (2-cycle, correct convergence, 36% fewer LLM calls)
 - Learning curves wired into execution + Bayesian update — **DONE** (D23)
@@ -66,10 +66,14 @@ models/
 - Novel structure prompting with few-shot examples — **DONE** (D24)
 - 5-cycle comparative validation (full_pool vs legacy, all 3 ground truths) — **DONE** (all correct, full_pool RULEX gap 68% vs legacy 2.4%)
 
-### M4: Multi-model ground truth
-- Run with each model as ground truth (GCM, SUSTAIN, RULEX)
-- Compare convergence patterns across conditions
-- Write up findings
+### M4: Analysis & write-up (CURRENT)
+- [ ] Analyze which structures/conditions EIG selects across the 6 validation runs — what makes a good discriminating experiment?
+- [ ] Analyze novel structures proposed by agents — are they valid? do they enter the EIG pool? do they improve discrimination?
+- [ ] Analyze per-cycle convergence trajectories — how quickly does posterior collapse? is it monotonic?
+- [ ] Analyze interpretation debate quality — do agents cite data correctly? do critiques change behavior?
+- [ ] Replicate: run each condition 3× to assess variance in final RMSE gaps
+- [ ] Write up findings as a structured report (intro, methods, results, discussion)
+- [ ] Consider whether framework generalizes beyond categorization models
 
 ## Key constraints
 
