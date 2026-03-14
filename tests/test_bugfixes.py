@@ -5137,3 +5137,173 @@ class TestFullPoolIntegration:
 
         # Sanity: LLM was actually called (not bypassed)
         assert call_count[0] > 0, "No LLM calls were made"
+
+
+# =========================================================================
+# Codex review round 3 — regression tests (D21)
+# =========================================================================
+
+
+class TestOverrideFallbackPreservesCondition:
+    """P1: compute_model_predictions() fallback must preserve condition overrides.
+
+    When a malformed LLM param_override causes ValueError/TypeError, the
+    fallback previously reverted to bare agent defaults, silently dropping
+    the experimental condition. E.g. low_attention sets GCM c=1.5, but a
+    bad override like attention_weights=[0.5,0.5,0.5] on a 4D structure
+    would revert to c=3.0 (baseline).
+    """
+
+    def test_fallback_preserves_condition_overrides(self):
+        """After a malformed override, condition params (e.g. c=1.5) must survive."""
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        gcm_agent = agents[0]  # Exemplar_Agent uses GCM
+        assert gcm_agent.model_class.name.startswith("GCM")
+
+        # low_attention sets GCM c=1.5 (vs default c=3.0)
+        # Provide a malformed override that will crash on first item
+        result = protocol.compute_model_predictions(
+            gcm_agent,
+            "linear_separable_4d",  # 4D structure
+            "low_attention",
+            param_overrides={
+                "attention_weights": [0.5, 0.5, 0.5]
+            },  # wrong shape for 4D
+        )
+
+        # The key check: params_used should have c=1.5 (from low_attention),
+        # NOT c=3.0 (bare default). The malformed attention_weights should be
+        # dropped, but the condition override should survive.
+        params_used = result.get("params_used", {})
+        assert params_used.get("c") == 1.5, (
+            f"Expected c=1.5 (low_attention), got c={params_used.get('c')}. "
+            "Fallback dropped condition overrides."
+        )
+
+
+class TestScalarAddressesCritiques:
+    """P1: run_design_revision() must handle scalar addresses_critiques.
+
+    If the LLM returns "addresses_critiques": 1 instead of [1], the
+    list comprehension on line 557 crashes with TypeError.
+    """
+
+    def test_scalar_addresses_critiques_no_crash(self):
+        """A scalar addresses_critiques value should not crash design revision."""
+        from antagonistic_collab.runner import run_design_revision
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        # Register theories and create a proposal with critiques
+        for a in agents:
+            try:
+                protocol.state.register_theory(
+                    TheoryCommitment(
+                        name=a.theory_name,
+                        agent_name=a.name,
+                        core_claims=a.model_class.core_claims,
+                        model_name=a.model_class.name,
+                        model_params=a.default_params,
+                    )
+                )
+            except ValueError:
+                pass
+
+        exp = protocol.state.propose_experiment(
+            proposed_by=agents[0].name,
+            title="Test proposal",
+            design_spec={"structure_name": "Type_I", "condition": "baseline"},
+            rationale="test",
+        )
+        # Add a critique so revision runs
+        exp.critique_log.append({"agent": agents[1].name, "critique": "Not diagnostic"})
+
+        protocol.skip_to_phase(Phase.DESIGN_REVISION)
+
+        # LLM returns scalar addresses_critiques
+        def fake_call(*a, **kw):
+            return json.dumps(
+                {
+                    "structure_name": "Type_II",
+                    "condition": "baseline",
+                    "changes": "Switched structure",
+                    "addresses_critiques": 1,  # scalar, not list
+                }
+            )
+
+        with patch("antagonistic_collab.runner.call_agent", side_effect=fake_call):
+            # This should NOT raise TypeError
+            result = run_design_revision(protocol, None, [])
+
+        # Should complete without crashing
+        assert result.phase == Phase.DESIGN_REVISION
+
+
+class TestInvalidApprovalRejects:
+    """P2: Out-of-range approve index must set rejected flag.
+
+    approve 99 with only 1 proposal nulls idx but doesn't set rejected,
+    so the cycle continues with no approved experiment.
+    """
+
+    def test_approve_out_of_range_sets_rejected(self):
+        """approve 99 with 1 proposal should result in rejection."""
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        # Create a single proposal
+        protocol.state.propose_experiment(
+            proposed_by=agents[0].name,
+            title="Test",
+            design_spec={"structure_name": "Type_I", "condition": "baseline"},
+            rationale="test",
+        )
+        protocol.skip_to_phase(Phase.HUMAN_ARBITRATION)
+
+        with patch("builtins.input", return_value="approve 99"):
+            result = run_human_arbitration(protocol, [])
+
+        # Must be flagged as rejected so the retry loop kicks in
+        assert result.outputs.get("rejected") is True, (
+            "Out-of-range approve should set rejected=True"
+        )
+
+
+class TestSUSTAINPartialBlockLabel:
+    """P2: SUSTAIN partial block must not duplicate prior block's label.
+
+    With 3 trials and block_size=2, the method returns blocks at indices
+    [2, 3]. The label formula (block_end // block_size) - 1 gives
+    block 0 for both (2//2-1=0, 3//2-1=0).
+    """
+
+    def test_partial_block_has_unique_label(self):
+        """Each block in the learning curve must have a unique label."""
+        model = SUSTAIN()
+        # 3 items → block_size=2 gives blocks at [2, 3]
+        stimuli = [[0, 0], [1, 1], [0, 1]]
+        labels = [0, 1, 0]
+        training_seq = list(zip(stimuli, labels))
+
+        curve = model.predict_learning_curve(
+            training_seq,
+            test_items=stimuli,
+            test_labels=labels,
+            n_epochs=1,
+            block_size=2,
+        )
+
+        # Should have 2 blocks (one complete, one partial)
+        assert len(curve) >= 2, f"Expected ≥2 blocks, got {len(curve)}"
+
+        # Block labels must be unique
+        block_labels = [entry["block"] for entry in curve]
+        assert len(block_labels) == len(set(block_labels)), (
+            f"Duplicate block labels: {block_labels}"
+        )

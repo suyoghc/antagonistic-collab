@@ -741,9 +741,16 @@ class DebateProtocol:
         # item i to itself with distance=0, similarity=1.0).
         #
         # If LLM-provided param values crash the model (wrong shapes,
-        # bad types), fall back to default params for the entire run.
-        default_only = {
-            k: v for k, v in agent_config.default_params.items() if k in valid_params
+        # bad types), fall back to condition-applied params (without the
+        # malformed LLM overrides). This preserves the experimental
+        # condition (e.g. low_attention → c=1.5) instead of reverting to
+        # bare agent defaults (c=3.0).
+        condition_params = dict(agent_config.default_params)
+        if condition in CONDITION_EFFECTS:
+            model_key = agent_config.model_class.name.split()[0]
+            condition_params.update(CONDITION_EFFECTS[condition].get(model_key, {}))
+        fallback_params = {
+            k: v for k, v in condition_params.items() if k in valid_params
         }
         item_accuracies = {}
         for i, (stim, label) in enumerate(zip(stimuli, labels)):
@@ -752,8 +759,8 @@ class DebateProtocol:
             try:
                 pred = model.predict(stim, loo_stimuli, loo_labels, **params)
             except (ValueError, TypeError):
-                # Malformed override values — fall back to defaults
-                params = default_only
+                # Malformed override values — fall back to condition params
+                params = fallback_params
                 pred = model.predict(stim, loo_stimuli, loo_labels, **params)
             p_correct = pred["probabilities"].get(int(label), 0.5)
             item_accuracies[f"item_{i}"] = float(p_correct)

@@ -550,6 +550,9 @@ def run_design_revision(
         revision_json = extract_json(response) or {}
         new_structure = revision_json.get("structure_name", "")
         addresses = revision_json.get("addresses_critiques", [])
+        # LLM may return a scalar (e.g. 1) instead of a list — coerce
+        if not isinstance(addresses, list):
+            addresses = [addresses]
         changes = revision_json.get("changes", "")
 
         if new_structure and addresses and new_structure in STRUCTURE_REGISTRY:
@@ -772,6 +775,9 @@ def run_human_arbitration(protocol: DebateProtocol, transcript: list) -> PhaseRe
                 + (f" (edits: {edits})" if edits else "")
             )
             messages[0]["approved"] = selected.experiment_id
+        else:
+            # Invalid or out-of-range index — treat as rejection
+            rejected = True
     elif choice == "skip":
         if current_proposals:
             protocol.state.approve_experiment(current_proposals[0].experiment_id)

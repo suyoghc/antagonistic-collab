@@ -357,7 +357,7 @@ class SUSTAIN:
         # Include the final partial block if the sequence isn't evenly divisible
         if len(training_sequence) % block_size != 0:
             block_ends.append(len(training_sequence))
-        for block_end in block_ends:
+        for block_idx, block_end in enumerate(block_ends):
             # Train on items up to this block
             partial_seq = training_sequence[:block_end]
             result = self.simulate_learning(partial_seq, **sim_params)
@@ -384,7 +384,7 @@ class SUSTAIN:
 
             curve.append(
                 {
-                    "block": (block_end // block_size) - 1,
+                    "block": block_idx,
                     "accuracy": float(correct / len(test_items)),
                     "n_clusters": n_clusters,
                 }
