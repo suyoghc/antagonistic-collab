@@ -249,4 +249,27 @@ Human-readable summary of each Claude Code session on this project.
 
 ---
 
+## Session 12 — 2026-03-14
+
+**Commits:** `27d4809`
+
+**What we did:**
+- Fixed full_pool mode phase desync bug: `advance_phase()` uses `current_phase` for transitions, but after divergence mapping current_phase was `EXPERIMENT_PROPOSAL`, not `HUMAN_ARBITRATION`. Full_pool mode's EIG selection skips phases 3-5, so the state machine never reached AUDIT → `advance_cycle()` never fired → cycle counter stuck at 0. Fix: `skip_to_phase(HUMAN_ARBITRATION)` before advancing from EIG selection result.
+- Added `TestFullPoolIntegration`: 2-cycle end-to-end integration test with mocked LLM, verifying the complete pipeline (commitment → divergence → EIG → execution → interpretation debate → critique → audit) for both cycles.
+- Validated with real 2-cycle Princeton/GPT-4o run (`--mode full_pool --true-model GCM`):
+  - Cycle 0: EIG selected `five_four / fast_presentation`
+  - Cycle 1: EIG selected `Type_I / low_attention`
+  - Exemplar_Agent wins (RMSE 0.139 vs 0.352 Rule, 0.298 Clustering) ✓
+- 190 tests passing, ruff clean
+
+**Key findings:**
+- Full_pool mode works end-to-end: EIG selects experiments, interpretation debate produces structured hypotheses, critique challenges claims, audit summarizes — no LLM calls wasted on experiment proposals
+- EIG correctly picks different structures across cycles without needing diversity penalty heuristic
+- Phase state machine was a subtle integration bug — unit tests didn't catch it because they mocked at lower levels
+
+**Key discussion:**
+- Next steps: wire learning curves into execution, feed novel structures back into EIG pool, run 5-cycle comparative validation
+
+---
+
 *This log is maintained manually. Update it at the end of each session.*
