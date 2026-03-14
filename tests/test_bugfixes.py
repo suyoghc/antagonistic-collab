@@ -3715,3 +3715,41 @@ class TestModeratorRejectPath:
                 f"Experiment {eid} should be rejected after moderator reject, "
                 f"got status={exp.status}"
             )
+
+
+# =========================================================================
+# --demo order-sensitivity — P3 fix
+# =========================================================================
+
+
+class TestDemoFlag:
+    """
+    Bug (P3): `sys.argv[1] == "--demo"` fails when other flags precede it,
+    e.g. `python -m antagonistic_collab --verbose --demo`.
+
+    Fix: Check `"--demo" in sys.argv` instead of positional check.
+    """
+
+    @patch("sys.argv", ["prog", "--demo"])
+    @patch("antagonistic_collab.demo.demo_model_predictions")
+    @patch("antagonistic_collab.demo.demo_divergence_mapping")
+    @patch("antagonistic_collab.demo.demo_epistemic_state")
+    @patch("antagonistic_collab.demo.demo_full_cycle")
+    def test_demo_as_first_arg(self, mock_fc, mock_es, mock_dm, mock_mp):
+        """--demo as argv[1] should run demo functions."""
+        from antagonistic_collab.__main__ import _entry
+
+        _entry()
+        mock_mp.assert_called_once()
+
+    @patch("sys.argv", ["prog", "--other", "--demo"])
+    @patch("antagonistic_collab.demo.demo_model_predictions")
+    @patch("antagonistic_collab.demo.demo_divergence_mapping")
+    @patch("antagonistic_collab.demo.demo_epistemic_state")
+    @patch("antagonistic_collab.demo.demo_full_cycle")
+    def test_demo_not_first_arg(self, mock_fc, mock_es, mock_dm, mock_mp):
+        """--demo as argv[2] should still run demo functions."""
+        from antagonistic_collab.__main__ import _entry
+
+        _entry()
+        mock_mp.assert_called_once()

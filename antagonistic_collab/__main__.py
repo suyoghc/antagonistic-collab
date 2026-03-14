@@ -9,7 +9,7 @@ import sys
 
 
 def _entry():
-    if len(sys.argv) > 1 and sys.argv[1] == "--demo":
+    if "--demo" in sys.argv:
         from .demo import (
             demo_model_predictions,
             demo_divergence_mapping,
