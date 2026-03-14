@@ -105,6 +105,61 @@ CONDITION_EFFECTS: dict[str, dict[str, dict]] = {
 }
 
 
+def validate_novel_structure(spec: dict) -> tuple[bool, str]:
+    """Check whether a novel structure proposed by an LLM agent is valid.
+
+    Requirements:
+    - Must have 'stimuli' and 'labels' keys
+    - stimuli must be 2D (list of lists)
+    - labels must match stimuli length
+    - 4–32 items
+    - ≤8 dimensions
+    - ≥2 categories
+
+    Returns:
+        (is_valid, message) — True + "" if valid, False + reason if not.
+    """
+    if not isinstance(spec, dict):
+        return False, "Spec must be a dict"
+
+    if "stimuli" not in spec:
+        return False, "Missing 'stimuli' key"
+    if "labels" not in spec:
+        return False, "Missing 'labels' key"
+
+    stimuli = spec["stimuli"]
+    labels = spec["labels"]
+
+    if not isinstance(stimuli, list) or not isinstance(labels, list):
+        return False, "stimuli and labels must be lists"
+
+    if len(stimuli) != len(labels):
+        return (
+            False,
+            f"Mismatched lengths: {len(stimuli)} stimuli vs {len(labels)} labels",
+        )
+
+    if len(stimuli) < 4:
+        return False, f"Too few items ({len(stimuli)}); need at least 4"
+    if len(stimuli) > 32:
+        return False, f"Too many items ({len(stimuli)}); max 32"
+
+    # Check dimensions
+    if len(stimuli) > 0 and isinstance(stimuli[0], list):
+        n_dims = len(stimuli[0])
+        if n_dims > 8:
+            return False, f"Too many dimensions ({n_dims}); max 8"
+    elif len(stimuli) > 0:
+        return False, "Stimuli must be 2D (list of lists)"
+
+    # Check categories
+    unique_labels = set(labels)
+    if len(unique_labels) < 2:
+        return False, f"Need at least 2 categories; found {len(unique_labels)}"
+
+    return True, ""
+
+
 def extract_curve_features(curve: list[dict]) -> dict:
     """Extract summary features from a learning curve.
 
@@ -392,6 +447,7 @@ class DebateProtocol:
         self.experiment_runner = experiment_runner or self._synthetic_runner
         self.current_phase = Phase.COMMITMENT
         self.phase_history: list[PhaseResult] = []
+        self.temporary_structures: dict = {}  # novel structures from agents
 
     # --- Phase specifications ---
 

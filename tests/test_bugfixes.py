@@ -4818,3 +4818,168 @@ class TestLearningCurvePredictions:
 
         # Different learning patterns → can break ties
         assert gcm_features["learning_pattern"] != rulex_features["learning_pattern"]
+
+
+# =========================================================================
+# Phase C: Novel Structure Generation from Debate (D19)
+# =========================================================================
+
+
+class TestNovelStructureValidation:
+    """Tests for validating novel category structures proposed by LLM agents
+    during interpretation debate."""
+
+    def test_validate_novel_structure_valid(self):
+        """A well-formed novel structure passes validation."""
+        from antagonistic_collab.debate_protocol import validate_novel_structure
+
+        spec = {
+            "name": "custom_xor",
+            "stimuli": [[0, 0], [0, 1], [1, 0], [1, 1]],
+            "labels": [0, 1, 1, 0],
+        }
+        valid, msg = validate_novel_structure(spec)
+        assert valid is True, msg
+
+    def test_validate_novel_structure_missing_labels(self):
+        """Structure without labels fails validation."""
+        from antagonistic_collab.debate_protocol import validate_novel_structure
+
+        spec = {
+            "name": "bad",
+            "stimuli": [[0, 0], [0, 1]],
+        }
+        valid, msg = validate_novel_structure(spec)
+        assert valid is False
+        assert "labels" in msg.lower()
+
+    def test_validate_novel_structure_too_many_items(self):
+        """Structure with >32 items fails validation."""
+        from antagonistic_collab.debate_protocol import validate_novel_structure
+
+        spec = {
+            "name": "huge",
+            "stimuli": [[i, i] for i in range(33)],
+            "labels": [i % 2 for i in range(33)],
+        }
+        valid, msg = validate_novel_structure(spec)
+        assert valid is False
+        assert "32" in msg or "items" in msg.lower()
+
+    def test_validate_novel_structure_wrong_dims(self):
+        """Structure with >8 dims fails validation."""
+        from antagonistic_collab.debate_protocol import validate_novel_structure
+
+        spec = {
+            "name": "highdim",
+            "stimuli": [[0] * 9, [1] * 9, [0] * 9, [1] * 9],
+            "labels": [0, 1, 0, 1],
+        }
+        valid, msg = validate_novel_structure(spec)
+        assert valid is False
+        assert "dim" in msg.lower()
+
+    def test_validate_novel_structure_mismatched_lengths(self):
+        """Mismatched stimuli/labels lengths fail."""
+        from antagonistic_collab.debate_protocol import validate_novel_structure
+
+        spec = {
+            "name": "mismatch",
+            "stimuli": [[0, 0], [1, 1], [0, 1], [1, 0]],
+            "labels": [0],  # only 1 label for 4 stimuli
+        }
+        valid, msg = validate_novel_structure(spec)
+        assert valid is False
+
+    def test_validate_novel_structure_too_few_categories(self):
+        """Need at least 2 categories."""
+        from antagonistic_collab.debate_protocol import validate_novel_structure
+
+        spec = {
+            "name": "onecat",
+            "stimuli": [[0, 0], [1, 1], [0, 1], [1, 0]],
+            "labels": [0, 0, 0, 0],  # only 1 category
+        }
+        valid, msg = validate_novel_structure(spec)
+        assert valid is False
+        assert "categor" in msg.lower()
+
+
+class TestTemporaryStructures:
+    """Tests for temporary structures from novel agent proposals being
+    incorporated into the divergence map and EIG search."""
+
+    def test_temporary_structures_in_divergence_map(self):
+        """Novel structures added to protocol.temporary_structures appear
+        in divergence map computation."""
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        # Add a temporary structure
+        protocol.temporary_structures = {
+            "novel_xor": {
+                "stimuli": [[0, 0], [0, 1], [1, 0], [1, 1]],
+                "labels": [0, 1, 1, 0],
+            }
+        }
+
+        # Compute divergence map with merged structures
+        merged = dict(STRUCTURE_REGISTRY)
+        merged.update(protocol.temporary_structures)
+        div_map = protocol.compute_divergence_map(structures=merged)
+        assert "novel_xor" in div_map
+
+    def test_temporary_structures_in_eig_search(self):
+        """Extra structures are included in EIG candidate pool."""
+        from antagonistic_collab.bayesian_selection import generate_full_candidate_pool
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        extra = {
+            "novel_xor": {
+                "stimuli": [[0, 0], [0, 1], [1, 0], [1, 1]],
+                "labels": [0, 1, 1, 0],
+            }
+        }
+        pool = generate_full_candidate_pool(protocol, extra_structures=extra)
+        novel_entries = [(s, c) for s, c in pool if s == "novel_xor"]
+        assert len(novel_entries) == 5  # 5 conditions
+
+    def test_novel_structure_from_llm_json(self):
+        """Parse a realistic LLM output containing a novel structure."""
+        from antagonistic_collab.debate_protocol import validate_novel_structure
+
+        # Realistic JSON that an LLM might produce
+        llm_output = {
+            "name": "random_similarity",
+            "stimuli": [
+                [0.2, 0.3],
+                [0.3, 0.2],
+                [0.8, 0.7],
+                [0.7, 0.8],
+                [0.1, 0.9],
+                [0.9, 0.1],
+            ],
+            "labels": [0, 0, 1, 1, 0, 1],
+        }
+        valid, msg = validate_novel_structure(llm_output)
+        assert valid is True, msg
+
+    def test_temporary_structures_cleared_after_use(self):
+        """temporary_structures should be clearable between cycles."""
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        protocol.temporary_structures = {
+            "temp": {
+                "stimuli": [[0, 0], [1, 1]],
+                "labels": [0, 1],
+            }
+        }
+        assert len(protocol.temporary_structures) == 1
+        protocol.temporary_structures = {}
+        assert len(protocol.temporary_structures) == 0
