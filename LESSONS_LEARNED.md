@@ -227,3 +227,92 @@ Exemplar_Agent was consistently closest to the data every cycle, not just on ave
 **Actual:** Agents picked rule_plus_exception_1exc (cycle 0), linear_separable_4d (cycle 1), and Type_II (cycle 2) — three different structures, more diverse than Phase 2 (which used only Type_VI and Type_II). But 5-4 (highest divergence at 0.556) was still never selected across all runs.
 
 **Implication:** Structure diversity is improving naturally as agents see different data each cycle, but the divergence ranking is still not driving choices. The 5-4 structure may need to be more prominently featured or its advantages explained more concretely in the prompt.
+
+---
+
+## Phase 4: Multi-model validation with LOO (2026-03-13)
+
+Comprehensive code review fixed 12 bugs (D9–D10). Then ran multi-model validation: 3-cycle debates with each model (GCM, SUSTAIN, RULEX) as ground truth. Initial runs revealed a self-prediction bias — GCM's predictions were inflated by self-matching (distance=0, similarity=1.0). Implemented leave-one-out cross-validation (D11) and re-ran all three.
+
+### 4.1 Self-prediction bias masks model differences
+
+**Expected:** With model-computed predictions and per-item scoring, the correct agent should win regardless of which model is ground truth.
+
+**Actual (pre-LOO):** SUSTAIN/Clustering_Agent won in all three conditions:
+
+| Ground Truth | Winner | RMSE | Correct agent's RMSE | Correct? |
+|---|---|---|---|---|
+| GCM | Clustering_Agent | 0.1051 | 0.1323 (2nd) | No |
+| SUSTAIN | Clustering_Agent | 0.0306 | 0.0306 (1st) | Yes |
+| RULEX | Clustering_Agent | 0.1741 | 0.2223 (2nd) | No |
+
+**Root cause:** `compute_model_predictions()` trains and tests on the same items. For GCM, item i is its own nearest exemplar: distance=0, similarity=exp(0)=1.0. This self-match dominates the Luce choice rule, producing near-binary predictions (~0.79 vs ~0.21) that are identical for every item in a structure. These over-confident predictions have higher RMSE against noisy synthetic data (which has binomial sampling variance from N subjects). SUSTAIN's cluster-based competition produces softer, more intermediate predictions that accidentally fit noise better.
+
+**Implication:** Testing on the training set is a well-known methodological error, but it manifests in a non-obvious way here. The bias doesn't crash the system or produce NaN — it produces valid-looking predictions that systematically disadvantage exemplar models. The fix is leave-one-out cross-validation, which is standard in the GCM literature (Nosofsky 1986). This is a reminder that methodological correctness matters even in synthetic evaluation pipelines.
+
+### 4.2 Leave-one-out restores correct model identification (2 of 3)
+
+**Expected:** With LOO, the correct agent should win when their model is ground truth.
+
+**Actual (post-LOO):**
+
+| Ground Truth | 1st | RMSE | 2nd | RMSE | 3rd | RMSE | Correct? |
+|---|---|---|---|---|---|---|---|
+| **GCM** | **Exemplar_Agent** | **0.4334** | Rule_Agent | 0.4930 | Clustering_Agent | 0.5536 | **Yes** |
+| **SUSTAIN** | **Clustering_Agent** | **0.4432** | Exemplar_Agent | 0.5591 | Rule_Agent | 0.6640 | **Yes** |
+| **RULEX** | Exemplar_Agent | 0.4417 | Rule_Agent | 0.5153 | Clustering_Agent | 0.5802 | **No** |
+
+GCM and SUSTAIN work correctly. RULEX fails — Exemplar_Agent outperforms Rule_Agent on RULEX-generated data.
+
+**Implication:** LOO fixes the self-prediction bias and makes GCM competitive (it was systematically disadvantaged before). RMSE values are higher across the board (0.43–0.66 vs 0.03–0.28) because LOO makes prediction harder — this is expected and healthy. The correct agent winning for GCM and SUSTAIN validates the core framework. The RULEX failure needs separate diagnosis.
+
+### 4.3 RULEX fails because experiment selection doesn't favor it
+
+**Expected:** Rule_Agent would win when RULEX generates the data, because RULEX's rule-based predictions should match RULEX-generated data.
+
+**Actual:** In the RULEX ground-truth run, the three experiments tested Type_VI, Type_II, and a linear separable structure. Type_VI is an all-exceptions structure with no simple rule — this is RULEX's *weakest* category type. RULEX has to memorize all items as exceptions, which it does stochastically and poorly. Meanwhile GCM handles Type_VI well via summed similarity to multiple exemplars. Only Type_II (conjunctive rule) was favorable for RULEX, but that was only 1 of 3 experiments.
+
+**Structures tested by ground truth:**
+
+| Ground Truth | Cycle 0 | Cycle 1 | Cycle 2 |
+|---|---|---|---|
+| GCM | Type_VI (high_attn) | Type_II (verbal load) | Linear Sep |
+| SUSTAIN | Type_VI (high_attn) | Type_II (verbal load) | Multimodal |
+| RULEX | Type_VI | Type_II (verbal load) | Linear Sep |
+
+All three runs tested similar structures (agents make similar proposals). Type_VI appears in every cycle 0 because Exemplar_Agent always goes first (round-robin) and always proposes Type_VI.
+
+**Implication:** The round-robin experiment selection is the bottleneck. When the correct model is disadvantaged on 2 of 3 structures (as RULEX is on Type_VI and linear separable), it can't accumulate a winning RMSE in just 3 cycles. This is where **the debate should matter but doesn't** — an intelligent moderator would select experiments that maximize discriminability between models, rather than cycling through agents in order.
+
+### 4.4 The debate doesn't influence outcomes (yet)
+
+**Expected:** The adversarial debate process (critique, interpretation, theory revision) would improve experiment selection and lead to better model identification.
+
+**Actual:** In the current architecture, the debate contributes zero signal to the quantitative outcome:
+
+1. **Predictions are model-computed** (D8) — RMSE comes from `model.predict()`, not LLM reasoning
+2. **Experiment selection is round-robin** (D5) — each agent gets one experiment regardless of critique quality
+3. **Phase 5 (Design Revision) is a placeholder** — critiques don't modify proposals
+4. **Divergence ranking is ignored** — agents pick structures by narrative familiarity, not quantitative divergence
+
+The debate generates interesting text (qualitative reasoning, mechanism-level explanations, theory revisions) but none of it enters the scoring pipeline. The system is effectively: "run 3 experiments with round-robin selection, score each model on each experiment, rank by mean RMSE."
+
+**Implication:** This is the central architectural gap. The debate machinery has scientific value (forcing agents to articulate mechanisms, identify predictions, revise commitments) but no causal connection to the quantitative evaluation. For the debate to matter, at least one of these must change:
+
+- **Experiment selection should use divergence information** — the moderator should pick the most discriminating experiment, not round-robin. This is where critique quality could matter: a good critique identifies why a proposed experiment fails to discriminate.
+- **Phase 5 should revise proposals** — critiques should modify experiment designs before execution. If Rule_Agent's critique of a Type_VI proposal is "my model can't be tested here," the proposal should shift to a more diagnostic structure.
+- **The moderator should be an LLM** — instead of round-robin, an LLM moderator could evaluate proposals + critiques and select the experiment most likely to resolve open disputes. This closes the loop between qualitative debate and quantitative evaluation.
+
+### 4.5 Model flexibility is a confound
+
+**Expected:** Each model would predict well on its own ground-truth data and poorly on others'.
+
+**Actual:** RMSE gaps between agents are relatively small (GCM: 0.43 vs 0.55; SUSTAIN: 0.44 vs 0.56). All three models achieve similar accuracy on most structures because:
+
+- **GCM** is flexible: with enough exemplars and attention weights, it approximates any decision boundary.
+- **SUSTAIN** interpolates between exemplar and prototype: cluster recruitment adapts to structure.
+- **RULEX** has exception storage: even when rules fail, exception memorization provides a fallback.
+
+The models are more similar than different on most category structures. Discrimination requires *specifically chosen* structures where the models make divergent predictions — and the current system doesn't optimize for this.
+
+**Implication:** Model flexibility is a fundamental challenge for adversarial collaboration between cognitive models. When all models can accommodate most data patterns (albeit through different mechanisms), the discriminating experiments are rare and must be deliberately sought. This mirrors the real scientific debate between these models (Nosofsky & Johansen 2000, Love et al. 2004): decades of research have focused on finding the specific conditions where the models disagree. The system needs to replicate this strategic experiment selection, not just run arbitrary experiments.

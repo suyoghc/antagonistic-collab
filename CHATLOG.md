@@ -149,21 +149,25 @@ Human-readable summary of each Claude Code session on this project.
 
 ## Session 8 — 2026-03-13
 
-**Commits:** `8927fb9`, `b11e6d9`
+**Commits:** `8927fb9`, `b11e6d9`, `dbcf83e`
 
 **What we did:**
-- Comprehensive code review across all 6 modules (runner.py, debate_protocol.py, epistemic_state.py, gcm.py, sustain.py, rulex.py/category_structures.py)
-- Identified 19+ issues, fixed 10 highest-impact bugs in two rounds:
-  - **Round 1 (D9):** Format crash on missing mean_accuracy, design_spec validation, GCM r=0 and incomplete bias, SUSTAIN zero-lambdas NaN, to_json parent dirs, NaN guard in divergence map, unknown condition warning
-  - **Round 2 (D10):** SUSTAIN predict_learning_curve now evaluates held-out test items (was reporting training accuracy), call_agent retry with exponential backoff
-- 17 new regression tests (108 total), ruff clean
-- Updated TASKS.md, DECISIONS.md, SCRATCHPAD.md
+- Comprehensive code review across all 6 modules → fixed 12 bugs in 3 rounds (D9, D10, D11)
+  - **D9 (8 bugs):** Format crash, design_spec validation, GCM r=0 and bias, SUSTAIN zero-lambdas, to_json dirs, NaN guard, condition warning
+  - **D10 (2 bugs):** SUSTAIN predict_learning_curve uses test items, call_agent retry with backoff
+  - **D11:** Leave-one-out cross-validation in compute_model_predictions and compute_divergence_map
+- Ran multi-model validation (pre-LOO): SUSTAIN won all 3 conditions — diagnosed self-prediction bias
+- Implemented LOO fix, re-ran all 3 validations:
+  - GCM → Exemplar_Agent wins (0.4334) ✓
+  - SUSTAIN → Clustering_Agent wins (0.4432) ✓
+  - RULEX → Exemplar_Agent wins (0.4417), Rule_Agent 2nd (0.5153) ✗
+- Documented Phase 4 findings in LESSONS_LEARNED.md (4.1–4.5)
+- 21 new regression tests (112 total), ruff clean
 
-**Key discussion:**
-- Code review was systematic: 4 parallel agents examined different modules
-- Most bugs were edge-case crashes (invalid params, missing data, API failures) rather than logic errors in the core debate flow
-- SUSTAIN predict_learning_curve was the only semantic correctness bug — it violated the contract shared with GCM
-- Remaining queued items: Phase 5 placeholder (P1), reject path (P2), --demo flag (P3)
+**Key findings:**
+- Self-prediction bias: GCM matching item to itself (distance=0) produced over-confident predictions that couldn't match noisy data. LOO fixes this.
+- RULEX failure: round-robin selects Type_VI (worst structure for RULEX) in cycle 0 every time. Need divergence-driven selection.
+- **The debate doesn't influence outcomes yet** — predictions are model-computed, selection is round-robin, critiques don't revise proposals. The LLM debate is currently cosmetic. Making it matter is the next architectural challenge.
 
 ---
 
