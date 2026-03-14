@@ -598,3 +598,91 @@ GCM discrimination is comparable between modes (both get it right easily). SUSTA
 **Fix:** Coerce to `str()` before joining. This is the same class of bug as D21 (scalar addresses_critiques): LLM outputs have unpredictable types, and any code that assumes string-typed fields will eventually crash.
 
 **Implication:** Every `join()`, format string, or type-sensitive operation on LLM-derived data should defensively coerce inputs. This pattern has now appeared 3 times (D21 scalar, D25 dict predictions, earlier format crash on 'N/A').
+
+---
+
+## Phase 9 — M4 Analysis: Cross-run patterns from 5-cycle validation (Session 13)
+
+### 9.1 EIG structure selection patterns
+
+**full_pool mode** — EIG selects from 55+ candidates (11 structures × 5 conditions + novel structures):
+
+| Ground Truth | Cycle 0 | Cycle 1 | Cycle 2 | Cycle 3 | Cycle 4 |
+|---|---|---|---|---|---|
+| GCM | five_four/fast | five_four/fast | five_four/fast | five_four/fast | five_four/fast |
+| SUSTAIN | five_four/fast | Type_I/fast | five_four/baseline | five_four/baseline | five_four/baseline |
+| RULEX | five_four/fast | Type_I/low_attn | Type_I/low_attn | Type_I/low_attn | Type_I/low_attn |
+
+**Observations:**
+- `five_four / fast_presentation` is the universally highest-EIG experiment in cycle 0 — it has the most items (9) and the most complex category boundary, producing maximal model disagreement
+- GCM ground truth: EIG locks onto five_four/fast for all 5 cycles because posterior collapses to P(Exemplar)=1.0 after cycle 0 and EIG remains highest there
+- RULEX ground truth: EIG shifts from five_four to Type_I after cycle 0 — once exemplar is initially favored, Type_I/low_attention is the most discriminating follow-up (simple rule structure where RULEX excels)
+- SUSTAIN ground truth: mixed selection shows EIG exploring the structure space more
+
+**Legacy mode** — LLM agents propose experiments:
+
+| Ground Truth | Cycle 0 | Cycle 1 | Cycle 2 | Cycle 3 | Cycle 4 |
+|---|---|---|---|---|---|
+| GCM | 5-4/baseline | linear_sep_4d/high_attn | rule_plus_exc/baseline | 5-4/high_attn | Type_VI/baseline |
+| SUSTAIN | 5-4/high_attn | 5-4/high_attn | complex_cat/high_attn | 5-4/baseline | Type_VI/baseline |
+| RULEX | complex_cat | 5-4 | SUSTAIN_multimodal | RULEX_verbal | SUSTAIN_Type_V |
+
+**Key contrast:** Legacy mode gets more structure diversity (agents propose different structures each cycle) but this diversity is not strategically optimal — it's driven by agents' narrative preferences, not information gain. Full_pool mode's "boring" repeated selection of the same high-EIG structure actually produces better discrimination.
+
+### 9.2 Posterior convergence speed
+
+**Full_pool mode** posterior convergence (log scale):
+
+| Ground Truth | Cycle 0 → P(correct) | Cycle 1 | Cycle 2 | Cycle 3 | Cycle 4 |
+|---|---|---|---|---|---|
+| GCM | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
+| SUSTAIN | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
+| RULEX | 5.5e-5 (wrong!) | 5.5e-5 | **0.9998** | 1.0000 | 1.0000 |
+
+**Critical finding:** RULEX posterior starts *wrong* — Exemplar_Agent is initially favored (P=1.0) because GCM fits five_four better than RULEX. The posterior flips in cycle 2 when EIG shifts to Type_I/low_attention, a structure where RULEX dramatically outperforms GCM (RMSE 0.06 vs 0.35). By cycle 3, Rule_Agent has P=1.0.
+
+This is the Bayesian system working exactly as designed: initial evidence can mislead, but subsequent experiments chosen to maximize information gain eventually find the correct model. The 2-cycle lag for RULEX explains why short (2-cycle) runs may not converge for hard model pairs.
+
+GCM and SUSTAIN converge immediately (cycle 0) because these models are easily distinguishable on five_four.
+
+### 9.3 Novel structure generation in practice
+
+Across 3 full_pool runs (15 total cycles), agents proposed **21 novel structures**:
+
+| Category | Examples | Count |
+|---|---|---|
+| Random/unstructured | random_assignment, randomized_no_rule, random_category_assignment | 5 |
+| Complex conjunctive | complex_conjunction, complex_conjunctive, noisy_xor | 4 |
+| Multimodal/subgroup | multimodal_subgroups, overlapping_clusters, multi_modal_split | 5 |
+| Attention/order-based | order_dependency_test, nonverbal_complex | 3 |
+| Other | noisy_or, staggered_overlap, asymmetric_complex, nonlinear_family_resemblance | 4 |
+
+**Important caveat:** None of these novel structures were *selected* by EIG — the Bayesian selector consistently chose registry structures (five_four, Type_I) over agent-proposed ones. This suggests either:
+1. The novel structures don't actually maximize information gain (likely — LLMs propose narratively interesting structures, not statistically optimal ones)
+2. The 11 registry structures already span the relevant space well
+3. Novel structures need multiple cycles to accumulate enough EIG advantage
+
+Whether agent-proposed structures add value beyond the registry remains an open question. They may be more useful for *longer* runs (10+ cycles) where registry structures become exhausted.
+
+### 9.4 Legacy vs full_pool: where LLM proposals hurt
+
+In legacy mode, Exemplar_Agent proposed 10/15 experiments across the 3 runs. This is the "proposal bias" from D5 (batch mode): the first agent's proposal tends to get approved.
+
+More critically, the legacy proposals often **miss the most discriminating structures**:
+- Legacy RULEX run never tested Type_I (the single structure where RULEX dominates GCM)
+- Legacy SUSTAIN run tested five_four 3 times with high_attention — repeating the same non-diagnostic condition
+- Legacy GCM run tested 5 different structures but spent cycle 4 on Type_VI (hardest structure, lowest discriminability)
+
+**Lesson:** LLM agents propose experiments that tell a good story ("let's test complex categories!") rather than experiments that maximize statistical discrimination. This is the core reason full_pool mode outperforms legacy mode.
+
+### 9.5 Theory revision patterns
+
+| Theory | Revisions when TRUE model | Revisions when NOT true |
+|---|---|---|
+| GCM (Exemplar) | 0 (stays stable) | 1–4 (progressive) |
+| RULEX (Rule) | 1 | 0–1 (stays stable) |
+| SUSTAIN (Clustering) | 0 (stays stable) | 2–4 (progressive) |
+
+**Pattern:** Correct theories don't need to revise — their predictions already match the data. Incorrect theories revise progressively (adapting parameters, adjusting claims) but never degeneratively. This is a Lakatos-compatible outcome: theories under pressure accommodate rather than degenerate, which is scientifically healthy behavior.
+
+RULEX is notably resistant to revision even when wrong (0–1 revisions) — consistent with its rigid rule-based structure having fewer free parameters to adjust.
