@@ -3,10 +3,11 @@
 ## Current Milestone: M4 — Analysis & write-up
 
 ### M4 Tasks
-- [ ] **Analyze EIG selection patterns** — which structures/conditions does EIG pick across 6 validation runs? What makes a good discriminating experiment?
-- [ ] **Analyze novel structures** — are agent-proposed structures valid? Do they enter EIG pool? Do they improve discrimination beyond registry structures?
-- [ ] **Per-cycle convergence trajectories** — how quickly does posterior collapse? Is it monotonic? Compare full_pool vs legacy convergence speed
-- [ ] **Interpretation debate quality audit** — do agents cite data correctly? Do critiques change behavior? Compare interpretation quality between modes
+- [x] **Analyze EIG selection patterns** — five_four/fast universal cycle-0 pick; RULEX run shifts to Type_I/low_attention; EIG repeats optimal structure rather than diversifying (LESSONS 9.1)
+- [x] **Analyze novel structures** — 21 proposed across 15 cycles, none selected by EIG. Narratively interesting but not statistically optimal. Registry structures sufficient (LESSONS 9.3)
+- [x] **Per-cycle convergence trajectories** — GCM/SUSTAIN immediate (cycle 0), RULEX 2-cycle lag then flip. Posterior monotonic after convergence (LESSONS 9.2)
+- [x] **Theory revision patterns** — correct theories stable, incorrect revise progressively (Lakatos-compatible). RULEX most rigid (LESSONS 9.5)
+- [x] **Interpretation debate quality audit** — data citation weak (posteriors as proxy), critiques mixed (mechanism-aware but numerically ungrounded), behavioral adaptation limited (same talking points repeat), novel structure rationale poor (not rooted in divergence). Forcing function of adversarial critique helps in later cycles. (LESSONS 9.6)
 - [ ] **Replication runs** — run each condition 3× to assess variance in final RMSE gaps
 - [ ] **Write-up** — structured report: intro, methods, results, discussion
 

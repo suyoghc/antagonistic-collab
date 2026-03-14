@@ -686,3 +686,44 @@ More critically, the legacy proposals often **miss the most discriminating struc
 **Pattern:** Correct theories don't need to revise — their predictions already match the data. Incorrect theories revise progressively (adapting parameters, adjusting claims) but never degeneratively. This is a Lakatos-compatible outcome: theories under pressure accommodate rather than degenerate, which is scientifically healthy behavior.
 
 RULEX is notably resistant to revision even when wrong (0–1 revisions) — consistent with its rigid rule-based structure having fewer free parameters to adjust.
+
+### 9.6 Interpretation debate quality audit
+
+Audited all 30 debate cycles across 6 validation runs (3 full_pool + 3 legacy, 5 cycles each). Four dimensions assessed: data citation accuracy, critique quality, behavioral adaptation, and novel structure rationale.
+
+#### Data citation accuracy: WEAK
+
+Agents reliably cite posterior probabilities ("Bayesian posterior = 1.0000") but rarely reference specific RMSE values, item-level prediction errors, or learning curve shapes. Posteriors serve as a proxy for understanding rather than a summary of it. Example (full_pool GCM, Cycle 1): Rule_Agent cites "posterior probability of 1.0000" but doesn't reference the actual mean accuracy (0.5875) or its own RMSE (0.352).
+
+Rare positive example (legacy SUSTAIN, Cycle 1, Clustering_Agent): "prediction for items 5, 6, 7, and 8 was quite close to the observed high accuracies, suggesting that SUSTAIN captured the correct cluster recruitment for these items. However, predictions for items 0 to 4 were not as accurate." This item-level engagement is the exception, not the norm.
+
+#### Critique quality: MIXED
+
+Critiques are structurally substantive but shallow in model grounding. Best critiques cite specific mechanisms — e.g., (full_pool GCM, Cycle 4): "under the RULEX framework, if participants are faced with the five-four structure, they might resort to memorizing exceptions when simple rule application fails. This mechanism could result in similar categorization accuracy, especially if p_exception is high." This names a parameter (p_exception) and a testable prediction.
+
+More commonly, critiques use generic claims: "model flexibility in fitting attention weights post-hoc means it can often fit a wide range of data" — without specifying which weights diverge or how. The dominant pattern is theory-driven argument (abstract mechanism claims) rather than data-driven argument (specific numerical divergences). Unfalsifiable critiques like "my model can also predict that" remain common.
+
+#### Behavioral adaptation: LIMITED
+
+Agents repeat the same 2–3 talking points across all 5 cycles within a run. Example (full_pool GCM): Exemplar_Agent cycles through (1) exemplars account for individual items, (2) attention weight flexibility, (3) no-information-loss assumption — in cycles 0, 1, 2, 3, and 4. Novel structure proposals show no cumulative learning: agents don't revisit why prior proposals weren't selected or build on them.
+
+Theory revisions are parameter tweaks ("adjust r and tau"), not conceptual changes. No agent ever says "this mechanism is fundamentally wrong." Critiques don't adapt to shifting posteriors — even when posterior is 1.0 for a competitor, agents restate the same objections.
+
+**What does improve:** In later cycles of legacy mode, where adversarial critique + design revision phases force engagement, proposals become more specific. Example (full_pool GCM, Cycle 4): agents propose transfer phases with novel stimuli and dual-task paradigms — concrete manipulations grounded in mechanism predictions. This suggests the critique-and-revise forcing function works, but only after several cycles.
+
+#### Novel structure rationale: POOR
+
+Agents propose structures to "test their advantage" without citing actual prediction divergence. Proposals duplicate existing structures with condition permutations rather than designing for maximum model discrimination. Example (legacy GCM, Cycle 1): all three agents propose variations of the same ~4 structures already tested.
+
+Rare exception (full_pool GCM, Cycle 4): "introduce a transfer phase where novel stimuli are presented — this will discern whether participants rely on similarity to stored exemplars or rule abstraction." This names an observable outcome that distinguishes models, but only appears in late cycles after sustained critique pressure.
+
+#### Summary
+
+| Dimension | Rating | Key issue |
+|---|---|---|
+| Data citation | Weak | Posteriors as proxy; item-level data rarely cited |
+| Critique quality | Mixed | Mechanism-aware but numerically ungrounded |
+| Behavioral adaptation | Limited | Same talking points repeat; no cumulative learning |
+| Novel structure rationale | Poor | Not rooted in actual model divergence |
+
+**Implication:** The interpretation debate adds value primarily through the forcing function of adversarial critique — it pressures agents to refine proposals in later cycles. But the debate does not produce cumulative scientific reasoning. Agents don't learn from prior cycles' data. Future iterations should enforce numerical citation requirements (e.g., "cite 3 specific item predictions that diverge") and track whether agents update specific claims based on data rather than repeating generic theoretical arguments.
