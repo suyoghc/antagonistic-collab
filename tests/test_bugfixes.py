@@ -3753,3 +3753,158 @@ class TestDemoFlag:
 
         _entry()
         mock_mp.assert_called_once()
+
+
+# =========================================================================
+# Structure diversity in experiment selection
+# =========================================================================
+
+
+class TestStructureDiversity:
+    """
+    Bug: Divergence-driven selection picks the same high-divergence structure
+    every cycle (e.g., Type_VI 4/5 times in RULEX validation). Models that
+    are weak on the repeated structure (like RULEX on Type_VI) never get
+    tested on favorable structures.
+
+    Fix: Penalize structures that have already been tested in prior cycles.
+    Previously-tested structures get their divergence score halved per prior
+    use, so untested structures with moderate divergence can win.
+    """
+
+    @staticmethod
+    def _make_protocol():
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        return DebateProtocol(state, agents)
+
+    @patch("antagonistic_collab.runner._BATCH_MODE", True)
+    def test_previously_tested_structure_penalized(self):
+        """
+        If Type_VI was tested in cycle 0, a proposal for Type_VI in cycle 1
+        should lose to a proposal for an untested structure with lower raw
+        divergence.
+        """
+        protocol = self._make_protocol()
+        state = protocol.state
+
+        # Cycle 0: Type_VI was tested (simulate by creating an executed experiment)
+        state.cycle = 0
+        exp0 = state.propose_experiment(
+            proposed_by="Clustering_Agent",
+            title="Cycle 0 experiment",
+            design_spec={"structure_name": "Type_VI", "condition": "baseline"},
+            rationale="r",
+        )
+        state.approve_experiment(exp0.experiment_id)
+        exp0.status = "executed"
+
+        # Move to cycle 1
+        state.cycle = 1
+
+        # Proposal A: Type_VI again (high raw divergence but already tested)
+        state.propose_experiment(
+            proposed_by="Clustering_Agent",
+            title="Type_VI again",
+            design_spec={"structure_name": "Type_VI", "condition": "baseline"},
+            rationale="r",
+        )
+        # Proposal B: five_four (untested, moderate divergence)
+        state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Five four fresh",
+            design_spec={"structure_name": "five_four", "condition": "baseline"},
+            rationale="r",
+        )
+
+        run_human_arbitration(protocol, [])
+
+        approved = [
+            e for e in state.experiments if e.cycle == 1 and e.status == "approved"
+        ]
+        assert len(approved) == 1
+        approved_struct = approved[0].design_spec.get("structure_name")
+        assert approved_struct != "Type_VI", (
+            f"Previously-tested Type_VI should be penalized, but it was selected again. "
+            f"Got: {approved_struct}"
+        )
+
+    @patch("antagonistic_collab.runner._BATCH_MODE", True)
+    def test_untested_structure_preferred(self):
+        """
+        With no prior experiments, the highest-divergence structure should
+        still win (no penalty applied).
+        """
+        protocol = self._make_protocol()
+        state = protocol.state
+        state.cycle = 0
+
+        state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="High div",
+            design_spec={"structure_name": "five_four", "condition": "baseline"},
+            rationale="r",
+        )
+        state.propose_experiment(
+            proposed_by="Rule_Agent",
+            title="Low div",
+            design_spec={"structure_name": "Type_I", "condition": "baseline"},
+            rationale="r",
+        )
+
+        run_human_arbitration(protocol, [])
+
+        approved = [
+            e for e in state.experiments if e.cycle == 0 and e.status == "approved"
+        ]
+        assert len(approved) == 1
+        assert approved[0].design_spec.get("structure_name") == "five_four", (
+            "With no prior experiments, highest divergence should still win"
+        )
+
+    @patch("antagonistic_collab.runner._BATCH_MODE", True)
+    def test_structure_tested_twice_penalized_more(self):
+        """
+        A structure tested twice should be penalized more heavily than one
+        tested once.
+        """
+        protocol = self._make_protocol()
+        state = protocol.state
+
+        # Simulate 2 prior cycles both testing Type_VI
+        for c in range(2):
+            state.cycle = c
+            exp = state.propose_experiment(
+                proposed_by="Clustering_Agent",
+                title=f"Cycle {c} Type_VI",
+                design_spec={"structure_name": "Type_VI", "condition": "baseline"},
+                rationale="r",
+            )
+            state.approve_experiment(exp.experiment_id)
+            exp.status = "executed"
+
+        # Cycle 2: Type_VI vs Type_I (very low divergence)
+        state.cycle = 2
+        state.propose_experiment(
+            proposed_by="Clustering_Agent",
+            title="Type_VI third time",
+            design_spec={"structure_name": "Type_VI", "condition": "baseline"},
+            rationale="r",
+        )
+        state.propose_experiment(
+            proposed_by="Rule_Agent",
+            title="Type_I fresh",
+            design_spec={"structure_name": "Type_I", "condition": "baseline"},
+            rationale="r",
+        )
+
+        run_human_arbitration(protocol, [])
+
+        approved = [
+            e for e in state.experiments if e.cycle == 2 and e.status == "approved"
+        ]
+        assert len(approved) == 1
+        approved_struct = approved[0].design_spec.get("structure_name")
+        assert approved_struct != "Type_VI", (
+            f"Type_VI tested 2x should be heavily penalized, got: {approved_struct}"
+        )

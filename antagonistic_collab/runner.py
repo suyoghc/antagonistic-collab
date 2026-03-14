@@ -619,26 +619,43 @@ def run_human_arbitration(protocol: DebateProtocol, transcript: list) -> PhaseRe
         print(f"  [{i}] {p.title} (by {p.proposed_by}, {n_critiques} critiques)")
 
     if _BATCH_MODE:
-        # Divergence-driven selection: pick the proposal whose structure
-        # has the highest divergence between models. This ensures experiments
-        # are maximally diagnostic. Falls back to critique count on ties.
+        # Divergence-driven selection with diversity penalty: pick the
+        # proposal whose structure has the highest *effective* divergence.
+        # Structures tested in prior cycles get penalized (halved per use)
+        # to ensure diverse experiment selection across the debate.
         div_map = protocol.compute_divergence_map()
 
-        def _structure_divergence(proposal) -> float:
-            """Get max pairwise divergence for a proposal's structure."""
+        # Count how many times each structure has been tested in prior cycles
+        tested_counts: dict[str, int] = {}
+        for exp in protocol.state.experiments:
+            if (
+                exp.status in ("executed", "approved")
+                and exp.cycle < protocol.state.cycle
+            ):
+                ds = exp.design_spec if isinstance(exp.design_spec, dict) else {}
+                sn = ds.get("structure_name", "")
+                if sn:
+                    tested_counts[sn] = tested_counts.get(sn, 0) + 1
+
+        def _effective_divergence(proposal) -> float:
+            """Get divergence with diversity penalty for repeated structures."""
             design = (
                 proposal.design_spec if isinstance(proposal.design_spec, dict) else {}
             )
             struct_name = design.get("structure_name", "")
             if struct_name in div_map:
                 divs = div_map[struct_name].get("divergences", {})
-                return max((d["mean_abs_diff"] for d in divs.values()), default=0.0)
-            return 0.0
+                raw_div = max((d["mean_abs_diff"] for d in divs.values()), default=0.0)
+            else:
+                raw_div = 0.0
+            # Halve divergence for each prior use of this structure
+            n_prior = tested_counts.get(struct_name, 0)
+            return raw_div / (2**n_prior)
 
         ranked = sorted(
             range(len(current_proposals)),
             key=lambda i: (
-                -_structure_divergence(current_proposals[i]),
+                -_effective_divergence(current_proposals[i]),
                 -len(current_proposals[i].critique_log),
             ),
         )
@@ -646,11 +663,13 @@ def run_human_arbitration(protocol: DebateProtocol, transcript: list) -> PhaseRe
         best_struct = ""
         if isinstance(current_proposals[best].design_spec, dict):
             best_struct = current_proposals[best].design_spec.get("structure_name", "")
-        best_div = _structure_divergence(current_proposals[best])
+        best_div = _effective_divergence(current_proposals[best])
+        n_prior = tested_counts.get(best_struct, 0)
         choice = f"approve {best}"
         print(
             f"\n[BATCH MODE] Auto-selecting: {choice} "
-            f"(divergence-driven: {best_struct} div={best_div:.3f})"
+            f"(divergence-driven: {best_struct} eff_div={best_div:.3f}"
+            f"{f', tested {n_prior}x before' if n_prior else ''})"
         )
     else:
         print("\nOptions:")

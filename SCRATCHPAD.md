@@ -6,30 +6,34 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ## Current focus — 2026-03-14
 
-Testing whether updated proposal prompt + concrete predictions fix RULEX validation. Run _07 in progress.
+5-cycle validation runs completed. GCM and SUSTAIN converge correctly. RULEX fails — need to diagnose and fix.
 
-### Progress table (RULEX as ground truth)
+### 5-cycle validation results
 
-| Run | Changes | Gap | Winner |
-|---|---|---|---|
-| _03 | round-robin | 16.7% | Exemplar (wrong) |
-| _04 | divergence-driven | 5.5% | Exemplar (wrong) |
-| _05 | + concrete preds | crashed (w_i param) | — |
-| _06 | + param filter | 8.5% | Exemplar (wrong) |
-| _07 | + updated prompt | pending | pending |
+| Ground Truth | Winner | RMSE | 2nd Place | RMSE | Gap | Correct? |
+|---|---|---|---|---|---|---|
+| **GCM** | Exemplar_Agent | 0.342 | Rule_Agent | 0.403 | 15.1% | YES |
+| **SUSTAIN** | Clustering_Agent | 0.344 | Rule_Agent | 0.507 | 32.2% | YES |
+| **RULEX** | Clustering_Agent | 0.500 | Exemplar_Agent | 0.501 | 0.2% | NO |
 
-### What changed in each run:
-- **_04**: Moderator picks highest-divergence structure from proposals
-- **_05/06**: Agents see per-model accuracy in divergence ranking
-- **_07**: Prompt explicitly tells agents to pick structures where their model has highest predicted accuracy
+### RULEX failure diagnosis
 
-### Key observation:
-Rule_Agent won cycle 0 of run _06 on `linear_separable_4d` (RMSE 0.312 vs 0.342). The system can identify the correct model on favorable structures. The challenge is getting enough favorable structures selected across 3 cycles.
+**Symptom:** All 3 agents converge to RMSE ~0.50 (random guessing). No separation after 5 cycles.
 
-### If _07 still fails:
-- Consider whether this is a fundamental GCM flexibility issue — GCM is genuinely more flexible than RULEX on most structures
-- May need 5+ cycles to accumulate enough evidence on RULEX-favorable structures
-- Or need to investigate whether the LOO accuracy metric for RULEX is computed correctly (stochastic model with seed=42 may not represent expected behavior)
+**Root causes identified:**
+1. **Structure repetition** — 4/5 RULEX experiments used Type_VI, where RULEX is weakest (no simple rule exists). No diversity in structure selection.
+2. **Clustering_Agent dominance** — Won 12/15 experiment selections across all 3 runs. Divergence-driven selection favors complex structures (Type_VI, five_four) which Clustering_Agent consistently proposes.
+3. **Rule_Agent passivity** — Never won a single experiment selection across any run (0/15). Its proposals for simple structures (Type_I, Type_III) have lower divergence scores and lose.
+
+**Proposed fix: Structure diversity penalty**
+- Track which structures have been tested in prior cycles
+- Penalize (or heavily discount) re-testing the same structure
+- Forces exploration of RULEX-favorable structures (Type_I, Type_II, linear_separable)
+
+### Other observations
+- Critique quality: agents revise theories "progressively" but critiques don't prevent structure repetition
+- RMSE gap widens for GCM (good) but collapses for RULEX (bad)
+- Clustering_Agent dominates experiment selection regardless of ground truth
 
 ---
 
@@ -39,3 +43,4 @@ Rule_Agent won cycle 0 of run _06 on `linear_separable_4d` (RMSE 0.312 vs 0.342)
 - **Round-robin experiment selection** — doesn't optimize for discriminability, disadvantages models that are weak on common structures (RULEX on Type_VI).
 - **Divergence ranking without per-model predictions** — agents can't interpret abstract divergence scores. They need to see which model wins on each structure.
 - **Trusting LLM param overrides** — LLM agents invent parameter names (e.g., `w_i`). Always filter through `inspect.signature`.
+- **Pure divergence-driven selection without diversity** — picks the same high-divergence structure every cycle (Type_VI). RULEX never gets tested on favorable structures.

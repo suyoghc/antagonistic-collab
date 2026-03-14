@@ -264,3 +264,35 @@ Also updated the proposal prompt to explicitly direct agents toward structures w
 **Tests:** 7 new regression tests, 140 total passing.
 
 **Status:** Done.
+
+---
+
+## D17: Structure diversity penalty in experiment selection — 2026-03-14
+
+**Problem:** 5-cycle validation runs revealed that divergence-driven selection picks the same high-divergence structure every cycle. In the RULEX validation, Type_VI was selected 4/5 times — a structure where RULEX has no advantage (no simple rule exists). Clustering_Agent won 12/15 experiment selections across all 3 runs. Rule_Agent never won a single selection (0/15).
+
+**Validation results (before fix):**
+
+| Ground Truth | Winner | RMSE | Correct? |
+|---|---|---|---|
+| GCM | Exemplar_Agent | 0.342 | YES (15.1% gap) |
+| SUSTAIN | Clustering_Agent | 0.344 | YES (32.2% gap) |
+| RULEX | Clustering_Agent | 0.500 | NO (0.2% gap, random) |
+
+**Root cause:** Raw divergence doesn't account for information gain. Testing Type_VI a 4th time adds no new information but keeps winning because its raw divergence score is highest.
+
+**Decision:** Add a diversity penalty — structures tested in prior cycles get their effective divergence halved per prior use: `effective_div = raw_div / 2^n_prior`. This means:
+- First test: full divergence
+- Second test: half divergence
+- Third test: quarter divergence
+
+Untested structures with moderate divergence can now beat heavily-tested high-divergence structures.
+
+**Alternatives considered:**
+- (A) Ban repeated structures entirely — too aggressive, same structure with different conditions can be informative
+- (B) Random selection weighted by divergence — loses determinism, harder to debug
+- (C) Round-robin agent rotation (reverted D12) — doesn't optimize for discriminability
+
+**Tests:** 3 new regression tests, 145 total passing.
+
+**Status:** Done. Re-running RULEX validation to check improvement.
