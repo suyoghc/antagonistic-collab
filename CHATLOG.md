@@ -196,4 +196,34 @@ Human-readable summary of each Claude Code session on this project.
 
 ---
 
+## Session 10 — 2026-03-14
+
+**Commits:** `d499221`, `c69a5e2`, `16e34ea`, `6b27a21`, `e94c4db`, `d148d2b`
+
+**What we did:**
+- Implemented Phase 5 (Design Revision) — agents now revise proposals based on critiques (D15)
+- Fixed moderator reject path (P2, D16) — rejection loops back to proposal→critique→revision→arbitration, capped at 3 attempts
+- Fixed --demo flag order-sensitivity (P3) — `"--demo" in sys.argv` works regardless of position
+- Implemented two-tier structure diversity penalty (D17) — exact repeats: 2x decay, same-structure-different-condition: 1.5x decay
+- Ran 5-cycle validation debates for all 3 ground truth models:
+  - GCM → Exemplar_Agent wins (15.1% gap) ✓
+  - SUSTAIN → Clustering_Agent wins (32.2% gap) ✓
+  - RULEX → Rule_Agent wins after diversity fix (1.8% gap) ✓
+- Investigated GCM flexibility confound — concluded it's a genuine scientific finding (Nosofsky 1991), not a system bug
+- Assessed critique quality over 5 cycles — critiques remain substantive but formulaic; don't drive structure diversity
+- Documented Phase 6 findings in LESSONS_LEARNED.md (6.1–6.5)
+- 146 tests passing, ruff clean
+
+**Key findings:**
+- Structure repetition pathology: without diversity penalty, Type_VI selected 4/5 cycles, causing all agents to converge to ~0.50 RMSE
+- GCM-RULEX divergence is inherently low (0.16–0.40) across all 11 structures — GCM mimics rule-like behavior via attention weights
+- The 1.8% RULEX gap vs 15–32% for GCM/SUSTAIN reflects genuine model flexibility asymmetry, not a system failure
+- Critique quality: agents revise theories progressively but critiques don't influence moderator's structure selection
+
+**Key discussion:**
+- User directed: refine heuristic now, log Bayesian information-gain approach as preferred long-term replacement in TASKS.md
+- Diversity penalty is necessary but insufficient for hard model pairs (GCM vs RULEX)
+
+---
+
 *This log is maintained manually. Update it at the end of each session.*
