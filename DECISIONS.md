@@ -223,3 +223,25 @@ Also updated the proposal prompt to explicitly direct agents toward structures w
 **Tests:** 6 new regression tests, 128 total passing.
 
 **Status:** Done.
+
+---
+
+## D15: Implement Phase 5 (Design Revision) — 2026-03-14
+
+**Problem:** Phase 5 was a placeholder — `PhaseResult(phase=Phase.DESIGN_REVISION, outputs={})`. Critiques were generated in Phase 4 but never led to revised proposals. The full provenance chain (proposal → critique → revision) was broken.
+
+**Decision:** Implemented `run_design_revision()`:
+1. For each proposal with critiques, call the proposing agent with critique context
+2. Agent returns revised JSON with `structure_name`, `condition`, `changes`, `addresses_critiques`
+3. If valid, call `state.revise_proposal()` to update the design_spec and log the revision
+4. If LLM output is unparseable or references invalid structures, keep the original proposal
+
+**Design choices:**
+- Only revise proposals that received critiques — uncritiqued proposals stay as-is
+- Require `addresses_critiques` indices to maintain provenance; invalid indices fall back to addressing all
+- Include structure menu in prompt so agents can switch structures
+- Revised `design_spec` replaces the original, so Phase 6 (moderator) sees the revised version
+
+**Tests:** 5 new regression tests, 133 total passing.
+
+**Status:** Done. The 9-phase debate loop is now structurally complete.
