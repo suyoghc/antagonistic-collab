@@ -625,8 +625,12 @@ def run_human_arbitration(protocol: DebateProtocol, transcript: list) -> PhaseRe
         # to ensure diverse experiment selection across the debate.
         div_map = protocol.compute_divergence_map()
 
-        # Count how many times each structure has been tested in prior cycles
-        tested_counts: dict[str, int] = {}
+        # Count how many times each structure (and structure+condition pair)
+        # has been tested in prior cycles. Two-tier penalty:
+        #   - Exact structure+condition repeat: full penalty (2x per use)
+        #   - Same structure, different condition: partial penalty (1.5x per use)
+        struct_counts: dict[str, int] = {}
+        pair_counts: dict[tuple[str, str], int] = {}
         for exp in protocol.state.experiments:
             if (
                 exp.status in ("executed", "approved")
@@ -634,23 +638,36 @@ def run_human_arbitration(protocol: DebateProtocol, transcript: list) -> PhaseRe
             ):
                 ds = exp.design_spec if isinstance(exp.design_spec, dict) else {}
                 sn = ds.get("structure_name", "")
+                cond = ds.get("condition", "baseline")
                 if sn:
-                    tested_counts[sn] = tested_counts.get(sn, 0) + 1
+                    struct_counts[sn] = struct_counts.get(sn, 0) + 1
+                    pair_counts[(sn, cond)] = pair_counts.get((sn, cond), 0) + 1
 
         def _effective_divergence(proposal) -> float:
-            """Get divergence with diversity penalty for repeated structures."""
+            """Get divergence with diversity penalty for repeated structures.
+
+            Penalty is two-tiered:
+            - Exact (structure, condition) repeats: 2x decay per prior use
+            - Same structure, new condition: 1.5x decay per prior use
+            This means re-running Type_VI/baseline 3 times is penalized more
+            harshly than running Type_VI under 3 different conditions.
+            """
             design = (
                 proposal.design_spec if isinstance(proposal.design_spec, dict) else {}
             )
             struct_name = design.get("structure_name", "")
+            condition = design.get("condition", "baseline")
             if struct_name in div_map:
                 divs = div_map[struct_name].get("divergences", {})
                 raw_div = max((d["mean_abs_diff"] for d in divs.values()), default=0.0)
             else:
                 raw_div = 0.0
-            # Halve divergence for each prior use of this structure
-            n_prior = tested_counts.get(struct_name, 0)
-            return raw_div / (2**n_prior)
+            # Two-tier penalty
+            n_exact = pair_counts.get((struct_name, condition), 0)
+            n_struct = struct_counts.get(struct_name, 0)
+            n_other_cond = n_struct - n_exact  # same struct, different condition
+            penalty = (2**n_exact) * (1.5**n_other_cond)
+            return raw_div / penalty
 
         ranked = sorted(
             range(len(current_proposals)),
@@ -664,12 +681,12 @@ def run_human_arbitration(protocol: DebateProtocol, transcript: list) -> PhaseRe
         if isinstance(current_proposals[best].design_spec, dict):
             best_struct = current_proposals[best].design_spec.get("structure_name", "")
         best_div = _effective_divergence(current_proposals[best])
-        n_prior = tested_counts.get(best_struct, 0)
+        n_prior = struct_counts.get(best_struct, 0)
         choice = f"approve {best}"
         print(
             f"\n[BATCH MODE] Auto-selecting: {choice} "
             f"(divergence-driven: {best_struct} eff_div={best_div:.3f}"
-            f"{f', tested {n_prior}x before' if n_prior else ''})"
+            f"{f', struct tested {n_prior}x before' if n_prior else ''})"
         )
     else:
         print("\nOptions:")

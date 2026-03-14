@@ -21,6 +21,7 @@
 - [ ] Run longer debates (5+ cycles) to check whether RMSE gap widens monotonically
 - [x] **Make the debate influence outcomes** — divergence-driven experiment selection picks the most diagnostic structure (D12)
 - [ ] **Investigate GCM flexibility confound** — GCM outperforms RULEX on RULEX-generated data (4.7% gap after 4 rounds of improvements). May need structures specifically designed to disadvantage GCM, or longer runs to accumulate signal.
+- [ ] **Bayesian information-gain experiment selection** — Replace the heuristic diversity penalty (halve divergence per prior use) with principled adaptive design. Given current RMSE posteriors, compute expected information gain for each candidate structure: which untested structure would most reduce uncertainty about which model is correct? Should distinguish same-structure-different-condition (partially informative) from same-structure-same-condition (redundant). Related: optimal experimental design literature (Myung & Pitt 2009, Cavagnaro et al. 2010). This is the preferred long-term replacement for the D17 heuristic.
 
 ### Queued (from Codex review, 2026-03-13)
 - [x] **[P1] Implement Phase 5 (Design Revision)** — agents now revise proposals based on critiques, updating design_spec via state.revise_proposal()

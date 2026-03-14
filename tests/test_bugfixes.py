@@ -3908,3 +3908,51 @@ class TestStructureDiversity:
         assert approved_struct != "Type_VI", (
             f"Type_VI tested 2x should be heavily penalized, got: {approved_struct}"
         )
+
+    @patch("antagonistic_collab.runner._BATCH_MODE", True)
+    def test_different_condition_penalized_less_than_same(self):
+        """
+        Same structure with a new condition should be penalized less harshly
+        than an exact structure+condition repeat. Type_VI/high_attention after
+        Type_VI/baseline should still be viable (1.5x penalty vs 2x).
+        """
+        protocol = self._make_protocol()
+        state = protocol.state
+
+        # Cycle 0: Type_VI/baseline was tested
+        state.cycle = 0
+        exp0 = state.propose_experiment(
+            proposed_by="Clustering_Agent",
+            title="Cycle 0 baseline",
+            design_spec={"structure_name": "Type_VI", "condition": "baseline"},
+            rationale="r",
+        )
+        state.approve_experiment(exp0.experiment_id)
+        exp0.status = "executed"
+
+        # Cycle 1: Type_VI/high_attention vs Type_VI/baseline
+        state.cycle = 1
+        state.propose_experiment(
+            proposed_by="Clustering_Agent",
+            title="Type_VI new condition",
+            design_spec={"structure_name": "Type_VI", "condition": "high_attention"},
+            rationale="r",
+        )
+        state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Type_VI same condition",
+            design_spec={"structure_name": "Type_VI", "condition": "baseline"},
+            rationale="r",
+        )
+
+        run_human_arbitration(protocol, [])
+
+        approved = [
+            e for e in state.experiments if e.cycle == 1 and e.status == "approved"
+        ]
+        assert len(approved) == 1
+        # New condition should win over exact repeat
+        assert approved[0].design_spec.get("condition") == "high_attention", (
+            f"New condition should be penalized less than exact repeat, "
+            f"got condition={approved[0].design_spec.get('condition')}"
+        )
