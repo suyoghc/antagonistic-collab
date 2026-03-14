@@ -41,7 +41,13 @@
 - [x] **[P3] Fix --demo order-sensitivity** — `"--demo" in sys.argv` works regardless of position
 - [x] **Show concrete model predictions in divergence ranking** — ranked summary now shows per-model predicted accuracy (e.g., "Exemplar_Agent: 0.75, Rule_Agent: 0.80, Clustering_Agent: 0.50") so agents can see their advantage per structure
 
-### Done (Codex review, 2026-03-14)
+### Done (Codex review round 3, 2026-03-14)
+- [x] **[P1] Override fallback drops condition params** — fallback now uses condition-applied params, not bare defaults (D21)
+- [x] **[P1] Scalar addresses_critiques crashes design revision** — coerce to list before iterating (D21)
+- [x] **[P2] Invalid approval input escapes retry loop** — set rejected=True on out-of-range approve (D21)
+- [x] **[P2] SUSTAIN partial block duplicate label** — use enumerate index instead of arithmetic formula (D21)
+
+### Done (Codex review round 2, 2026-03-14)
 - [x] **Malformed param override values crash execution** — try/except fallback to default params on ValueError/TypeError
 - [x] **SUSTAIN drops final partial block** — predict_learning_curve now includes partial block, matches GCM/RULEX curve length
 

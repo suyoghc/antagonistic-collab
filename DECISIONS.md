@@ -409,3 +409,29 @@ Cycle N:
 - Correct agent wins with 2.1x gap over second place
 
 **Status:** Done.
+
+---
+
+## D21: Codex review round 3 — 4 bug fixes — 2026-03-14
+
+**Source:** Codex automated review flagged 4 issues (2 P1, 2 P2).
+
+**Bug 1 (P1): Override fallback drops condition params.**
+`compute_model_predictions()` builds params as defaults → condition → LLM overrides. On malformed LLM override (e.g. wrong-shape attention_weights), the fallback used bare `agent_config.default_params`, silently dropping the condition (e.g. `low_attention` sets GCM `c=1.5` but fallback reverted to `c=3.0`).
+**Fix:** Build `fallback_params` from defaults + condition overrides (excluding LLM overrides), so the condition survives.
+
+**Bug 2 (P1): Scalar `addresses_critiques` crashes design revision.**
+`run_design_revision()` iterates `addresses_critiques` as a list. LLM returns `"addresses_critiques": 1` (truthy scalar) → `TypeError: 'int' object is not iterable`.
+**Fix:** Coerce non-list values to `[value]` before iterating.
+
+**Bug 3 (P2): Invalid `approve 99` escapes retry loop.**
+Out-of-range index nulls `idx` but doesn't set `rejected = True`. The outer `run_cycle()` retry loop checks `outputs["rejected"]`, which is absent, so it breaks out — cycle continues with no approved experiment.
+**Fix:** Added `else: rejected = True` after the `if idx is not None` block.
+
+**Bug 4 (P2): SUSTAIN partial block duplicate label.**
+`predict_learning_curve()` computes block label as `(block_end // block_size) - 1`. For partial final block (e.g. `block_end=3, block_size=2`), gives `0` — same as the prior complete block.
+**Fix:** Use `enumerate` index instead of arithmetic formula.
+
+**Tests:** 4 regression tests, 194 total passing, ruff clean.
+
+**Status:** Done.
