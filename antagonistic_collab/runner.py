@@ -1043,6 +1043,309 @@ def run_interpretation(
     )
 
 
+def run_full_pool_selection(
+    protocol: DebateProtocol,
+    transcript: list,
+) -> PhaseResult:
+    """Full-pool Bayesian selection: compute EIG over all 55+ candidates.
+
+    Replaces phases 3-6 (proposal, critique, revision, arbitration) in
+    full_pool mode. No LLM calls — pure computation.
+    """
+    from .bayesian_selection import (
+        ModelPosterior,
+        generate_full_candidate_pool,
+        select_from_pool,
+    )
+
+    print("\n" + "=" * 70)
+    print("PHASE: FULL-POOL BAYESIAN SELECTION")
+    print("=" * 70)
+
+    model_names = [a.name for a in protocol.agent_configs]
+    if protocol.state.model_posterior and "log_probs" in protocol.state.model_posterior:
+        posterior = ModelPosterior.from_dict(protocol.state.model_posterior)
+    else:
+        posterior = ModelPosterior.uniform(model_names)
+
+    # Collect extra structures from prior cycle's novel proposals
+    extra = getattr(protocol, "temporary_structures", None) or {}
+
+    pool = generate_full_candidate_pool(protocol, extra_structures=extra or None)
+    print(f"  Evaluating {len(pool)} candidates...")
+
+    best_idx, eig_scores = select_from_pool(
+        protocol, posterior, pool, n_subjects=20, n_sim=200, seed=42
+    )
+
+    best_struct, best_cond = pool[best_idx]
+
+    # Build top-5 EIG landscape
+    ranked = sorted(range(len(pool)), key=lambda i: -eig_scores[i])
+    eig_landscape = []
+    for rank, idx in enumerate(ranked[:10]):
+        s, c = pool[idx]
+        entry = {
+            "rank": rank + 1,
+            "structure": s,
+            "condition": c,
+            "eig": eig_scores[idx],
+        }
+        eig_landscape.append(entry)
+        marker = " ← SELECTED" if idx == best_idx else ""
+        print(f"    {rank + 1}. {s} / {c} — EIG={eig_scores[idx]:.4f}{marker}")
+
+    # Create and approve the winning experiment
+    exp = protocol.state.propose_experiment(
+        proposed_by="SYSTEM (full-pool EIG)",
+        title=f"EIG-selected: {best_struct} / {best_cond}",
+        design_spec={"structure_name": best_struct, "condition": best_cond},
+        rationale=f"Highest EIG ({eig_scores[best_idx]:.4f}) among {len(pool)} candidates",
+    )
+    protocol.state.approve_experiment(exp.experiment_id)
+    print(
+        f"\n  ✓ Selected: {best_struct} / {best_cond} (EIG={eig_scores[best_idx]:.4f})"
+    )
+
+    messages = [
+        {
+            "agent": "SYSTEM",
+            "phase": "FULL_POOL_SELECTION",
+            "selected": {"structure": best_struct, "condition": best_cond},
+            "eig": eig_scores[best_idx],
+        }
+    ]
+    transcript.extend(messages)
+
+    return PhaseResult(
+        phase=Phase.HUMAN_ARBITRATION,  # reuse phase enum for compatibility
+        cycle=protocol.state.cycle,
+        outputs={
+            "selected_structure": best_struct,
+            "selected_condition": best_cond,
+            "eig": eig_scores[best_idx],
+            "eig_landscape": eig_landscape,
+        },
+        messages=messages,
+    )
+
+
+def run_interpretation_debate(
+    protocol: DebateProtocol,
+    client,
+    transcript: list,
+) -> PhaseResult:
+    """Interpretation debate: agents interpret results and generate hypotheses.
+
+    Replaces the simple run_interpretation() in full_pool mode.
+    Agents see: results, posterior, EIG landscape, parameter stability.
+    They produce: interpretation, confound flags, hypothesis, optional novel structure.
+    """
+    messages = []
+    agent_hypotheses = []
+    all_confounds = []
+
+    print("\n" + "=" * 70)
+    print("PHASE: INTERPRETATION DEBATE — Agents interpret & hypothesize")
+    print("=" * 70)
+
+    executed = [
+        e
+        for e in protocol.state.experiments
+        if e.cycle == protocol.state.cycle and e.status == "executed"
+    ]
+    if not executed:
+        return PhaseResult(
+            phase=Phase.INTERPRETATION,
+            cycle=protocol.state.cycle,
+            outputs={"agent_hypotheses": [], "confounds": []},
+            messages=[],
+        )
+
+    exp = executed[0]
+    results_context = protocol._results_context()
+
+    # Build extended context: posterior, EIG landscape, param stability
+    extra_context_lines = []
+
+    # Bayesian posterior
+    if protocol.state.model_posterior and "log_probs" in protocol.state.model_posterior:
+        import numpy as _np
+
+        lp = _np.array(protocol.state.model_posterior["log_probs"])
+        probs = _np.exp(lp - _np.max(lp))
+        probs = probs / probs.sum()
+        model_names = protocol.state.model_posterior.get("model_names", [])
+        extra_context_lines.append("\n### Bayesian Posterior")
+        for i, p in enumerate(probs):
+            name = model_names[i] if i < len(model_names) else f"model_{i}"
+            extra_context_lines.append(f"  P({name}) = {p:.4f}")
+
+    # Parameter stability across cycles
+    extra_context_lines.append("\n### Parameter Stability")
+    for theory in protocol.state.active_theories():
+        params = theory.model_params
+        n_revisions = len(theory.revision_log)
+        extra_context_lines.append(
+            f"  {theory.agent_name}: params={params}, revisions={n_revisions}"
+        )
+
+    extended_context = results_context + "\n".join(extra_context_lines)
+
+    for agent in protocol.agent_configs:
+        prompt = (
+            f"PHASE: Interpretation Debate\n\n"
+            f"You are interpreting experimental results. Analyze the data and "
+            f"produce a structured response.\n\n"
+            f"RESULTS AND CONTEXT:\n{extended_context}\n\n"
+            f"You MUST output a JSON block with:\n"
+            f'{{"interpretation": "your analysis of what the results show", '
+            f'"confounds_flagged": ["list any confounds or methodological issues"], '
+            f'"hypothesis": "what experiment should come next and why", '
+            f'"novel_structure": null or {{"name": "...", "stimuli": [[...]], "labels": [...]}} '
+            f"if you want to propose a new category structure, "
+            f'"revision": null or {{"description": "...", "new_predictions": [...]}} '
+            f"if you want to revise your theory}}"
+        )
+
+        print(f"\n--- {agent.name} interprets ---")
+        response = call_agent(client, agent.system_prompt, prompt)
+        print(response[:600] + "..." if len(response) > 600 else response)
+
+        protocol.state.add_interpretation(exp.experiment_id, agent.name, response)
+
+        # Parse structured response
+        json_block = extract_json(response) or {}
+
+        hypothesis = json_block.get("hypothesis", "")
+        confounds = json_block.get("confounds_flagged", [])
+        novel_structure = json_block.get("novel_structure")
+
+        if hypothesis:
+            hyp_entry = {
+                "agent": agent.name,
+                "hypothesis": hypothesis,
+                "cycle": protocol.state.cycle,
+            }
+            if novel_structure and isinstance(novel_structure, dict):
+                hyp_entry["novel_structure"] = novel_structure
+            agent_hypotheses.append(hyp_entry)
+
+        if confounds:
+            for c in confounds:
+                all_confounds.append({"agent": agent.name, "confound": c})
+
+        # Handle theory revision
+        if json_block.get("revision") and isinstance(json_block["revision"], dict):
+            rev = json_block["revision"]
+            protocol.state.revise_theory(
+                agent.theory_name,
+                description=rev.get("description", "Post-data revision"),
+                triggered_by_experiment=exp.experiment_id,
+                new_predictions=rev.get("new_predictions", []),
+            )
+
+        messages.append(
+            {
+                "agent": agent.name,
+                "phase": "INTERPRETATION_DEBATE",
+                "response": response,
+                "parsed_json": json_block,
+            }
+        )
+
+    # Store hypotheses in epistemic state for next cycle
+    protocol.state.agent_hypotheses.extend(agent_hypotheses)
+
+    transcript.extend(messages)
+    return PhaseResult(
+        phase=Phase.INTERPRETATION,
+        cycle=protocol.state.cycle,
+        outputs={
+            "agent_hypotheses": agent_hypotheses,
+            "confounds": all_confounds,
+        },
+        messages=messages,
+    )
+
+
+def run_interpretation_critique(
+    protocol: DebateProtocol,
+    client,
+    transcript: list,
+) -> PhaseResult:
+    """Interpretation critique: agents challenge each other's interpretations.
+
+    Each agent sees all other agents' interpretations and must challenge at
+    least one claim or confound flag.
+    """
+    messages = []
+
+    print("\n" + "=" * 70)
+    print("PHASE: INTERPRETATION CRITIQUE — Agents challenge interpretations")
+    print("=" * 70)
+
+    executed = [
+        e
+        for e in protocol.state.experiments
+        if e.cycle == protocol.state.cycle and e.status == "executed"
+    ]
+    if not executed:
+        return PhaseResult(
+            phase=Phase.INTERPRETATION,
+            cycle=protocol.state.cycle,
+            outputs={},
+            messages=[],
+        )
+
+    exp = executed[0]
+    interpretations = exp.interpretations
+
+    for agent in protocol.agent_configs:
+        # Build context from other agents' interpretations
+        other_interps = {
+            name: interp
+            for name, interp in interpretations.items()
+            if name != agent.name
+        }
+        if not other_interps:
+            continue
+
+        interp_text = "\n".join(
+            f"  {name}: {interp[:500]}" for name, interp in other_interps.items()
+        )
+
+        prompt = (
+            f"PHASE: Interpretation Critique\n\n"
+            f"Other agents' interpretations of the latest results:\n"
+            f"{interp_text}\n\n"
+            f"Challenge at least one interpretation. Be specific:\n"
+            f"1. Which interpretation do you dispute and why?\n"
+            f"2. What alternative explanation does your theory offer?\n"
+            f"3. What evidence would distinguish your view from theirs?"
+        )
+
+        print(f"\n--- {agent.name} critiques interpretations ---")
+        response = call_agent(client, agent.system_prompt, prompt)
+        print(response[:600] + "..." if len(response) > 600 else response)
+
+        messages.append(
+            {
+                "agent": agent.name,
+                "phase": "INTERPRETATION_CRITIQUE",
+                "response": response,
+            }
+        )
+
+    transcript.extend(messages)
+    return PhaseResult(
+        phase=Phase.INTERPRETATION,
+        cycle=protocol.state.cycle,
+        outputs={"n_critiques": len(messages)},
+        messages=messages,
+    )
+
+
 def run_audit(protocol: DebateProtocol, client, transcript: list) -> PhaseResult:
     """Phase 9: Summarize what was learned."""
     print("\n" + "=" * 70)
@@ -1096,12 +1399,18 @@ def run_cycle(
     critique_rounds: int = 2,
     output_dir: str = ".",
     metadata: Optional[dict] = None,
+    mode: str = "legacy",
 ):
-    """Run one full debate cycle through all 9 phases."""
+    """Run one full debate cycle.
+
+    Args:
+        mode: "full_pool" uses EIG over all candidates + interpretation debate.
+              "legacy" (default) uses the original 9-phase flow with LLM proposals.
+    """
     cycle_start = len(transcript)
 
     print(f"\n{'#' * 70}")
-    print(f"# CYCLE {protocol.state.cycle}")
+    print(f"# CYCLE {protocol.state.cycle} (mode={mode})")
     print(f"{'#' * 70}")
 
     # Phase 1: Commitment (only on first cycle)
@@ -1115,55 +1424,65 @@ def run_cycle(
     result = run_divergence_mapping(protocol, client, transcript)
     protocol.advance_phase(result)
 
-    # Phases 3–6 may loop if the moderator rejects all proposals
-    MAX_REJECT_RETRIES = 2  # up to 3 total attempts (initial + 2 retries)
-    for attempt in range(1 + MAX_REJECT_RETRIES):
-        if attempt > 0:
-            # Loop back: reset phase to EXPERIMENT_PROPOSAL and mark
-            # rejected proposals so new ones can be created
-            print(
-                f"\n[RETRY {attempt}/{MAX_REJECT_RETRIES}] "
-                "Moderator rejected all proposals. Requesting new round."
-            )
-            for exp in protocol.state.experiments:
-                if exp.cycle == protocol.state.cycle and exp.status == "proposed":
-                    exp.status = "rejected"
-            protocol.skip_to_phase(Phase.EXPERIMENT_PROPOSAL)
-
-        # Phase 3: Experiment proposal
-        result = run_experiment_proposal(protocol, client, transcript)
+    if mode == "full_pool":
+        # Full-pool mode: EIG selection replaces phases 3-6
+        result = run_full_pool_selection(protocol, transcript)
         protocol.advance_phase(result)
-
-        # Phase 4: Adversarial critique
-        result = run_adversarial_critique(
-            protocol, client, transcript, n_rounds=critique_rounds
-        )
-        protocol.advance_phase(result)
-
-        # Phase 5: Design revision — agents revise proposals based on critiques
-        result = run_design_revision(protocol, client, transcript)
-        protocol.advance_phase(result)
-
-        # Phase 6: Human arbitration
-        result = run_human_arbitration(protocol, transcript)
-        protocol.advance_phase(result)
-
-        if not result.outputs.get("rejected"):
-            break  # Moderator approved or skipped — continue to execution
     else:
-        # Exhausted all retries — proceed with no approved experiment
-        print(
-            f"\n[WARNING] All {1 + MAX_REJECT_RETRIES} proposal rounds rejected. "
-            "Proceeding with no approved experiment."
-        )
+        # Legacy mode: Phases 3–6 may loop if the moderator rejects all proposals
+        MAX_REJECT_RETRIES = 2  # up to 3 total attempts (initial + 2 retries)
+        for attempt in range(1 + MAX_REJECT_RETRIES):
+            if attempt > 0:
+                print(
+                    f"\n[RETRY {attempt}/{MAX_REJECT_RETRIES}] "
+                    "Moderator rejected all proposals. Requesting new round."
+                )
+                for exp in protocol.state.experiments:
+                    if exp.cycle == protocol.state.cycle and exp.status == "proposed":
+                        exp.status = "rejected"
+                protocol.skip_to_phase(Phase.EXPERIMENT_PROPOSAL)
+
+            # Phase 3: Experiment proposal
+            result = run_experiment_proposal(protocol, client, transcript)
+            protocol.advance_phase(result)
+
+            # Phase 4: Adversarial critique
+            result = run_adversarial_critique(
+                protocol, client, transcript, n_rounds=critique_rounds
+            )
+            protocol.advance_phase(result)
+
+            # Phase 5: Design revision
+            result = run_design_revision(protocol, client, transcript)
+            protocol.advance_phase(result)
+
+            # Phase 6: Human arbitration
+            result = run_human_arbitration(protocol, transcript)
+            protocol.advance_phase(result)
+
+            if not result.outputs.get("rejected"):
+                break
+        else:
+            print(
+                f"\n[WARNING] All {1 + MAX_REJECT_RETRIES} proposal rounds rejected. "
+                "Proceeding with no approved experiment."
+            )
 
     # Phase 7: Execution
     result = run_execution(protocol, client, transcript, true_model=true_model)
     protocol.advance_phase(result)
 
-    # Phase 8: Interpretation
-    result = run_interpretation(protocol, client, transcript)
-    protocol.advance_phase(result)
+    if mode == "full_pool":
+        # Interpretation debate + critique replaces simple interpretation
+        result = run_interpretation_debate(protocol, client, transcript)
+        protocol.advance_phase(result)
+
+        result = run_interpretation_critique(protocol, client, transcript)
+        # Don't advance_phase here — we still need audit
+    else:
+        # Phase 8: Interpretation (legacy)
+        result = run_interpretation(protocol, client, transcript)
+        protocol.advance_phase(result)
 
     # Phase 9: Audit
     result = run_audit(protocol, client, transcript)
@@ -1566,6 +1885,12 @@ def main():
         default="bayesian",
         help="Experiment selection method: bayesian (EIG) or heuristic (diversity penalty)",
     )
+    parser.add_argument(
+        "--mode",
+        choices=["full_pool", "legacy"],
+        default="legacy",
+        help="Phase flow: full_pool (EIG + interpretation debate) or legacy (9-phase)",
+    )
     args = parser.parse_args()
 
     # Resolve model default based on backend
@@ -1590,7 +1915,7 @@ def main():
     print(f"LLM: {args.model}")
     print(
         f"Cycles: {args.cycles}, True model: {args.true_model}, "
-        f"Selection: {args.selection}\n"
+        f"Selection: {args.selection}, Mode: {args.mode}\n"
     )
 
     # Patch call_agent to use the specified model
@@ -1632,6 +1957,7 @@ def main():
             critique_rounds=args.critique_rounds,
             output_dir=output_dir,
             metadata=metadata,
+            mode=args.mode,
         )
 
     # End-of-run summary report

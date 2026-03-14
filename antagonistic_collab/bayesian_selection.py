@@ -193,6 +193,83 @@ def compute_eig(
     return max(0.0, float(eig))  # EIG >= 0 by Jensen's inequality
 
 
+def generate_full_candidate_pool(
+    protocol,
+    extra_structures: Optional[dict] = None,
+) -> list[tuple[str, str]]:
+    """All structure×condition pairs from STRUCTURE_REGISTRY × CONDITION_EFFECTS.
+
+    Args:
+        protocol: DebateProtocol instance (for access to registries).
+        extra_structures: Optional dict of additional structures (e.g., from
+            novel agent proposals) to include in the pool.
+
+    Returns:
+        List of (structure_name, condition) tuples.
+    """
+    from .debate_protocol import STRUCTURE_REGISTRY, CONDITION_EFFECTS
+
+    structures = dict(STRUCTURE_REGISTRY)
+    if extra_structures:
+        structures.update(extra_structures)
+
+    pool = []
+    for struct_name in structures:
+        for condition in CONDITION_EFFECTS:
+            pool.append((struct_name, condition))
+    return pool
+
+
+def select_from_pool(
+    protocol,
+    posterior: ModelPosterior,
+    pool: list[tuple[str, str]],
+    n_subjects: int = 20,
+    n_sim: int = 200,
+    seed: Optional[int] = 42,
+) -> tuple[int, list[float]]:
+    """Select the best (structure, condition) pair from the full pool by EIG.
+
+    Args:
+        protocol: DebateProtocol instance (for compute_model_predictions).
+        posterior: current ModelPosterior.
+        pool: list of (structure_name, condition) tuples.
+        n_subjects: subjects per item for likelihood computation.
+        n_sim: Monte Carlo simulations per model per candidate.
+        seed: random seed.
+
+    Returns:
+        (best_index, eig_scores) — index into pool, and EIG for each candidate.
+    """
+    eig_scores = []
+
+    for i, (struct_name, condition) in enumerate(pool):
+        # Get predictions from each model for this candidate
+        model_predictions = {}
+        for agent_config in protocol.agent_configs:
+            preds = protocol.compute_model_predictions(
+                agent_config, struct_name, condition
+            )
+            item_keys = sorted(
+                [k for k in preds if k.startswith("item_")],
+                key=lambda k: int(k.split("_")[1]),
+            )
+            pred_array = np.array([preds[k] for k in item_keys])
+            model_predictions[agent_config.name] = pred_array
+
+        eig = compute_eig(
+            model_predictions,
+            posterior,
+            n_subjects=n_subjects,
+            n_sim=n_sim,
+            seed=seed + i if seed is not None else None,
+        )
+        eig_scores.append(eig)
+
+    best_idx = int(np.argmax(eig_scores))
+    return best_idx, eig_scores
+
+
 def select_experiment(
     protocol,
     posterior: ModelPosterior,

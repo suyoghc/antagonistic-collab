@@ -194,6 +194,9 @@ class EpistemicState:
     cycle: int = 0
     log: list[dict] = field(default_factory=list)  # free-form event log
     model_posterior: Optional[dict] = None  # Bayesian posterior over models
+    agent_hypotheses: list[dict] = field(
+        default_factory=list
+    )  # from interpretation debate
 
     # --- Theory management ---
 

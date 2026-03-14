@@ -4162,3 +4162,433 @@ class TestBayesianSelection:
             np.testing.assert_allclose(restored.probs, post.probs, atol=1e-10)
         finally:
             os.unlink(path)
+
+
+# =========================================================================
+# Phase A: Full-Pool EIG + Interpretation Debate (D19)
+# =========================================================================
+
+
+class TestFullPoolSelection:
+    """Tests for full-pool Bayesian experiment selection.
+
+    The full-pool approach replaces the agent-proposal→moderator-selection
+    pipeline with direct EIG computation over all 55 structure×condition
+    candidates. This removes LLM calls from the selection path entirely.
+    """
+
+    def test_generate_full_candidate_pool_returns_55(self):
+        """11 structures × 5 conditions = 55 candidates."""
+        from antagonistic_collab.bayesian_selection import generate_full_candidate_pool
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+        pool = generate_full_candidate_pool(protocol)
+        assert len(pool) == 55
+        # Each entry is (structure_name, condition)
+        for struct, cond in pool:
+            assert struct in STRUCTURE_REGISTRY
+            assert cond in CONDITION_EFFECTS
+
+    def test_full_pool_selection_picks_highest_eig(self):
+        """select_from_pool returns the candidate with highest EIG."""
+        from antagonistic_collab.bayesian_selection import (
+            generate_full_candidate_pool,
+            select_from_pool,
+        )
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+        posterior = ModelPosterior.uniform([a.name for a in agents])
+        pool = generate_full_candidate_pool(protocol)
+
+        best_idx, eig_scores = select_from_pool(
+            protocol, posterior, pool, n_subjects=20, n_sim=50, seed=42
+        )
+        assert 0 <= best_idx < len(pool)
+        assert len(eig_scores) == len(pool)
+        assert eig_scores[best_idx] == max(eig_scores)
+
+    def test_full_pool_creates_experiment_record(self):
+        """run_full_pool_selection creates an approved ExperimentRecord."""
+        from antagonistic_collab.runner import run_full_pool_selection
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+        transcript = []
+
+        run_full_pool_selection(protocol, transcript)
+
+        # Should have created and approved one experiment
+        approved = [
+            e
+            for e in state.experiments
+            if e.cycle == state.cycle and e.status == "approved"
+        ]
+        assert len(approved) == 1
+        ds = approved[0].design_spec
+        assert ds["structure_name"] in STRUCTURE_REGISTRY
+        assert ds["condition"] in CONDITION_EFFECTS
+
+    def test_full_pool_with_extra_structures(self):
+        """Extra structures from novel proposals are included in the pool."""
+        from antagonistic_collab.bayesian_selection import generate_full_candidate_pool
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        extra = {
+            "custom_struct": {
+                "stimuli": [[0, 0], [0, 1], [1, 0], [1, 1]],
+                "labels": [0, 0, 1, 1],
+            }
+        }
+        pool = generate_full_candidate_pool(protocol, extra_structures=extra)
+        # 11 + 1 = 12 structures, × 5 conditions = 60
+        assert len(pool) == 60
+        custom_entries = [(s, c) for s, c in pool if s == "custom_struct"]
+        assert len(custom_entries) == 5
+
+    def test_eig_landscape_in_result(self):
+        """run_full_pool_selection includes top-5 EIG landscape in outputs."""
+        from antagonistic_collab.runner import run_full_pool_selection
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+        transcript = []
+
+        result = run_full_pool_selection(protocol, transcript)
+        assert "eig_landscape" in result.outputs
+        landscape = result.outputs["eig_landscape"]
+        assert len(landscape) >= 5  # top-5 at minimum
+
+
+class TestInterpretationDebate:
+    """Tests for the interpretation debate phase that replaces fire-and-forget
+    interpretation. Agents now produce structured JSON with interpretation,
+    confound flags, hypotheses, and optional novel structure proposals."""
+
+    def test_interpretation_debate_parses_hypothesis(self):
+        """Mock LLM returns JSON with hypothesis; verify it's stored."""
+        from antagonistic_collab.runner import run_interpretation_debate
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        # Create an executed experiment so interpretation has something to see
+        exp = state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Test Exp",
+            design_spec={"structure_name": "Type_I", "condition": "baseline"},
+            rationale="test",
+        )
+        state.approve_experiment(exp.experiment_id)
+        state.record_data(
+            exp.experiment_id,
+            {
+                "mean_accuracy": 0.8,
+                "item_accuracies": {"item_0": 0.9, "item_1": 0.7},
+            },
+        )
+
+        # Mock LLM to return structured interpretation
+        mock_response = json.dumps(
+            {
+                "interpretation": "GCM fits well due to high similarity structure",
+                "confounds_flagged": ["small sample size"],
+                "hypothesis": "Type_VI will reveal SUSTAIN advantage",
+                "revision": None,
+            }
+        )
+
+        def fake_client_call(*a, **kw):
+            return mock_response
+
+        class FakeClient:
+            pass
+
+        transcript = []
+        with patch(
+            "antagonistic_collab.runner.call_agent", side_effect=fake_client_call
+        ):
+            result = run_interpretation_debate(protocol, FakeClient(), transcript)
+
+        assert "agent_hypotheses" in result.outputs
+        hypotheses = result.outputs["agent_hypotheses"]
+        assert len(hypotheses) > 0
+
+    def test_confound_flags_stored(self):
+        """Confound flags from agent interpretations are stored in result."""
+        from antagonistic_collab.runner import run_interpretation_debate
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        exp = state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Test Exp",
+            design_spec={"structure_name": "Type_I", "condition": "baseline"},
+            rationale="test",
+        )
+        state.approve_experiment(exp.experiment_id)
+        state.record_data(
+            exp.experiment_id,
+            {
+                "mean_accuracy": 0.8,
+                "item_accuracies": {"item_0": 0.9, "item_1": 0.7},
+            },
+        )
+
+        mock_response = json.dumps(
+            {
+                "interpretation": "Results consistent with rule-based learning",
+                "confounds_flagged": ["ceiling effect", "order bias"],
+                "hypothesis": "Need harder structure",
+            }
+        )
+
+        def fake_call(*a, **kw):
+            return mock_response
+
+        transcript = []
+        with patch("antagonistic_collab.runner.call_agent", side_effect=fake_call):
+            result = run_interpretation_debate(
+                protocol, type("C", (), {})(), transcript
+            )
+
+        assert "confounds" in result.outputs
+        all_confounds = result.outputs["confounds"]
+        assert len(all_confounds) > 0
+
+    def test_hypothesis_stored_for_next_cycle(self):
+        """Hypotheses are persisted in EpistemicState.agent_hypotheses."""
+        from antagonistic_collab.runner import run_interpretation_debate
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        exp = state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Test",
+            design_spec={"structure_name": "Type_I", "condition": "baseline"},
+            rationale="test",
+        )
+        state.approve_experiment(exp.experiment_id)
+        state.record_data(
+            exp.experiment_id,
+            {
+                "mean_accuracy": 0.75,
+                "item_accuracies": {"item_0": 0.8},
+            },
+        )
+
+        mock_response = json.dumps(
+            {
+                "interpretation": "Supports exemplar theory",
+                "confounds_flagged": [],
+                "hypothesis": "Test with Type_VI next",
+            }
+        )
+
+        def fake_call(*a, **kw):
+            return mock_response
+
+        transcript = []
+        with patch("antagonistic_collab.runner.call_agent", side_effect=fake_call):
+            run_interpretation_debate(protocol, type("C", (), {})(), transcript)
+
+        assert hasattr(state, "agent_hypotheses")
+        assert len(state.agent_hypotheses) > 0
+
+    def test_param_stability_tracking(self):
+        """Interpretation context includes parameter stability info."""
+        from antagonistic_collab.runner import run_interpretation_debate
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        # Register theories + run a couple cycles worth of predictions
+        for agent in agents:
+            state.register_theory(
+                TheoryCommitment(
+                    name=agent.theory_name,
+                    agent_name=agent.name,
+                    core_claims=["claim"],
+                    model_name=agent.model_class.name,
+                    model_params=agent.default_params,
+                )
+            )
+
+        exp = state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Test",
+            design_spec={"structure_name": "Type_I", "condition": "baseline"},
+            rationale="test",
+        )
+        state.approve_experiment(exp.experiment_id)
+        state.record_data(
+            exp.experiment_id,
+            {
+                "mean_accuracy": 0.75,
+                "item_accuracies": {"item_0": 0.8},
+            },
+        )
+
+        mock_response = json.dumps(
+            {
+                "interpretation": "OK",
+                "confounds_flagged": [],
+                "hypothesis": "next",
+            }
+        )
+
+        captured_prompts = []
+
+        def fake_call(*a, **kw):
+            if len(a) >= 2:
+                captured_prompts.append(a[1])
+            return mock_response
+
+        transcript = []
+        with patch("antagonistic_collab.runner.call_agent", side_effect=fake_call):
+            run_interpretation_debate(protocol, type("C", (), {})(), transcript)
+
+        # At least one prompt should mention parameter stability or params
+        assert any("param" in p.lower() for p in captured_prompts if isinstance(p, str))
+
+
+class TestInterpretationCritique:
+    """Tests for interpretation critique phase where agents challenge
+    each other's interpretations and confound claims."""
+
+    def test_critique_produces_output(self):
+        """run_interpretation_critique returns a PhaseResult with messages."""
+        from antagonistic_collab.runner import run_interpretation_critique
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        # Set up an executed experiment with interpretations
+        exp = state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Test",
+            design_spec={"structure_name": "Type_I", "condition": "baseline"},
+            rationale="test",
+        )
+        state.approve_experiment(exp.experiment_id)
+        state.record_data(
+            exp.experiment_id,
+            {
+                "mean_accuracy": 0.8,
+                "item_accuracies": {"item_0": 0.9, "item_1": 0.7},
+            },
+        )
+        state.add_interpretation(exp.experiment_id, "Exemplar_Agent", "GCM fits best")
+        state.add_interpretation(exp.experiment_id, "Rule_Agent", "Rules explain this")
+
+        mock_response = "I challenge the exemplar interpretation because..."
+
+        def fake_call(*a, **kw):
+            return mock_response
+
+        transcript = []
+        with patch("antagonistic_collab.runner.call_agent", side_effect=fake_call):
+            result = run_interpretation_critique(
+                protocol, type("C", (), {})(), transcript
+            )
+
+        assert result.phase.name == "INTERPRETATION"
+        assert len(result.messages) > 0
+
+
+class TestFullPoolModeFlag:
+    """Tests for the --mode full_pool|legacy flag in run_cycle."""
+
+    def test_legacy_mode_runs_original_flow(self):
+        """--mode legacy should call proposal/critique/revision/arbitration phases."""
+        from antagonistic_collab.runner import run_cycle
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+        transcript = []
+
+        call_log = []
+
+        def fake_call(*a, **kw):
+            call_log.append("called")
+            return json.dumps(
+                {
+                    "title": "Test",
+                    "structure_name": "Type_I",
+                    "condition": "baseline",
+                    "rationale": "test",
+                    "reasoning": "test",
+                    "confidence": "medium",
+                }
+            )
+
+        with (
+            patch("antagonistic_collab.runner.call_agent", side_effect=fake_call),
+            patch("antagonistic_collab.runner._BATCH_MODE", True),
+            patch("antagonistic_collab.runner._SELECTION_METHOD", "bayesian"),
+        ):
+            run_cycle(protocol, type("C", (), {})(), transcript, mode="legacy")
+
+        # Legacy mode should have many LLM calls (proposals, critiques, etc.)
+        assert len(call_log) > 6
+
+    def test_full_pool_mode_no_proposal_phases(self):
+        """--mode full_pool should skip proposal/critique/revision/arbitration."""
+        from antagonistic_collab.runner import run_cycle
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+        transcript = []
+
+        call_phases = []
+
+        def fake_call(*a, **kw):
+            # Track which phase prompt this is for
+            prompt = a[1] if len(a) >= 2 else kw.get("user_message", "")
+            if "Experiment Proposal" in prompt:
+                call_phases.append("proposal")
+            elif "Adversarial Critique" in prompt:
+                call_phases.append("critique")
+            elif "Design Revision" in prompt:
+                call_phases.append("revision")
+            elif "Interpretation" in prompt or "interpret" in prompt.lower():
+                call_phases.append("interpretation")
+            else:
+                call_phases.append("other")
+            return json.dumps(
+                {
+                    "interpretation": "OK",
+                    "confounds_flagged": [],
+                    "hypothesis": "next",
+                    "reasoning": "test",
+                    "confidence": "medium",
+                }
+            )
+
+        with (
+            patch("antagonistic_collab.runner.call_agent", side_effect=fake_call),
+            patch("antagonistic_collab.runner._BATCH_MODE", True),
+        ):
+            run_cycle(protocol, type("C", (), {})(), transcript, mode="full_pool")
+
+        # Should NOT have proposal, critique, revision phases
+        assert "proposal" not in call_phases
+        assert "critique" not in call_phases
+        assert "revision" not in call_phases
