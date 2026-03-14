@@ -32,7 +32,7 @@
 - [x] **Feed novel structures back into EIG pool** — after `run_interpretation_debate()`, validate and register novel structures in `protocol.temporary_structures` for next cycle's `generate_full_candidate_pool()` (D23)
 - [x] **Include learning curve + posterior context in interpretation debate** — agents see curve comparison table (pattern, final accuracy, max jump, onset block) in their interpretation prompt (D23)
 - [ ] **5-cycle comparative validation** — run `--mode full_pool` vs `--mode legacy` for all 3 ground truth models, compare convergence speed and final RMSE gap
-- [ ] **Prompt novel structure generation** — add few-shot examples to interpretation debate prompt showing valid `novel_structure` format to encourage agents to propose new structures
+- [x] **Prompt novel structure generation** — added few-shot example (diagonal_xor), constraints (4-32 items, ≤8 dims, ≥2 cats), strategic guidance to interpretation prompt (D24)
 
 ### Queued (from Codex review, 2026-03-13)
 - [x] **[P1] Implement Phase 5 (Design Revision)** — agents now revise proposals based on critiques, updating design_spec via state.revise_proposal()

@@ -488,3 +488,22 @@ Pattern covered `debate_cycle_*.json` but not `.md` transcripts.
 **Tests:** 7 new regression tests, 205 total passing, ruff clean.
 
 **Status:** Done.
+
+---
+
+## D24: Few-shot novel structure examples in interpretation prompt — 2026-03-14
+
+**Problem:** Agents could propose novel structures but had no guidance on the required format, constraints, or strategic design principles. The prompt only said `"novel_structure": null or {"name": "...", "stimuli": [[...]], "labels": [...]}`.
+
+**Decision:** Added to the interpretation debate prompt:
+- Explicit constraints: 4-32 items, ≤8 dimensions, ≥2 categories
+- Concrete example: `diagonal_xor` with 6 items, 2D stimuli, binary labels
+- Strategic guidance: "design structures that exploit weaknesses in competing models" with specific suggestions (random categories to challenge rule models, high-dimensional stimuli to challenge exemplar models)
+
+**Alternatives:**
+- Multiple examples covering different structure types — decided one clear example is enough; more would bloat the prompt
+- Parameterized template — over-engineering for current needs
+
+**Tests:** 1 new regression test, 206 total passing, ruff clean.
+
+**Status:** Done.
