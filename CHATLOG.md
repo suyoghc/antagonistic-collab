@@ -251,24 +251,30 @@ Human-readable summary of each Claude Code session on this project.
 
 ## Session 12 — 2026-03-14
 
-**Commits:** `27d4809`
+**Commits:** `27d4809`, `06c2f8f`, `6c32451`, `908cb36`, `b9837a3`, `d8841fd`, `6adcdf1`
 
 **What we did:**
-- Fixed full_pool mode phase desync bug: `advance_phase()` uses `current_phase` for transitions, but after divergence mapping current_phase was `EXPERIMENT_PROPOSAL`, not `HUMAN_ARBITRATION`. Full_pool mode's EIG selection skips phases 3-5, so the state machine never reached AUDIT → `advance_cycle()` never fired → cycle counter stuck at 0. Fix: `skip_to_phase(HUMAN_ARBITRATION)` before advancing from EIG selection result.
-- Added `TestFullPoolIntegration`: 2-cycle end-to-end integration test with mocked LLM, verifying the complete pipeline (commitment → divergence → EIG → execution → interpretation debate → critique → audit) for both cycles.
+- Fixed full_pool mode phase desync bug (D20): `advance_phase()` uses `current_phase` for transitions, but after divergence mapping current_phase was `EXPERIMENT_PROPOSAL`, not `HUMAN_ARBITRATION`. Fix: `skip_to_phase(HUMAN_ARBITRATION)` before advancing from EIG selection result.
+- Added `TestFullPoolIntegration`: 2-cycle end-to-end integration test with mocked LLM
 - Validated with real 2-cycle Princeton/GPT-4o run (`--mode full_pool --true-model GCM`):
   - Cycle 0: EIG selected `five_four / fast_presentation`
   - Cycle 1: EIG selected `Type_I / low_attention`
   - Exemplar_Agent wins (RMSE 0.139 vs 0.352 Rule, 0.298 Clustering) ✓
-- 190 tests passing, ruff clean
+- Documented Phase 7 findings in LESSONS_LEARNED.md (7.1–7.4)
+- Fixed 8 bugs from two Codex review rounds:
+  - **D21 (4 bugs):** Override fallback drops condition params, scalar addresses_critiques crash, invalid approval escapes retry loop, SUSTAIN partial block duplicate label
+  - **D22 (4 fixes):** RULEX ground truth non-deterministic (missing seed=42), RULEX predict_learning_curve drops seed, redundant model_predicted/predicted keys, .gitignore gap for .md transcripts
+- 198 tests passing, ruff clean
 
 **Key findings:**
-- Full_pool mode works end-to-end: EIG selects experiments, interpretation debate produces structured hypotheses, critique challenges claims, audit summarizes — no LLM calls wasted on experiment proposals
-- EIG correctly picks different structures across cycles without needing diversity penalty heuristic
-- Phase state machine was a subtle integration bug — unit tests didn't catch it because they mocked at lower levels
+- Full_pool mode works end-to-end with 36% fewer LLM calls per cycle than legacy mode
+- EIG is naturally self-diversifying through posterior updates — no heuristic penalty needed
+- Phase state machine desyncs are subtle integration bugs that unit tests miss; need integration tests
+- RULEX non-determinism was a significant correctness issue — same experiment could produce different ground truth between runs
 
 **Key discussion:**
-- Next steps: wire learning curves into execution, feed novel structures back into EIG pool, run 5-cycle comparative validation
+- Codex review dismissed: module-level globals (valid but large refactor), code in `__init__.py` (standard re-exports). Deferred: GCM.fit() self-prediction bias (latent, unused in pipeline).
+- Next steps: wire learning curves into execution, feed novel structures back into EIG pool, 5-cycle comparative validation
 
 ---
 
