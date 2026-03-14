@@ -386,4 +386,26 @@ Cycle N:
 
 **Tests:** 31 new regression tests (12 Phase A + 9 Phase B + 10 Phase C), 189 total passing. ruff clean.
 
-**Status:** Done. Pending: 5-cycle validation runs with `--mode full_pool` to compare convergence.
+**Status:** Done. Validated end-to-end with 2-cycle Princeton/GPT-4o run (see D20). Pending: 5-cycle comparative runs and wiring learning curves into execution.
+
+---
+
+## D20: Fix full_pool mode phase state machine desync — 2026-03-14
+
+**Problem:** Full_pool mode's `run_cycle()` called `advance_phase()` after EIG selection, but the phase state machine was still at `EXPERIMENT_PROPOSAL` (from the divergence mapping advance). Since `advance_phase()` uses `self.current_phase` — not the result's phase — to determine the next state, it transitioned to `ADVERSARIAL_CRITIQUE` instead of `EXECUTION`. The state machine never reached `AUDIT`, so `advance_cycle()` never fired and the cycle counter stayed at 0. Discovered by integration test; unit tests didn't catch it because they tested individual phase functions in isolation.
+
+**Decision:** Insert `skip_to_phase(Phase.HUMAN_ARBITRATION)` before the full_pool selection's `advance_phase()` call. This restores the correct transition chain: HUMAN_ARBITRATION → EXECUTION → INTERPRETATION → AUDIT → advance_cycle().
+
+**Alternatives considered:**
+- (A) Add a separate transition map for full_pool mode — more complex, duplicates logic, higher maintenance burden
+- (B) Make `advance_phase()` accept an explicit "from_phase" override — changes the core API, risks downstream breakage
+- (C) Skip directly to EXECUTION after selection (bypassing advance_phase entirely) — loses the phase history record
+
+**Tests:** Added `TestFullPoolIntegration` — 2-cycle end-to-end integration test with mocked LLM, verifying the complete pipeline (commitment → divergence → EIG → execution → interpretation debate → critique → audit) for both cycles. 190 total passing.
+
+**Verification:** Real 2-cycle run with Princeton/GPT-4o, GCM ground truth:
+- Cycle 0: EIG selected `five_four / fast_presentation`, Exemplar_Agent RMSE=0.170
+- Cycle 1: EIG selected `Type_I / low_attention`, Exemplar_Agent RMSE=0.139 (cumulative)
+- Correct agent wins with 2.1x gap over second place
+
+**Status:** Done.

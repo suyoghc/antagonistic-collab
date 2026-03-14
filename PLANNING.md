@@ -56,10 +56,12 @@ models/
 - Expand scoring beyond mean_accuracy
 - Agents call their models for predictions (not LLM-guessed)
 
-### M3: Validate convergence (CURRENT)
-- Run debates where true model's agent should win
-- Measure whether RMSE gap grows over cycles
-- Check whether critique quality improves or degrades
+### M3: Validate convergence (NEARLY COMPLETE)
+- Run debates where true model's agent should win — **DONE** (GCM, SUSTAIN, RULEX all correct)
+- Measure whether RMSE gap grows over cycles — **DONE** (15.1% GCM, 32.2% SUSTAIN, 1.8% RULEX at 5 cycles)
+- Check whether critique quality improves or degrades — **DONE** (stable but formulaic)
+- Full-pool EIG mode validated end-to-end — **DONE** (2-cycle, correct convergence, 36% fewer LLM calls)
+- Remaining: wire learning curves into execution, 5-cycle comparative validation (full_pool vs legacy)
 
 ### M4: Multi-model ground truth
 - Run with each model as ground truth (GCM, SUSTAIN, RULEX)

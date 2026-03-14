@@ -473,3 +473,74 @@ The high divergence scores on structures like linear_separable_2d (0.619) are be
 This is logically valid but formulaic. Agents never identified genuinely novel discriminating conditions — they critiqued within a fixed repertoire of "my model can do that too" arguments. Theory revisions were marked "progressive" but typically added auxiliary assumptions rather than fundamental changes.
 
 **Implication:** The adversarial critique phase generates useful qualitative content but doesn't drive experiment selection or resolve disputes. The cycle 5 audit correctly detected "no convergence collapse" but also no genuine convergence. Critiques need to be causally connected to experiment design — a good critique should suggest a *better* experiment, not just argue that the proposed experiment is non-diagnostic. This could be achieved by having the moderator consider critiques when selecting experiments, or by having a "critique-driven revision" phase where critiques explicitly propose alternative structures.
+
+---
+
+## Phase 7: Full-pool EIG mode validation (2026-03-14)
+
+Implemented the debate-as-hypothesis-generator architecture (D19): full-pool Bayesian EIG over all 55 structure×condition candidates replaces LLM proposal/critique/revision/arbitration phases. Agents shift to interpreting results, generating hypotheses, detecting confounds, and proposing novel structures. Learning curves implemented as second evidence channel. Novel structure validation added. Fixed a phase state machine desync bug (D20) discovered during integration testing.
+
+### 7.1 Phase state machine desync in new mode
+
+**Expected:** Adding `--mode full_pool` to `run_cycle()` would work by simply calling different functions for the selection and interpretation phases.
+
+**Actual:** The cycle counter never incremented. The root cause was subtle: `advance_phase()` uses `self.current_phase` (not the result's phase) to determine the next state. After divergence mapping, `current_phase = EXPERIMENT_PROPOSAL`. In legacy mode, phases 3-6 advance through PROPOSAL → CRITIQUE → REVISION → ARBITRATION → EXECUTION. In full_pool mode, we called `advance_phase()` directly from EXPERIMENT_PROPOSAL, which transitioned to ADVERSARIAL_CRITIQUE — not EXECUTION. The state machine never reached AUDIT, so `advance_cycle()` never fired.
+
+Unit tests didn't catch this because they mocked at function level (e.g., testing `run_full_pool_selection` in isolation). Only an integration test exercising the full `run_cycle()` flow revealed the desync.
+
+**Fix:** `skip_to_phase(Phase.HUMAN_ARBITRATION)` before advancing from the EIG selection result. This restores the correct transition chain: HUMAN_ARBITRATION → EXECUTION → INTERPRETATION → AUDIT → advance_cycle().
+
+**Implication:** When a pipeline has a state machine controlling phase transitions, adding alternative paths (like full_pool mode) requires careful attention to the state machine invariants. The transition map is implicit — each phase assumes the previous one was the expected predecessor. Bypassing intermediate phases without updating the state creates silent desync bugs that manifest as downstream failures (in this case, cycle counter stuck at 0). Integration tests are essential for multi-phase orchestration; unit tests on individual phases give false confidence.
+
+### 7.2 EIG selects diverse structures without heuristic penalty
+
+**Expected:** Full-pool EIG would need some form of diversity mechanism (like the D17 heuristic penalty) to avoid repeating structures.
+
+**Actual:** In the 2-cycle validation run, EIG selected `five_four / fast_presentation` (cycle 0) and `Type_I / low_attention` (cycle 1) — two different structures without any diversity penalty. The Bayesian posterior update after cycle 0 (P(Exemplar)=1.0) shifted the EIG landscape so that structures distinguishing the remaining two models became more informative.
+
+**Implication:** Bayesian EIG is naturally self-diversifying through posterior updates. Once an experiment resolves one comparison (e.g., GCM vs SUSTAIN), the posterior shifts so that the next EIG computation favors experiments that resolve the remaining uncertainty (e.g., GCM vs RULEX). This is qualitatively different from the heuristic penalty, which decays based on usage count regardless of what was learned. The heuristic is a blunt approximation of what EIG does principally. However, the 2-cycle run is too short to confirm this — 5-cycle runs are needed to see if EIG avoids pathological repetition over longer horizons.
+
+### 7.3 Full-pool mode produces correct convergence with fewer LLM calls
+
+**Expected:** Full_pool mode should produce similar or better convergence to legacy mode while eliminating LLM calls for experiment selection.
+
+**Actual:** 2-cycle validation with GCM as ground truth:
+
+| Agent | RMSE | Rank |
+|---|---|---|
+| **Exemplar_Agent** | **0.139** | **1st** |
+| Clustering_Agent | 0.298 | 2nd |
+| Rule_Agent | 0.352 | 3rd |
+
+The correct agent wins decisively. LLM calls per cycle were reduced:
+
+| Phase | Legacy mode calls | Full_pool mode calls |
+|---|---|---|
+| Commitment (cycle 0 only) | 3 | 3 |
+| Divergence mapping | 3 | 3 |
+| Experiment proposal | 3 | 0 |
+| Adversarial critique (2 rounds) | 6 | 0 |
+| Design revision | 3 | 0 |
+| Execution predictions | 3 | 3 |
+| Interpretation / debate | 3 | 3 |
+| Interpretation critique | 0 | 3 |
+| Audit | 1 | 1 |
+| **Total per cycle** | **25** | **16** |
+
+Full_pool mode uses 36% fewer LLM calls per cycle while producing correct convergence. The removed calls (proposal, critique, revision) were the ones where LLMs performed worst (see Phase 1 lessons: agents underuse divergence ranking, propose narratively familiar structures). The added calls (interpretation critique) are where LLMs add genuine value — challenging each other's causal explanations.
+
+**Implication:** The reorganization confirms the core thesis of D19: LLMs add value for qualitative scientific reasoning (interpretation, hypothesis generation, confound detection) but not for quantitative experiment selection (which EIG does better, faster, and cheaper). The debate still matters — it just matters in a different place in the pipeline. This is a concrete instantiation of the "LLM for semantics, model for numerics" principle from Phase 3 (lesson 3.3), now extended to "LLM for interpretation, Bayesian for selection."
+
+### 7.4 Interpretation debate produces structured, actionable output
+
+**Expected:** Agents would produce valid JSON with interpretation, confounds, hypotheses, and optional novel structures.
+
+**Actual:** All 3 agents produced valid structured JSON in every cycle. Example interpretation (Exemplar_Agent, cycle 0):
+
+> "Results support my model's predictions. Under fast presentation conditions, participants appear to rely more on exemplar-based strategies, potentially due to limited time for forming complex abstractions."
+
+Confounds flagged included "small sample size" and "condition may not discriminate sufficiently." Hypotheses were forward-looking: "Next we should test a harder structure."
+
+No novel structures were proposed in the 2-cycle run — agents defaulted to `null` for the `novel_structure` field. This may require stronger prompting or examples in the interpretation prompt.
+
+**Implication:** The structured JSON format works well for extracting machine-readable outputs from natural language reasoning. The interpretation critique phase produced substantive challenges — agents disputed each other's causal claims and offered alternative explanations grounded in their theoretical frameworks. However, novel structure generation may need explicit few-shot examples showing what a valid novel structure looks like (stimuli array, labels array) to trigger creative proposals. The current prompt describes the format but doesn't demonstrate it.

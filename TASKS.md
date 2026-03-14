@@ -24,6 +24,15 @@
 - [x] **Bayesian information-gain experiment selection** — Replaced heuristic diversity penalty with principled adaptive design (D18). `ModelPosterior` maintains Bayesian posterior over models; `compute_eig()` uses Monte Carlo expected information gain to select experiments. Heuristic retained as `--selection heuristic` fallback. 12 new tests, 158 total passing.
 
 - [x] **Debate-as-hypothesis-generator architecture (D19)** — Three-phase refactor: (A) Full-pool EIG over 55 candidates replaces agent proposals, (B) Learning curves as second evidence channel, (C) Novel structure generation from LLM debate. Legacy 9-phase flow preserved as `--mode legacy`. 31 new tests, 189 total passing.
+- [x] **Fix full_pool mode phase desync (D20)** — `advance_phase()` uses `current_phase` for transitions; skipping phases 3-5 in full_pool mode left the state machine at EXPERIMENT_PROPOSAL instead of HUMAN_ARBITRATION. Fix: `skip_to_phase(HUMAN_ARBITRATION)` before EIG advance. Integration test added. 190 tests passing.
+- [x] **Validate full_pool mode end-to-end** — 2-cycle real run with Princeton/GPT-4o confirms correct convergence: Exemplar_Agent wins (RMSE 0.139) when GCM is ground truth. EIG selects different structures across cycles without diversity penalty.
+
+### Up Next (M3 cont. — full_pool integration gaps)
+- [ ] **Wire learning curves into run_execution()** — compute `compute_learning_curve_predictions()` during execution, simulate "observed" curve from ground truth model, pass curves to `update_posterior_from_experiment()`
+- [ ] **Feed novel structures back into EIG pool** — after `run_interpretation_debate()`, validate and register novel structures in `protocol.temporary_structures` for next cycle's `generate_full_candidate_pool()`
+- [ ] **Include learning curve + posterior context in interpretation debate** — agents should see curve comparison table and EIG landscape in their interpretation prompt
+- [ ] **5-cycle comparative validation** — run `--mode full_pool` vs `--mode legacy` for all 3 ground truth models, compare convergence speed and final RMSE gap
+- [ ] **Prompt novel structure generation** — add few-shot examples to interpretation debate prompt showing valid `novel_structure` format to encourage agents to propose new structures
 
 ### Queued (from Codex review, 2026-03-13)
 - [x] **[P1] Implement Phase 5 (Design Revision)** — agents now revise proposals based on critiques, updating design_spec via state.revise_proposal()
