@@ -14,6 +14,7 @@ Each phase has:
 """
 
 import hashlib
+import inspect
 import json
 from enum import Enum, auto
 from dataclasses import dataclass, field
@@ -594,6 +595,14 @@ class DebateProtocol:
         # Deterministic seed for RULEX
         if isinstance(model, RULEX):
             params.setdefault("seed", 42)
+
+        # Filter params to only include keys that model.predict() accepts.
+        # LLM agents may propose overrides with invented parameter names
+        # (e.g., 'w_i' for GCM) that cause TypeError.
+        valid_params = set(inspect.signature(model.predict).parameters.keys())
+        # Exclude positional args (stimulus, training_items, training_labels)
+        valid_params -= {"self", "stimulus", "training_items", "training_labels"}
+        params = {k: v for k, v in params.items() if k in valid_params}
 
         # Get per-item P(correct label) using leave-one-out:
         # When predicting item i, exclude it from the training set.

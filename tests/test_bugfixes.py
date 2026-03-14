@@ -2920,3 +2920,83 @@ class TestConcreteModelPredictions:
             f"Expected >=3 distinct accuracy values for Exemplar_Agent, "
             f"got {distinct}: {exemplar_accs}"
         )
+
+
+# =========================================================================
+# Unknown param overrides crash model.predict() — 2026-03-14
+# =========================================================================
+
+
+class TestUnknownParamOverrides:
+    """
+    Bug: LLM agents can propose param_overrides with keys that the model's
+    predict() method doesn't accept (e.g., 'w_i' for GCM). This causes
+    TypeError: GCM.predict() got an unexpected keyword argument 'w_i'.
+    The system should filter out unknown params before calling predict().
+    """
+
+    def _make_protocol(self):
+        return DebateProtocol(
+            agent_configs=default_agent_configs(),
+            state=EpistemicState(domain="test"),
+        )
+
+    def test_unknown_param_overrides_ignored(self):
+        """
+        compute_model_predictions() should silently ignore param overrides
+        that the model's predict() method doesn't accept.
+        """
+        protocol = self._make_protocol()
+        # Find the GCM agent
+        gcm_agent = next(a for a in protocol.agent_configs if "Exemplar" in a.name)
+
+        # Pass a bogus param that GCM.predict() doesn't accept
+        result = protocol.compute_model_predictions(
+            gcm_agent,
+            "Type_II",
+            "baseline",
+            param_overrides={"w_i": [0.5, 0.5, 0.5], "bogus_param": 42},
+        )
+
+        # Should succeed without crashing
+        assert "mean_accuracy" in result
+        assert isinstance(result["mean_accuracy"], float)
+
+    def test_valid_param_overrides_still_work(self):
+        """
+        Known params (like 'c' for GCM) should still be applied.
+        """
+        protocol = self._make_protocol()
+        gcm_agent = next(a for a in protocol.agent_configs if "Exemplar" in a.name)
+
+        # c=0.1 (very low sensitivity) vs c=20.0 (very high)
+        result_low = protocol.compute_model_predictions(
+            gcm_agent, "Type_II", "baseline", param_overrides={"c": 0.1}
+        )
+        result_high = protocol.compute_model_predictions(
+            gcm_agent, "Type_II", "baseline", param_overrides={"c": 20.0}
+        )
+
+        # Different c values should produce different predictions
+        assert result_low["mean_accuracy"] != result_high["mean_accuracy"], (
+            "Different c values should produce different predictions"
+        )
+
+    def test_mixed_valid_and_invalid_overrides(self):
+        """
+        Valid params should be applied, invalid ones should be ignored.
+        """
+        protocol = self._make_protocol()
+        gcm_agent = next(a for a in protocol.agent_configs if "Exemplar" in a.name)
+
+        # Mix valid (c) and invalid (w_i) overrides
+        result = protocol.compute_model_predictions(
+            gcm_agent,
+            "Type_II",
+            "baseline",
+            param_overrides={"c": 10.0, "w_i": [0.5, 0.5, 0.5]},
+        )
+
+        # Should succeed and apply the valid param
+        assert "mean_accuracy" in result
+        assert result["params_used"].get("c") == 10.0
