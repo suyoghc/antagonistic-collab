@@ -5480,3 +5480,418 @@ class TestRedundantPredictedKey:
             assert not (has_model_predicted and has_predicted), (
                 f"Message has both 'model_predicted' and 'predicted': {list(msg.keys())}"
             )
+
+
+# =========================================================================
+# Learning curves wired into execution (runner.py)
+# =========================================================================
+
+
+class TestLearningCurvesInExecution:
+    """Learning curves should be computed during run_execution() and passed
+    to update_posterior_from_experiment() as the learning_curves kwarg.
+    This is the key integration that adds a second evidence channel
+    (curve shape) beyond item-level accuracy.
+    """
+
+    def _make_protocol_with_approved_experiment(self, struct="Type_I"):
+        """Helper: create a protocol with one approved experiment."""
+        agents = default_agent_configs()
+        state = EpistemicState(domain="test")
+        protocol = DebateProtocol(state, agents)
+        # Register theories
+        for a in agents:
+            try:
+                protocol.state.register_theory(
+                    TheoryCommitment(
+                        name=a.theory_name,
+                        agent_name=a.name,
+                        core_claims=a.model_class.core_claims,
+                        model_name=a.model_class.name,
+                        model_params=a.default_params,
+                    )
+                )
+            except ValueError:
+                pass
+
+        exp = protocol.state.propose_experiment(
+            proposed_by=agents[0].name,
+            title="Test",
+            design_spec={"structure_name": struct, "condition": "baseline"},
+            rationale="test",
+        )
+        protocol.state.approve_experiment(exp.experiment_id)
+        protocol.skip_to_phase(Phase.EXECUTION)
+        return protocol, agents
+
+    def test_learning_curves_passed_to_posterior_update(self):
+        """run_execution() should compute learning curves and pass them
+        to update_posterior_from_experiment(), evidenced by
+        has_curve_evidence=True in the posterior history."""
+        import antagonistic_collab.runner as runner_mod
+        from antagonistic_collab.runner import run_execution
+
+        protocol, agents = self._make_protocol_with_approved_experiment()
+        transcript = []
+
+        def fake_call(*a, **kw):
+            return json.dumps(
+                {"reasoning": "test", "confidence": "medium", "param_overrides": {}}
+            )
+
+        old_batch = runner_mod._BATCH_MODE
+        runner_mod._BATCH_MODE = True
+        try:
+            with patch.object(runner_mod, "call_agent", side_effect=fake_call):
+                run_execution(protocol, None, transcript, true_model="GCM")
+        finally:
+            runner_mod._BATCH_MODE = old_batch
+
+        # If learning curves were passed, the posterior history will record it
+        posterior = protocol.state.model_posterior
+        assert posterior is not None, "Posterior should exist after execution"
+        from antagonistic_collab.bayesian_selection import ModelPosterior
+
+        mp = ModelPosterior.from_dict(posterior)
+        assert len(mp.history) > 0, "Should have at least one history entry"
+        assert mp.history[-1]["has_curve_evidence"] is True, (
+            "Posterior history should record has_curve_evidence=True when "
+            "learning curves are passed to update_posterior_from_experiment()"
+        )
+
+    def test_learning_curves_in_execution_outputs(self):
+        """run_execution() outputs should include learning_curves and
+        curve_features so they can be used by downstream phases."""
+        import antagonistic_collab.runner as runner_mod
+        from antagonistic_collab.runner import run_execution
+
+        protocol, agents = self._make_protocol_with_approved_experiment()
+        transcript = []
+
+        def fake_call(*a, **kw):
+            return json.dumps(
+                {"reasoning": "test", "confidence": "medium", "param_overrides": {}}
+            )
+
+        old_batch = runner_mod._BATCH_MODE
+        runner_mod._BATCH_MODE = True
+        try:
+            with patch.object(runner_mod, "call_agent", side_effect=fake_call):
+                result = run_execution(protocol, None, transcript, true_model="GCM")
+        finally:
+            runner_mod._BATCH_MODE = old_batch
+
+        assert "learning_curves" in result.outputs, (
+            "PhaseResult outputs should include 'learning_curves'"
+        )
+        assert "curve_features" in result.outputs, (
+            "PhaseResult outputs should include 'curve_features'"
+        )
+
+    def test_curve_evidence_recorded_in_posterior_history(self):
+        """When curves are passed, the posterior history entry should have
+        has_curve_evidence=True."""
+        import antagonistic_collab.runner as runner_mod
+        from antagonistic_collab.runner import run_execution
+
+        protocol, agents = self._make_protocol_with_approved_experiment()
+        transcript = []
+
+        def fake_call(*a, **kw):
+            return json.dumps(
+                {"reasoning": "test", "confidence": "medium", "param_overrides": {}}
+            )
+
+        old_batch = runner_mod._BATCH_MODE
+        runner_mod._BATCH_MODE = True
+        try:
+            with patch.object(runner_mod, "call_agent", side_effect=fake_call):
+                run_execution(protocol, None, transcript, true_model="GCM")
+        finally:
+            runner_mod._BATCH_MODE = old_batch
+
+        posterior = protocol.state.model_posterior
+        assert posterior is not None, "Posterior should be set after execution"
+        # Check history for curve evidence marker
+        from antagonistic_collab.bayesian_selection import ModelPosterior
+
+        mp = ModelPosterior.from_dict(posterior)
+        assert len(mp.history) > 0, "Should have at least one history entry"
+        assert mp.history[-1]["has_curve_evidence"] is True, (
+            "History entry should record has_curve_evidence=True"
+        )
+
+
+# =========================================================================
+# Learning curve context in interpretation debate (runner.py)
+# =========================================================================
+
+
+class TestLearningCurvesInInterpretation:
+    """The interpretation debate should include learning curve comparison
+    in the extended context, so agents can reason about curve shapes."""
+
+    def test_interpretation_debate_includes_curve_context(self):
+        """If execution produced learning curves, the interpretation debate
+        prompt should include curve comparison data."""
+        import antagonistic_collab.runner as runner_mod
+        from antagonistic_collab.runner import run_interpretation_debate
+
+        agents = default_agent_configs()
+        state = EpistemicState(domain="test")
+        protocol = DebateProtocol(state, agents)
+        # Register theories
+        for a in agents:
+            try:
+                protocol.state.register_theory(
+                    TheoryCommitment(
+                        name=a.theory_name,
+                        agent_name=a.name,
+                        core_claims=a.model_class.core_claims,
+                        model_name=a.model_class.name,
+                        model_params=a.default_params,
+                    )
+                )
+            except ValueError:
+                pass
+
+        # Create an executed experiment with learning curve data
+        exp = protocol.state.propose_experiment(
+            proposed_by=agents[0].name,
+            title="Test",
+            design_spec={"structure_name": "Type_I", "condition": "baseline"},
+            rationale="test",
+        )
+        protocol.state.approve_experiment(exp.experiment_id)
+        protocol.state.record_data(
+            exp.experiment_id,
+            {
+                "mean_accuracy": 0.75,
+                "item_accuracies": {"item_0": 0.8, "item_1": 0.7},
+                "ground_truth_model": "GCM",
+                "structure_name": "Type_I",
+                "condition": "baseline",
+            },
+        )
+        protocol.skip_to_phase(Phase.INTERPRETATION)
+
+        # Store learning curve data in the execution outputs (where run_execution
+        # would have put it)
+        protocol.state.last_execution_curves = {
+            "Exemplar_Agent": [
+                {"block": 0, "accuracy": 0.5},
+                {"block": 1, "accuracy": 0.7},
+                {"block": 2, "accuracy": 0.85},
+            ],
+            "Rule_Agent": [
+                {"block": 0, "accuracy": 0.5},
+                {"block": 1, "accuracy": 0.5},
+                {"block": 2, "accuracy": 0.9},
+            ],
+            "Clustering_Agent": [
+                {"block": 0, "accuracy": 0.5},
+                {"block": 1, "accuracy": 0.65},
+                {"block": 2, "accuracy": 0.8},
+            ],
+        }
+
+        # Capture the prompt sent to agents
+        captured_prompts = []
+
+        def fake_call(client, system, prompt):
+            captured_prompts.append(prompt)
+            return json.dumps(
+                {
+                    "interpretation": "test",
+                    "confounds_flagged": [],
+                    "hypothesis": "test hypothesis",
+                    "novel_structure": None,
+                    "revision": None,
+                }
+            )
+
+        transcript = []
+        with patch.object(runner_mod, "call_agent", side_effect=fake_call):
+            run_interpretation_debate(protocol, None, transcript)
+
+        # At least one prompt should mention learning curves
+        assert any(
+            "learning" in p.lower() or "curve" in p.lower() for p in captured_prompts
+        ), "Interpretation debate prompt should include learning curve context"
+
+
+# =========================================================================
+# Novel structures validated and registered (runner.py)
+# =========================================================================
+
+
+class TestNovelStructureRegistration:
+    """When an agent proposes a novel_structure in interpretation debate,
+    it should be validated and registered in protocol.temporary_structures
+    for the next cycle's EIG candidate pool."""
+
+    def _setup_protocol_for_interpretation(self):
+        """Helper: protocol in INTERPRETATION phase with executed experiment."""
+        agents = default_agent_configs()
+        state = EpistemicState(domain="test")
+        protocol = DebateProtocol(state, agents)
+        for a in agents:
+            try:
+                protocol.state.register_theory(
+                    TheoryCommitment(
+                        name=a.theory_name,
+                        agent_name=a.name,
+                        core_claims=a.model_class.core_claims,
+                        model_name=a.model_class.name,
+                        model_params=a.default_params,
+                    )
+                )
+            except ValueError:
+                pass
+
+        exp = protocol.state.propose_experiment(
+            proposed_by=agents[0].name,
+            title="Test",
+            design_spec={"structure_name": "Type_I", "condition": "baseline"},
+            rationale="test",
+        )
+        protocol.state.approve_experiment(exp.experiment_id)
+        protocol.state.record_data(
+            exp.experiment_id,
+            {
+                "mean_accuracy": 0.75,
+                "item_accuracies": {"item_0": 0.8, "item_1": 0.7},
+                "ground_truth_model": "GCM",
+                "structure_name": "Type_I",
+                "condition": "baseline",
+            },
+        )
+        protocol.skip_to_phase(Phase.INTERPRETATION)
+        return protocol, agents
+
+    def test_valid_novel_structure_registered(self):
+        """A valid novel_structure from an agent should be added to
+        protocol.temporary_structures."""
+        import antagonistic_collab.runner as runner_mod
+        from antagonistic_collab.runner import run_interpretation_debate
+
+        protocol, agents = self._setup_protocol_for_interpretation()
+
+        valid_structure = {
+            "name": "custom_diagonal",
+            "stimuli": [[0, 0], [0, 1], [1, 0], [1, 1]],
+            "labels": [0, 1, 1, 0],
+        }
+
+        call_count = [0]
+
+        def fake_call(client, system, prompt):
+            call_count[0] += 1
+            # Only first agent proposes a novel structure
+            if call_count[0] == 1:
+                return json.dumps(
+                    {
+                        "interpretation": "test",
+                        "confounds_flagged": [],
+                        "hypothesis": "test XOR structure",
+                        "novel_structure": valid_structure,
+                        "revision": None,
+                    }
+                )
+            return json.dumps(
+                {
+                    "interpretation": "test",
+                    "confounds_flagged": [],
+                    "hypothesis": "test",
+                    "novel_structure": None,
+                    "revision": None,
+                }
+            )
+
+        transcript = []
+        with patch.object(runner_mod, "call_agent", side_effect=fake_call):
+            run_interpretation_debate(protocol, None, transcript)
+
+        assert "custom_diagonal" in protocol.temporary_structures, (
+            f"Novel structure should be registered. Got: {list(protocol.temporary_structures.keys())}"
+        )
+        registered = protocol.temporary_structures["custom_diagonal"]
+        assert registered["stimuli"] == valid_structure["stimuli"]
+        assert registered["labels"] == valid_structure["labels"]
+
+    def test_invalid_novel_structure_not_registered(self):
+        """An invalid novel_structure (e.g., too few items) should NOT be
+        registered in protocol.temporary_structures."""
+        import antagonistic_collab.runner as runner_mod
+        from antagonistic_collab.runner import run_interpretation_debate
+
+        protocol, agents = self._setup_protocol_for_interpretation()
+
+        invalid_structure = {
+            "name": "too_small",
+            "stimuli": [[0, 0], [1, 1]],  # Only 2 items — needs at least 4
+            "labels": [0, 1],
+        }
+
+        def fake_call(client, system, prompt):
+            return json.dumps(
+                {
+                    "interpretation": "test",
+                    "confounds_flagged": [],
+                    "hypothesis": "test",
+                    "novel_structure": invalid_structure,
+                    "revision": None,
+                }
+            )
+
+        transcript = []
+        with patch.object(runner_mod, "call_agent", side_effect=fake_call):
+            run_interpretation_debate(protocol, None, transcript)
+
+        assert "too_small" not in protocol.temporary_structures, (
+            "Invalid novel structure should NOT be registered"
+        )
+        assert len(protocol.temporary_structures) == 0
+
+
+# =========================================================================
+# compute_learning_curve_predictions checks temporary_structures
+# =========================================================================
+
+
+class TestLearningCurvesTemporaryStructures:
+    """compute_learning_curve_predictions() should check
+    protocol.temporary_structures in addition to STRUCTURE_REGISTRY,
+    so that novel structures proposed by agents can be used for
+    curve predictions."""
+
+    def test_temporary_structure_used_for_curve(self):
+        """If a structure name is only in temporary_structures (not in
+        STRUCTURE_REGISTRY), compute_learning_curve_predictions() should
+        still produce curves for it."""
+        agents = default_agent_configs()
+        state = EpistemicState(domain="test")
+        protocol = DebateProtocol(state, agents)
+
+        # Register a novel structure
+        protocol.temporary_structures["custom_xor"] = {
+            "stimuli": [[0, 0], [0, 1], [1, 0], [1, 1]],
+            "labels": [0, 1, 1, 0],
+        }
+
+        # This should NOT fall back to Type_II — it should use custom_xor
+        curves = protocol.compute_learning_curve_predictions("custom_xor", "baseline")
+
+        assert len(curves) == len(agents), (
+            f"Expected {len(agents)} curves, got {len(curves)}"
+        )
+        # Verify the curves are for 4-item XOR, not Type_II (8 items)
+        # XOR has 4 items with n_epochs=3 → 12 training items → 6 blocks (block_size=2)
+        # Type_II has 8 items with n_epochs=3 → 24 training items → 12 blocks
+        # So if we got 12 blocks, it fell back to Type_II instead of using custom_xor
+        for agent_name, curve in curves.items():
+            assert len(curve) > 0, f"{agent_name} produced empty curve"
+            assert len(curve) <= 6, (
+                f"{agent_name} produced {len(curve)} blocks — likely fell back to "
+                f"Type_II (8 items) instead of using custom_xor (4 items)"
+            )

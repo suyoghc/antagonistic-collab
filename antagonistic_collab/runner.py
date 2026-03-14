@@ -53,6 +53,8 @@ from .debate_protocol import (
     STRUCTURE_REGISTRY,
     STRUCTURE_DESCRIPTIONS,
     CONDITION_EFFECTS,
+    extract_curve_features,
+    validate_novel_structure,
 )
 
 
@@ -925,6 +927,26 @@ def run_execution(
             else:
                 print(f"  {agent_name}: not yet scored")
 
+    # --- Learning curve computation ---
+    learning_curves = None
+    curve_features = {}
+    if struct_name:
+        learning_curves = protocol.compute_learning_curve_predictions(
+            struct_name, condition
+        )
+        print("\n--- Learning curve comparison ---")
+        for agent_name, curve in learning_curves.items():
+            features = extract_curve_features(curve)
+            curve_features[agent_name] = features
+            print(
+                f"  {agent_name}: pattern={features['learning_pattern']}, "
+                f"final={features['final_accuracy']:.3f}, "
+                f"max_jump={features['max_jump']:.3f}"
+            )
+
+        # Store curves on state for interpretation debate
+        protocol.state.last_execution_curves = learning_curves
+
     # --- Bayesian posterior update ---
     if _BATCH_MODE and struct_name:
         from .bayesian_selection import ModelPosterior, update_posterior_from_experiment
@@ -939,7 +961,13 @@ def run_execution(
             posterior = ModelPosterior.uniform(model_names)
 
         posterior = update_posterior_from_experiment(
-            posterior, protocol, data, struct_name, condition, protocol.state.cycle
+            posterior,
+            protocol,
+            data,
+            struct_name,
+            condition,
+            protocol.state.cycle,
+            learning_curves=learning_curves,
         )
         protocol.state.model_posterior = posterior.to_dict()
 
@@ -962,7 +990,11 @@ def run_execution(
     return PhaseResult(
         phase=Phase.EXECUTION,
         cycle=protocol.state.cycle,
-        outputs={"data": data},
+        outputs={
+            "data": data,
+            "learning_curves": learning_curves,
+            "curve_features": curve_features,
+        },
         messages=messages,
     )
 
@@ -1195,6 +1227,19 @@ def run_interpretation_debate(
             f"  {theory.agent_name}: params={params}, revisions={n_revisions}"
         )
 
+    # Learning curve comparison (if available from execution)
+    curves = getattr(protocol.state, "last_execution_curves", None)
+    if curves:
+        extra_context_lines.append("\n### Learning Curve Comparison")
+        for agent_name, curve in curves.items():
+            features = extract_curve_features(curve)
+            extra_context_lines.append(
+                f"  {agent_name}: pattern={features['learning_pattern']}, "
+                f"final_accuracy={features['final_accuracy']:.3f}, "
+                f"max_jump={features['max_jump']:.3f}, "
+                f"onset_block={features['onset_block']}"
+            )
+
     extended_context = results_context + "\n".join(extra_context_lines)
 
     for agent in protocol.agent_configs:
@@ -1235,6 +1280,19 @@ def run_interpretation_debate(
             if novel_structure and isinstance(novel_structure, dict):
                 hyp_entry["novel_structure"] = novel_structure
             agent_hypotheses.append(hyp_entry)
+
+        # Validate and register novel structures
+        if novel_structure and isinstance(novel_structure, dict):
+            struct_name = novel_structure.get("name", "")
+            is_valid, reason = validate_novel_structure(novel_structure)
+            if is_valid and struct_name:
+                protocol.temporary_structures[struct_name] = {
+                    "stimuli": novel_structure["stimuli"],
+                    "labels": novel_structure["labels"],
+                }
+                print(f"    Registered novel structure: {struct_name}")
+            elif struct_name:
+                print(f"    Rejected novel structure '{struct_name}': {reason}")
 
         if confounds:
             for c in confounds:

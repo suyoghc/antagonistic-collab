@@ -798,9 +798,10 @@ class DebateProtocol:
         Returns:
             {agent_name: list[dict]} where each dict has at least "accuracy" and "block".
         """
-        if structure_name not in STRUCTURE_REGISTRY:
+        all_structures = {**STRUCTURE_REGISTRY, **self.temporary_structures}
+        if structure_name not in all_structures:
             structure_name = "Type_II"
-        struct = STRUCTURE_REGISTRY[structure_name]
+        struct = all_structures[structure_name]
         stimuli = np.asarray(struct["stimuli"])
         labels = np.asarray(struct["labels"])
 
