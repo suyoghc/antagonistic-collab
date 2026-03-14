@@ -6,9 +6,9 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ## Current focus — 2026-03-14
 
-5-cycle validation runs completed. GCM and SUSTAIN converge correctly. RULEX fails — need to diagnose and fix.
+Implemented two-tier diversity penalty (D17). RULEX re-validation running. Analyzing whether the heuristic is sufficient or if the GCM flexibility problem is fundamental.
 
-### 5-cycle validation results
+### 5-cycle validation results (pre-diversity-penalty)
 
 | Ground Truth | Winner | RMSE | 2nd Place | RMSE | Gap | Correct? |
 |---|---|---|---|---|---|---|
@@ -16,24 +16,38 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 | **SUSTAIN** | Clustering_Agent | 0.344 | Rule_Agent | 0.507 | 32.2% | YES |
 | **RULEX** | Clustering_Agent | 0.500 | Exemplar_Agent | 0.501 | 0.2% | NO |
 
-### RULEX failure diagnosis
+### Diversity penalty analysis
 
-**Symptom:** All 3 agents converge to RMSE ~0.50 (random guessing). No separation after 5 cycles.
+**What the heuristic does:**
+- Two-tier penalty on previously-tested structures
+- Exact structure+condition repeat: 2x decay per prior use
+- Same structure, different condition: 1.5x decay per prior use
+- Effect: forces exploration of diverse structures over 5 cycles
 
-**Root causes identified:**
-1. **Structure repetition** — 4/5 RULEX experiments used Type_VI, where RULEX is weakest (no simple rule exists). No diversity in structure selection.
-2. **Clustering_Agent dominance** — Won 12/15 experiment selections across all 3 runs. Divergence-driven selection favors complex structures (Type_VI, five_four) which Clustering_Agent consistently proposes.
-3. **Rule_Agent passivity** — Never won a single experiment selection across any run (0/15). Its proposals for simple structures (Type_I, Type_III) have lower divergence scores and lose.
+**What it fixes:** Structure repetition. Without it, Type_VI is selected 4/5 times. With it, 5 cycles should test ~5 different structures.
 
-**Proposed fix: Structure diversity penalty**
-- Track which structures have been tested in prior cycles
-- Penalize (or heavily discount) re-testing the same structure
-- Forces exploration of RULEX-favorable structures (Type_I, Type_II, linear_separable)
+**What it does NOT fix — the GCM flexibility problem:**
 
-### Other observations
-- Critique quality: agents revise theories "progressively" but critiques don't prevent structure repetition
-- RMSE gap widens for GCM (good) but collapses for RULEX (bad)
-- Clustering_Agent dominates experiment selection regardless of ground truth
+Divergence map analysis shows RULEX and GCM have **low pairwise divergence** across all structures:
+
+| Structure | GCM-RULEX divergence | RULEX best? |
+|---|---|---|
+| Type_I | 0.341 | Tied (both 1.0) |
+| linear_separable_4d | 0.276 | Tied (~0.80) |
+| linear_separable_2d | 0.229 | Tied (~0.65) |
+| Type_III–V | 0.325 | Tied (~0.50) |
+| Type_VI | 0.400 | No (SUSTAIN wins) |
+| five_four | 0.331 | No (GCM wins) |
+
+The high divergence on structures like linear_separable_2d (0.619) is between **RULEX vs SUSTAIN**, not RULEX vs GCM. GCM mimics RULEX by assigning high attention weights to the diagnostic dimension. This is a genuine property of GCM's flexibility — not a bug.
+
+**Implication:** Even with perfect structure diversity, RULEX may not win because GCM approximates its predictions on every structure. The diversity penalty is necessary but likely insufficient. The Bayesian information-gain approach (TASKS.md) may help by selecting structures that maximize GCM-RULEX divergence specifically, but the fundamental issue is that these models are hard to distinguish with current category structures.
+
+**Possible paths forward:**
+1. Wait for RULEX re-run with diversity penalty — see if it helps at all
+2. Consider whether RULEX-vs-GCM indistinguishability is a scientifically valid finding (it is, per Nosofsky 1991 — GCM can approximate many rule-like patterns)
+3. Add structures specifically designed to differentiate GCM from RULEX (e.g., random categories where rules don't exist but attention helps)
+4. Use learning curves instead of final accuracy — GCM predicts gradual learning, RULEX predicts sudden rule discovery
 
 ---
 

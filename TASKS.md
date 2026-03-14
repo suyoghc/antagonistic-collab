@@ -17,10 +17,10 @@
 - [x] Validate convergence: run 3-cycle debate where the true model's agent accumulates best RMSE — **confirmed** (Exemplar_Agent RMSE=0.0776, 3.6x gap)
 - [x] Run with each model as ground truth (GCM, SUSTAIN, RULEX) and compare — **GCM and SUSTAIN correct, RULEX fails due to unfavorable structure selection** (D11, Phase 4 findings)
 - [x] Fix self-prediction bias — leave-one-out cross-validation in compute_model_predictions and compute_divergence_map (D11)
-- [ ] Assess whether critique quality degrades over cycles (circular "my model can also predict that" pattern)
-- [ ] Run longer debates (5+ cycles) to check whether RMSE gap widens monotonically
+- [x] Assess whether critique quality degrades over cycles — critiques remain substantive but formulaic ("my model can also predict that" is common). Agents revise theories "progressively" but critiques don't drive structure diversity. The audit phase detects no convergence collapse. Main issue: critiques target proposals but don't influence moderator selection.
+- [x] Run longer debates (5+ cycles) to check whether RMSE gap widens monotonically — **GCM: yes (15.1% gap at 5 cycles), SUSTAIN: yes (32.2%), RULEX: gap only appears with diversity penalty (1.8%)**
 - [x] **Make the debate influence outcomes** — divergence-driven experiment selection picks the most diagnostic structure (D12)
-- [ ] **Investigate GCM flexibility confound** — GCM outperforms RULEX on RULEX-generated data (4.7% gap after 4 rounds of improvements). May need structures specifically designed to disadvantage GCM, or longer runs to accumulate signal.
+- [x] **Investigate GCM flexibility confound** — With diversity penalty, Rule_Agent now wins on RULEX-generated data (RMSE 0.433 vs 0.441). Gap is small (1.8%) vs GCM/SUSTAIN (15-32%) — this is genuine model flexibility, not a system bug. GCM approximates rule-like behavior through attention weights (consistent with Nosofsky 1991).
 - [ ] **Bayesian information-gain experiment selection** — Replace the heuristic diversity penalty (halve divergence per prior use) with principled adaptive design. Given current RMSE posteriors, compute expected information gain for each candidate structure: which untested structure would most reduce uncertainty about which model is correct? Should distinguish same-structure-different-condition (partially informative) from same-structure-same-condition (redundant). Related: optimal experimental design literature (Myung & Pitt 2009, Cavagnaro et al. 2010). This is the preferred long-term replacement for the D17 heuristic.
 
 ### Queued (from Codex review, 2026-03-13)

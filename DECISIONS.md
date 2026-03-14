@@ -295,4 +295,16 @@ Untested structures with moderate divergence can now beat heavily-tested high-di
 
 **Tests:** 3 new regression tests, 145 total passing.
 
-**Status:** Done. Re-running RULEX validation to check improvement.
+**Verification (5-cycle RULEX re-run with diversity penalty):**
+
+| Metric | Before (no diversity) | After (two-tier penalty) |
+|---|---|---|
+| Rule_Agent RMSE | 0.504 (3rd) | **0.433 (1st)** |
+| Exemplar_Agent RMSE | 0.501 (2nd) | 0.441 (2nd) |
+| Clustering_Agent RMSE | 0.500 (1st) | 0.515 (3rd) |
+| Gap (1st vs 2nd) | 0.2% | 1.8% |
+| Structures tested | 2 unique | 4+ unique |
+
+Rule_Agent now wins. Gap is small (1.8%) vs GCM (15.1%) and SUSTAIN (32.2%) — this is the genuine GCM flexibility confound, not a system bug.
+
+**Status:** Done.
