@@ -1093,3 +1093,32 @@ class DebateProtocol:
                 if not isinstance(v, np.ndarray) and v is not None
             },
         }
+
+
+# ---------------------------------------------------------------------------
+# Critique verification
+# ---------------------------------------------------------------------------
+
+
+def verify_prediction_claim(
+    protocol: DebateProtocol,
+    agent_config,
+    structure: str,
+    condition: str,
+    claimed_value: float,
+    tolerance: float = 0.1,
+) -> dict:
+    """Run model prediction and compare to an agent's claimed value.
+
+    Returns dict with 'actual', 'claimed', 'discrepancy', and 'verified'.
+    """
+    preds = protocol.compute_model_predictions(agent_config, structure, condition)
+    actual = preds.get("mean_accuracy", 0.0)
+    discrepancy = abs(actual - claimed_value)
+    return {
+        "actual": actual,
+        "claimed": claimed_value,
+        "discrepancy": discrepancy,
+        "verified": discrepancy <= tolerance,
+        "params_used": preds.get("params_used", {}),
+    }

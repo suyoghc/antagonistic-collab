@@ -9,6 +9,7 @@ Organized by module, not by review round, so future developers can find
 the relevant tests next to the code they cover.
 """
 
+import inspect
 import json
 import math
 import os
@@ -6384,3 +6385,138 @@ class TestClaimLedger:
         # Should be non-empty and include the claim
         assert len(summary) > 0
         assert "GCM RMSE < 0.1" in summary
+
+
+# =========================================================================
+# Feature 7.2: Critique-as-Falsification (M5)
+# =========================================================================
+
+
+class TestCritiqueAsFalsification:
+    """
+    Agents claim 'my model can also predict that' but are never fact-checked.
+    Critiques are free text with no verification. verify_prediction_claim()
+    runs the critic's actual model and compares to their stated claim.
+    """
+
+    def _make_protocol(self):
+        """Helper: create a protocol with standard agent configs."""
+        agents = default_agent_configs()
+        state = EpistemicState(domain="test")
+        for agent in agents:
+            state.register_theory(
+                TheoryCommitment(
+                    name=agent.theory_name,
+                    agent_name=agent.name,
+                    core_claims=agent.model_class.core_claims,
+                    model_name=agent.model_class.name,
+                    model_params=dict(agent.default_params),
+                )
+            )
+        return DebateProtocol(state=state, agent_configs=agents)
+
+    def test_critique_claim_verified_true(self):
+        """When an agent's claimed prediction matches the model output,
+        the verification should return verified=True."""
+        from antagonistic_collab.debate_protocol import verify_prediction_claim
+
+        protocol = self._make_protocol()
+        # GCM agent (index 0)
+        agent = protocol.agent_configs[0]
+
+        # Get actual prediction to use as the "claimed" value
+        preds = protocol.compute_model_predictions(agent, "Type_I", "baseline")
+        actual_mean = preds["mean_accuracy"]
+
+        result = verify_prediction_claim(
+            protocol, agent, "Type_I", "baseline", actual_mean
+        )
+        assert result["verified"] is True
+        assert abs(result["actual"] - actual_mean) < 0.01
+
+    def test_critique_claim_verified_false(self):
+        """When an agent claims a prediction far from reality,
+        verification should return verified=False."""
+        from antagonistic_collab.debate_protocol import verify_prediction_claim
+
+        protocol = self._make_protocol()
+        agent = protocol.agent_configs[0]
+
+        # Claim something wildly wrong
+        result = verify_prediction_claim(
+            protocol, agent, "Type_I", "baseline", 0.01
+        )
+        assert result["verified"] is False
+        assert result["discrepancy"] > 0.1
+
+    def test_false_claim_added_to_ledger(self):
+        """A falsified critique claim should be recorded in the claim ledger."""
+        from antagonistic_collab.debate_protocol import verify_prediction_claim
+
+        protocol = self._make_protocol()
+        agent = protocol.agent_configs[0]
+
+        result = verify_prediction_claim(
+            protocol, agent, "Type_I", "baseline", 0.01
+        )
+
+        # Add the result as a claim to the ledger
+        from antagonistic_collab.epistemic_state import DebateClaim
+
+        claim = DebateClaim(
+            agent=agent.name,
+            claim_type="critique",
+            content=f"Claimed mean_accuracy=0.01 on Type_I",
+            testable=True,
+            structure="Type_I",
+            predicted_outcome="mean_accuracy=0.01",
+            status="falsified" if not result["verified"] else "confirmed",
+            evidence=f"actual={result['actual']:.3f}",
+        )
+        protocol.state.add_claim(claim)
+
+        assert len(protocol.state.claim_ledger) == 1
+        assert protocol.state.claim_ledger[0].status == "falsified"
+
+    def test_critique_prompt_requires_json(self):
+        """The critique prompt should instruct agents to use structured JSON."""
+        # This is a design test — verify the prompt template includes JSON format
+        # We check that run_interpretation_critique's prompt mentions structured format
+        # by inspecting the function source code
+        import antagonistic_collab.runner as runner_mod
+        import textwrap
+
+        source = inspect.getsource(runner_mod.run_interpretation_critique)
+        assert "alternative_prediction" in source or "disputed_interpretation" in source
+
+    def test_verification_uses_current_params(self):
+        """verify_prediction_claim should use agent's current default_params,
+        which may have been updated by sync_params_from_theory."""
+        from antagonistic_collab.debate_protocol import verify_prediction_claim
+        from antagonistic_collab.runner import sync_params_from_theory
+
+        protocol = self._make_protocol()
+        agent = protocol.agent_configs[0]
+
+        # Get prediction with original params
+        result_before = verify_prediction_claim(
+            protocol, agent, "Type_I", "baseline", 0.5
+        )
+        actual_before = result_before["actual"]
+
+        # Revise theory params and sync
+        protocol.state.revise_theory(
+            agent.theory_name,
+            description="Lower sensitivity",
+            new_params={"c": 0.1},
+        )
+        sync_params_from_theory(protocol)
+
+        # Verify should now use new params
+        result_after = verify_prediction_claim(
+            protocol, agent, "Type_I", "baseline", 0.5
+        )
+        actual_after = result_after["actual"]
+
+        # With c=0.1 (very low sensitivity), predictions should differ
+        assert actual_before != actual_after

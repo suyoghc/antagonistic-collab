@@ -1410,21 +1410,62 @@ def run_interpretation_critique(
             f"PHASE: Interpretation Critique\n\n"
             f"Other agents' interpretations of the latest results:\n"
             f"{interp_text}\n\n"
-            f"Challenge at least one interpretation. Be specific:\n"
-            f"1. Which interpretation do you dispute and why?\n"
-            f"2. What alternative explanation does your theory offer?\n"
-            f"3. What evidence would distinguish your view from theirs?"
+            f"Challenge at least one interpretation. Output a JSON block:\n"
+            f'{{"disputed_interpretation": "which agent/claim you dispute", '
+            f'"alternative_prediction": {{"structure": "...", "condition": "...", '
+            f'"my_model_predicts": 0.75}}, '
+            f'"distinguishing_experiment": "what experiment would resolve this"}}\n\n'
+            f"The alternative_prediction field is optional. If you include it, "
+            f"the system will run your model to verify the claim."
         )
 
         print(f"\n--- {agent.name} critiques interpretations ---")
         response = call_agent(client, agent.system_prompt, prompt)
         print(response[:600] + "..." if len(response) > 600 else response)
 
+        # Parse and verify alternative predictions
+        json_block = extract_json(response) or {}
+        alt_pred = json_block.get("alternative_prediction")
+        verification = None
+        if alt_pred and isinstance(alt_pred, dict):
+            struct = alt_pred.get("structure", "")
+            cond = alt_pred.get("condition", "baseline")
+            claimed = alt_pred.get("my_model_predicts")
+            if struct and claimed is not None:
+                from .debate_protocol import verify_prediction_claim
+
+                verification = verify_prediction_claim(
+                    protocol, agent, struct, cond, float(claimed)
+                )
+                status = "verified" if verification["verified"] else "FALSE CLAIM"
+                print(
+                    f"    Prediction check: claimed={claimed:.3f}, "
+                    f"actual={verification['actual']:.3f} → {status}"
+                )
+                # Record as claim in ledger
+                protocol.state.add_claim(
+                    DebateClaim(
+                        agent=agent.name,
+                        claim_type="critique",
+                        content=f"Claimed mean_accuracy={claimed:.3f} on {struct}/{cond}",
+                        testable=True,
+                        structure=struct,
+                        condition=cond,
+                        predicted_outcome=f"mean_accuracy={claimed:.3f}",
+                        cycle_made=protocol.state.cycle,
+                        status="confirmed" if verification["verified"] else "falsified",
+                        evidence=f"actual={verification['actual']:.3f}",
+                        tested_at_cycle=protocol.state.cycle,
+                    )
+                )
+
         messages.append(
             {
                 "agent": agent.name,
                 "phase": "INTERPRETATION_CRITIQUE",
                 "response": response,
+                "parsed_json": json_block,
+                "verification": verification,
             }
         )
 
