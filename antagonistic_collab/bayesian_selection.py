@@ -488,46 +488,13 @@ def update_posterior_from_experiment(
 
         log_likelihoods[m_idx] = compute_log_likelihood(observed, predicted, n_subjects)
 
-    # Add learning curve evidence if provided.
-    #
-    # Pairwise curve divergence: for each model, compute mean RMSE of its
-    # predicted curve against every other model's curve.  Models with more
-    # distinctive (divergent) curves get a small log-likelihood bonus.
-    # This replaces the old approach that compared curves against the
-    # ground-truth model's curve, which leaked the answer key (Codex P1).
-    if learning_curves:
-        curve_arrays = {}
-        for agent_config in protocol.agent_configs:
-            if agent_config.name in learning_curves:
-                curve_arrays[agent_config.name] = np.array(
-                    [b["accuracy"] for b in learning_curves[agent_config.name]]
-                )
-
-        if len(curve_arrays) >= 2:
-            for m_idx, agent_config in enumerate(protocol.agent_configs):
-                if agent_config.name not in curve_arrays:
-                    continue
-                my_curve = curve_arrays[agent_config.name]
-                # Mean RMSE against all other models' curves
-                rmses = []
-                for other_name, other_curve in curve_arrays.items():
-                    if other_name == agent_config.name:
-                        continue
-                    min_len = min(len(my_curve), len(other_curve))
-                    if min_len > 0:
-                        rmse = float(
-                            np.sqrt(
-                                np.mean(
-                                    (my_curve[:min_len] - other_curve[:min_len]) ** 2
-                                )
-                            )
-                        )
-                        rmses.append(rmse)
-                if rmses:
-                    # More divergent curves → higher bonus (more distinguishable)
-                    mean_divergence = float(np.mean(rmses))
-                    curve_ll = mean_divergence * n_subjects * curve_weight
-                    log_likelihoods[m_idx] += curve_ll
+    # NOTE: Learning curve predictions are NOT used in the posterior update.
+    # The synthetic framework does not generate observed learning curves, so
+    # there is no observed data to compare model curves against. The previous
+    # pairwise divergence bonus (Codex review round 5 fix) was data-independent
+    # — it rewarded curve distinctiveness rather than fit to observations,
+    # distorting the posterior with non-evidence. Curve data remains available
+    # for agent interpretation via protocol.state.last_execution_curves.
 
     # Record history before update
     history_entry = {

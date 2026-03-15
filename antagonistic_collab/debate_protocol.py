@@ -632,8 +632,8 @@ class DebateProtocol:
         that proposals are grounded in actual model behavior.
         """
         if structures is None:
-            # Use all structures from the registry for comprehensive divergence
-            structures = STRUCTURE_REGISTRY
+            # Use all structures from registry + any novel agent-proposed structures
+            structures = {**STRUCTURE_REGISTRY, **self.temporary_structures}
 
         results = {}
         for struct_name, struct in structures.items():
@@ -1018,8 +1018,9 @@ class DebateProtocol:
         """
         # --- Resolve category structure ---
         structure_name = design_spec.get("structure_name", "")
-        if structure_name in STRUCTURE_REGISTRY:
-            struct = STRUCTURE_REGISTRY[structure_name]
+        all_structures = {**STRUCTURE_REGISTRY, **self.temporary_structures}
+        if structure_name in all_structures:
+            struct = all_structures[structure_name]
         else:
             # Fallback: pick highest-divergence structure from divergence map
             try:
@@ -1032,15 +1033,15 @@ class DebateProtocol:
                             best_div = pair_div["mean_abs_diff"]
                             best_name = sname
                 # Map divergence map keys (e.g. "II") to registry keys (e.g. "Type_II")
-                if best_name and f"Type_{best_name}" in STRUCTURE_REGISTRY:
+                if best_name and f"Type_{best_name}" in all_structures:
                     structure_name = f"Type_{best_name}"
-                elif best_name and best_name in STRUCTURE_REGISTRY:
+                elif best_name and best_name in all_structures:
                     structure_name = best_name
                 else:
                     structure_name = "Type_II"
             except Exception:
                 structure_name = "Type_II"
-            struct = STRUCTURE_REGISTRY[structure_name]
+            struct = all_structures.get(structure_name, STRUCTURE_REGISTRY["Type_II"])
 
         stimuli = np.asarray(struct["stimuli"])
         labels = np.asarray(struct["labels"])

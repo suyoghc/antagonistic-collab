@@ -8031,3 +8031,153 @@ class TestHITLCheckpoints:
 
         args_default = parser.parse_args([])
         assert args_default.hitl_checkpoints is False
+
+
+# =====================================================================
+# Codex Review Round 6 — P1/P2 fixes
+# =====================================================================
+
+
+class TestCurveEvidenceNotUsedInPosterior:
+    """P1: Curve bonus was independent of observed data.
+
+    The pairwise curve divergence bonus depended only on model predictions,
+    not on any observed learning-curve data. Since our synthetic framework
+    does not generate observed learning curves, passing predicted curves to
+    update_posterior_from_experiment should NOT modify the log-likelihoods.
+    The curve data should remain available for agent interpretation only.
+    """
+
+    def test_curves_do_not_affect_posterior(self):
+        """Posterior update should be identical with and without learning curves.
+
+        With 3 models, the pairwise divergence bonus is asymmetric: the model
+        with the most distinctive curves gets a larger bonus, distorting the
+        posterior toward "distinctiveness" rather than "fit to data."
+        """
+        from antagonistic_collab.bayesian_selection import (
+            ModelPosterior,
+            update_posterior_from_experiment,
+        )
+
+        class Cfg:
+            def __init__(self, name):
+                self.name = name
+
+        class Proto:
+            agent_configs = [Cfg("A"), Cfg("B"), Cfg("C")]
+
+            def compute_model_predictions(self, agent_config, struct, cond):
+                if agent_config.name == "A":
+                    return {"item_0": 0.8, "item_1": 0.3}
+                elif agent_config.name == "B":
+                    return {"item_0": 0.3, "item_1": 0.8}
+                return {"item_0": 0.5, "item_1": 0.5}
+
+        data = {"item_accuracies": {"item_0": 0.7, "item_1": 0.4}}
+
+        # Without curves
+        p1 = ModelPosterior.uniform(["A", "B", "C"])
+        update_posterior_from_experiment(
+            p1, Proto(), data, "Type_II", "baseline", cycle=0,
+        )
+
+        # With curves where A is distinctive (should NOT affect posterior)
+        fake_curves = {
+            "A": [{"accuracy": 0.9}, {"accuracy": 0.95}, {"accuracy": 1.0}],
+            "B": [{"accuracy": 0.3}, {"accuracy": 0.35}, {"accuracy": 0.4}],
+            "C": [{"accuracy": 0.3}, {"accuracy": 0.35}, {"accuracy": 0.4}],
+        }
+        p2 = ModelPosterior.uniform(["A", "B", "C"])
+        update_posterior_from_experiment(
+            p2, Proto(), data, "Type_II", "baseline", cycle=0,
+            learning_curves=fake_curves,
+        )
+
+        np.testing.assert_array_almost_equal(
+            p1.probs, p2.probs,
+            err_msg="Curve data should not affect posterior (no observed curves to compare against)",
+        )
+
+
+class TestNovelStructureExecution:
+    """P1: Novel structures could not be executed by _synthetic_runner.
+
+    _synthetic_runner() only consulted STRUCTURE_REGISTRY, silently falling
+    back to a built-in structure when a novel (agent-proposed) structure was
+    selected. Now it should also check temporary_structures.
+    """
+
+    def test_synthetic_runner_uses_temporary_structures(self):
+        """_synthetic_runner should execute novel structures from temporary_structures."""
+        from antagonistic_collab.debate_protocol import DebateProtocol, default_agent_configs
+        from antagonistic_collab.epistemic_state import EpistemicState
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state=state, agent_configs=agents)
+
+        # Register a novel structure
+        novel = {
+            "stimuli": [[0, 0], [0, 1], [1, 0], [1, 1]],
+            "labels": [0, 1, 1, 0],  # XOR
+        }
+        protocol.temporary_structures["xor_test"] = novel
+
+        result = protocol._synthetic_runner(
+            design_spec={"structure_name": "xor_test", "condition": "baseline"},
+            true_model="GCM",
+            cycle=0,
+        )
+
+        # Should have 4 items (the novel structure), not fall back
+        assert len(result["item_accuracies"]) == 4, (
+            f"Expected 4 items from novel structure, got {len(result['item_accuracies'])} "
+            f"(likely fell back to a registry structure)"
+        )
+        assert result["structure_name"] == "xor_test"
+
+    def test_synthetic_runner_still_falls_back_for_unknown(self):
+        """Completely unknown structures should still fall back gracefully."""
+        from antagonistic_collab.debate_protocol import DebateProtocol, default_agent_configs
+        from antagonistic_collab.epistemic_state import EpistemicState
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state=state, agent_configs=agents)
+
+        result = protocol._synthetic_runner(
+            design_spec={"structure_name": "totally_nonexistent", "condition": "baseline"},
+            true_model="GCM",
+            cycle=0,
+        )
+        # Should not crash — falls back to some registry structure
+        assert "item_accuracies" in result
+
+
+class TestDivergenceMapIncludesTemporaryStructures:
+    """P2: Legacy divergence mapping dropped temporary structures.
+
+    compute_divergence_map() used only STRUCTURE_REGISTRY when no explicit
+    structures dict was passed. Now it should include temporary_structures.
+    """
+
+    def test_divergence_map_includes_novel_structures(self):
+        """compute_divergence_map() should include temporary_structures."""
+        from antagonistic_collab.debate_protocol import DebateProtocol, default_agent_configs
+        from antagonistic_collab.epistemic_state import EpistemicState
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state=state, agent_configs=agents)
+
+        # Add a novel structure
+        protocol.temporary_structures["xor_test"] = {
+            "stimuli": [[0, 0], [0, 1], [1, 0], [1, 1]],
+            "labels": [0, 1, 1, 0],
+        }
+
+        div_map = protocol.compute_divergence_map()
+        assert "xor_test" in div_map, (
+            "temporary_structures should appear in divergence map"
+        )
