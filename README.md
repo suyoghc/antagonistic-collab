@@ -153,11 +153,6 @@ antagonistic_collab/
 - Shepard, R. N., Hovland, C. I., & Jenkins, H. M. (1961). Learning and memorization of classifications. *Psychological Monographs*, 75(13), 1–42.
 - Musslick, S., et al. AutoRA: Automated Research Assistant. https://autoresearch.github.io/autora/
 
-## Contributors
-
-- Suyog Chandramouli
-- George Kachergis
-
 ## License
 
 MIT
