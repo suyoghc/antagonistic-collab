@@ -6023,6 +6023,57 @@ class TestSummaryForAgentNonStringPredictions:
         assert isinstance(summary, str)
         assert len(summary) > 0
 
+    def test_summary_does_not_crash_on_dict_new_predictions(self):
+        """Regression: summary_for_agent crashes with KeyError when
+        new_predictions is a dict (not a list). LLMs sometimes return
+        {"Type_I": 0.9, "Type_II": 0.7} instead of [0.9, 0.7].
+        The slice [:2] on a dict raises KeyError: slice(None, 2, None).
+        """
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        state.register_theory(
+            TheoryCommitment(
+                name=agents[0].theory_name,
+                agent_name=agents[0].name,
+                core_claims=agents[0].model_class.core_claims,
+                model_name=agents[0].model_class.name,
+                model_params=agents[0].default_params,
+            )
+        )
+        # new_predictions as a dict — the exact shape that caused the crash
+        state.revise_theory(
+            agents[0].theory_name,
+            description="Revised after interpretation",
+            triggered_by_experiment="exp_001",
+            new_predictions={"Type_I": 0.9, "Type_II": 0.7, "Type_IV": 0.5},
+        )
+        summary = state.summary_for_agent(agents[0].name)
+        assert isinstance(summary, str)
+        assert "New predictions from revision" in summary
+
+    def test_summary_does_not_crash_on_scalar_new_predictions(self):
+        """Edge case: new_predictions is a single scalar value."""
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        state.register_theory(
+            TheoryCommitment(
+                name=agents[0].theory_name,
+                agent_name=agents[0].name,
+                core_claims=agents[0].model_class.core_claims,
+                model_name=agents[0].model_class.name,
+                model_params=agents[0].default_params,
+            )
+        )
+        state.revise_theory(
+            agents[0].theory_name,
+            description="Revised",
+            triggered_by_experiment="exp_001",
+            new_predictions="accuracy improved to 0.9",
+        )
+        summary = state.summary_for_agent(agents[0].name)
+        assert isinstance(summary, str)
+        assert "New predictions from revision" in summary
+
 
 # =========================================================================
 # Feature 7.1: Parameter Revision Persistence (M5)

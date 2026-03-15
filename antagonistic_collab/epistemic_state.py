@@ -771,7 +771,13 @@ class EpistemicState:
                     f"  Latest revision: {latest.get('description', '(no description)')}"
                 )
                 if latest.get("new_predictions"):
-                    preds = [str(p) for p in latest["new_predictions"][:2]]
+                    raw_preds = latest["new_predictions"]
+                    # LLM outputs have unpredictable types — coerce to list
+                    if isinstance(raw_preds, dict):
+                        raw_preds = list(raw_preds.values())
+                    elif not isinstance(raw_preds, list):
+                        raw_preds = [raw_preds]
+                    preds = [str(p) for p in raw_preds[:2]]
                     lines.append(f"  New predictions from revision: {'; '.join(preds)}")
             if t.term_glossary:
                 key_terms = list(t.term_glossary.keys())[:4]
