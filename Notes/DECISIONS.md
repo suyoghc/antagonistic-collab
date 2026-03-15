@@ -643,3 +643,32 @@ Pattern covered `debate_cycle_*.json` but not `.md` transcripts.
 **Default:** tau=1.0 preserves all existing behavior. Recommended tau=0.1–0.3 for synthetic data.
 
 **Status:** Done. Pending live validation with --learning-rate 0.2.
+
+---
+
+## D31: Codex review — 5 bug fixes across Bayesian selection, debate protocol, and RULEX — 2026-03-15
+
+**Problem:** Codex automated review identified 5 bugs in the codebase. All were real issues, not false positives.
+
+**Fixes:**
+
+1. **Ground-truth leakage in curve evidence** (`bayesian_selection.py`): `update_posterior_from_experiment()` used `data["ground_truth_model"]` to select a reference curve when computing curve-based evidence, leaking the answer key into posterior updates. **Fix:** Replaced single-model curve comparison with pairwise curve divergence — compute mean L1 divergence between each pair of models' curves, then score each model by how distinct its curve is from others. No ground-truth reference needed.
+
+2. **Novel structure silent fallback** (`debate_protocol.py`): `compute_model_predictions()` only searched `STRUCTURE_REGISTRY`, silently falling back to Type_II when a novel structure from `temporary_structures` was requested. **Fix:** Merge `self.temporary_structures` with `STRUCTURE_REGISTRY` before lookup: `all_structures = {**STRUCTURE_REGISTRY, **self.temporary_structures}`.
+
+3. **Synthetic data LOO mismatch** (`debate_protocol.py`): `_synthetic_runner()` used full-set predictions (train on all items, predict all items) while the scoring path used LOO predictions. This meant synthetic data was easier than it should be, biasing evidence. **Fix:** Changed `_synthetic_runner()` to use LOO: `loo_stimuli = np.delete(stimuli, i, axis=0)`, `loo_labels = np.delete(labels, i)` for each item.
+
+4. **RULEX curve missing exceptions** (`models/rulex.py`): `predict_learning_curve()` called `_evaluate_rule()` which only applies the rule, ignoring stored exceptions. On `rule_plus_exception` structures, this underestimates RULEX accuracy. **Fix:** Replaced `_evaluate_rule()` loop with `self.predict()` loop so `p_exception` contributes to curve accuracy.
+
+5. **n_subjects not threaded** (`bayesian_selection.py`): `update_posterior_from_experiment()` ignored `data["n_subjects"]`, always using the default of 20. **Fix:** Added `n_subjects = data.get("n_subjects", n_subjects)` before the binomial likelihood computation.
+
+**Tests:** 5 new tests in `test_codex_fixes.py` (306 total passing):
+- Curve evidence independent of ground_truth_model (compares log_probs)
+- Novel structure produces 4-item predictions (not 8-item Type_II)
+- Synthetic runner matches scoring path within 0.35 tolerance
+- RULEX curve final accuracy > 0.5 on rule_plus_exception structure
+- n_subjects=100 produces lower entropy posterior than default
+
+**Alternatives considered:** None — all were clear bugs with clear fixes.
+
+**Status:** Done.

@@ -1,12 +1,20 @@
 # Tasks
 
-## Current Milestone: M7 — Likelihood Tempering (IN PROGRESS)
+## Current Milestone: M7 — Likelihood Tempering + Codex Fixes (DONE)
 
 ### M7 Tasks
-- [x] **M7: Likelihood Tempering** — Add `learning_rate` (tau) parameter to Bayesian posterior updates to prevent posterior collapse. Multiplies log-likelihoods by tau ∈ (0, 1] before adding to prior. Threaded through `ModelPosterior.update()`, `compute_eig()`, `select_from_pool()`, `select_experiment()`, `update_posterior_from_experiment()`. Wired into `runner.py` via `_LEARNING_RATE` global + `--learning-rate` CLI flag. Default tau=1.0 preserves backward compatibility. 9 new tests (296 total).
+- [x] **M7: Likelihood Tempering** — Add `learning_rate` (tau) parameter to Bayesian posterior updates to prevent posterior collapse. Multiplies log-likelihoods by tau ∈ (0, 1] before adding to prior. Threaded through `ModelPosterior.update()`, `compute_eig()`, `select_from_pool()`, `select_experiment()`, `update_posterior_from_experiment()`. Default tau=0.2 with `--no-tempering` to disable. `--no-arbiter` toggle for ARBITER features. YAML config file with layered precedence. 10 tests.
+- [x] **Codex Review Fixes** — 5 bugs identified by Codex automated review (D31):
+  - [x] Fix #1: Ground-truth leakage in curve evidence → pairwise divergence
+  - [x] Fix #2: Novel structure silent fallback → merge temporary_structures
+  - [x] Fix #3: Synthetic data LOO mismatch → LOO in _synthetic_runner
+  - [x] Fix #4: RULEX curve missing exceptions → use predict() not _evaluate_rule()
+  - [x] Fix #5: n_subjects not threaded → data.get("n_subjects", default)
+  - 5 new tests (306 total passing)
 
 ### M7 Commits
-- (pending commit)
+- `0c43faf` feat(M7): likelihood tempering, ARBITER toggle, and config file
+- (pending) fix: 5 Codex review bugs — ground-truth leakage, novel structures, LOO mismatch, RULEX curves, n_subjects threading
 
 ---
 

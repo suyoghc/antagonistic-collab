@@ -417,6 +417,10 @@ def update_posterior_from_experiment(
     if not item_accs:
         return posterior  # no item-level data to update from
 
+    # Use actual n_subjects from experimental data if available,
+    # rather than always falling back to the function default (Codex P2).
+    n_subjects = data.get("n_subjects", n_subjects)
+
     item_keys = sorted(item_accs.keys(), key=lambda k: int(k.split("_")[1]))
     observed = np.array([item_accs[k] for k in item_keys])
 
@@ -434,39 +438,46 @@ def update_posterior_from_experiment(
 
         log_likelihoods[m_idx] = compute_log_likelihood(observed, predicted, n_subjects)
 
-    # Add learning curve evidence if provided
+    # Add learning curve evidence if provided.
+    #
+    # Pairwise curve divergence: for each model, compute mean RMSE of its
+    # predicted curve against every other model's curve.  Models with more
+    # distinctive (divergent) curves get a small log-likelihood bonus.
+    # This replaces the old approach that compared curves against the
+    # ground-truth model's curve, which leaked the answer key (Codex P1).
     if learning_curves:
-        # Simulate ground-truth curve from data's ground_truth_model
-        gt_model = data.get("ground_truth_model", "")
-        if gt_model:
-            gt_curve = None
-            # Find ground truth model's curve by matching model name
-            for agent_config in protocol.agent_configs:
-                model_key = agent_config.model_class.name.split()[0]
-                if model_key == gt_model and agent_config.name in learning_curves:
-                    gt_curve = learning_curves[agent_config.name]
-                    break
+        curve_arrays = {}
+        for agent_config in protocol.agent_configs:
+            if agent_config.name in learning_curves:
+                curve_arrays[agent_config.name] = np.array(
+                    [b["accuracy"] for b in learning_curves[agent_config.name]]
+                )
 
-            if gt_curve:
-                gt_accs = np.array([b["accuracy"] for b in gt_curve])
-                for m_idx, agent_config in enumerate(protocol.agent_configs):
-                    if agent_config.name in learning_curves:
-                        pred_curve = learning_curves[agent_config.name]
-                        pred_accs = np.array([b["accuracy"] for b in pred_curve])
-                        # Match lengths
-                        min_len = min(len(gt_accs), len(pred_accs))
-                        if min_len > 0:
-                            curve_rmse = float(
-                                np.sqrt(
-                                    np.mean(
-                                        (gt_accs[:min_len] - pred_accs[:min_len]) ** 2
-                                    )
+        if len(curve_arrays) >= 2:
+            for m_idx, agent_config in enumerate(protocol.agent_configs):
+                if agent_config.name not in curve_arrays:
+                    continue
+                my_curve = curve_arrays[agent_config.name]
+                # Mean RMSE against all other models' curves
+                rmses = []
+                for other_name, other_curve in curve_arrays.items():
+                    if other_name == agent_config.name:
+                        continue
+                    min_len = min(len(my_curve), len(other_curve))
+                    if min_len > 0:
+                        rmse = float(
+                            np.sqrt(
+                                np.mean(
+                                    (my_curve[:min_len] - other_curve[:min_len]) ** 2
                                 )
                             )
-                            # Convert RMSE to log-likelihood-like score
-                            # Lower RMSE = higher score
-                            curve_ll = -curve_rmse * n_subjects * curve_weight
-                            log_likelihoods[m_idx] += curve_ll
+                        )
+                        rmses.append(rmse)
+                if rmses:
+                    # More divergent curves → higher bonus (more distinguishable)
+                    mean_divergence = float(np.mean(rmses))
+                    curve_ll = mean_divergence * n_subjects * curve_weight
+                    log_likelihoods[m_idx] += curve_ll
 
     # Record history before update
     history_entry = {

@@ -476,4 +476,30 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 
 ---
 
+## Session 19 — 2026-03-15
+
+**Commits:** (pending)
+
+**What we did:**
+- Evaluated 5 Codex automated review findings — all confirmed as real bugs
+- Implemented all 5 fixes with TDD:
+  1. Ground-truth leakage in curve evidence (`bayesian_selection.py`) — replaced gt_model curve comparison with pairwise divergence
+  2. Novel structure silent fallback (`debate_protocol.py`) — merge `temporary_structures` with `STRUCTURE_REGISTRY`
+  3. Synthetic data LOO mismatch (`debate_protocol.py`) — `_synthetic_runner()` now uses LOO predictions
+  4. RULEX curve missing exceptions (`models/rulex.py`) — `predict_learning_curve()` uses `predict()` instead of `_evaluate_rule()`
+  5. n_subjects not threaded (`bayesian_selection.py`) — `data.get("n_subjects", n_subjects)`
+- 5 new tests in `test_codex_fixes.py` (306 total passing)
+- Fixed test data shape issues (Type_II has 8 items, not 3)
+- Fixed false-pass in leakage test by comparing `log_probs` instead of `probs` (near-degenerate posteriors mask differences)
+
+**Key discussion:**
+- Codex review was accurate on all 5 points — good signal-to-noise ratio
+- Ground-truth leakage was the most significant: using the answer key to select a reference curve defeats the purpose of Bayesian model comparison
+- LOO mismatch between synthetic data and scoring path created systematic bias — synthetic data was "too easy"
+- Decision logged as D31
+
+**Status:** All fixes implemented and tested. Committing and pushing.
+
+---
+
 *This log is maintained manually. Update it at the end of each session.*

@@ -358,11 +358,25 @@ class RULEX:
                 acc = 0.5
                 rule_found = False
             else:
-                # Test on test items
-                eval_result = self._evaluate_rule(
-                    rule_result["rule"], test_items, test_labels
-                )
-                acc = eval_result["accuracy"]
+                # Test on test items using predict() so that exception
+                # retrieval (p_exception) contributes to accuracy.
+                # Previously used _evaluate_rule() which only applies the
+                # rule, ignoring stored exceptions (Codex P2).
+                n_correct = 0
+                for t_item, t_label in zip(test_items, test_labels):
+                    pred_result = self.predict(
+                        t_item,
+                        train_arr,
+                        label_arr,
+                        **p,
+                    )
+                    pred_cat = max(
+                        pred_result["probabilities"],
+                        key=pred_result["probabilities"].get,
+                    )
+                    if pred_cat == t_label:
+                        n_correct += 1
+                acc = n_correct / len(test_labels) if len(test_labels) > 0 else 0.5
                 rule_found = True
 
             curve.append(

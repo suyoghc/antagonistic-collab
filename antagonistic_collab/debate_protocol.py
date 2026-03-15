@@ -716,9 +716,12 @@ class DebateProtocol:
         Returns dict with "mean_accuracy", "item_0" through "item_N" (all
         floats in [0, 1]), and "params_used" (the final merged params).
         """
-        # Resolve structure (fallback to Type_II)
-        if structure_name in STRUCTURE_REGISTRY:
-            struct = STRUCTURE_REGISTRY[structure_name]
+        # Resolve structure: check registry, then temporary_structures, then
+        # fallback to Type_II.  Without this, novel structures proposed by
+        # agents were silently scored as Type_II (Codex P2).
+        all_structures = {**STRUCTURE_REGISTRY, **self.temporary_structures}
+        if structure_name in all_structures:
+            struct = all_structures[structure_name]
         else:
             struct = STRUCTURE_REGISTRY["Type_II"]
 
@@ -1070,10 +1073,16 @@ class DebateProtocol:
         # Apply condition overrides
         params.update(overrides)
 
-        # --- Get model predictions for each item ---
+        # --- Get model predictions for each item (LOO) ---
+        # Use leave-one-out to match the scoring path in
+        # compute_model_predictions().  Previously, predictions used the
+        # full training set (including item i when predicting item i),
+        # creating a systematic optimistic bias vs LOO scoring (Codex P2).
         item_probs = {}
         for i, (stim, label) in enumerate(zip(stimuli, labels)):
-            pred = model.predict(stim, stimuli, labels, **params)
+            loo_stimuli = np.delete(stimuli, i, axis=0)
+            loo_labels = np.delete(labels, i)
+            pred = model.predict(stim, loo_stimuli, loo_labels, **params)
             item_probs[f"item_{i}"] = {
                 int(k): float(v) for k, v in pred["probabilities"].items()
             }

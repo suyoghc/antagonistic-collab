@@ -4,20 +4,9 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ---
 
-## Current focus — M7: Likelihood Tempering — DONE
+## Current focus — M7: Likelihood Tempering + Codex Fixes — DONE
 
-### Implementation
-
-| Component | Change | Status |
-|---|---|---|
-| `ModelPosterior.update()` | `learning_rate` param, validates (0,1], applies `lr * log_likelihoods` | DONE |
-| `compute_eig()` | `learning_rate` param, applied in simulated updates | DONE |
-| `select_from_pool()` | Threads `learning_rate` to `compute_eig()` | DONE |
-| `select_experiment()` | Threads `learning_rate` to `compute_eig()` | DONE |
-| `update_posterior_from_experiment()` | Threads to `posterior.update()`, records in history | DONE |
-| `runner.py` | `_LEARNING_RATE` global, 3 call sites, `--learning-rate` CLI flag | DONE |
-| `__main__.py` | `--learning-rate` in `_build_argparser()` | DONE |
-| Tests | 9 new in `TestLikelihoodTempering` | DONE (296 total) |
+All M7 work complete: likelihood tempering, ARBITER toggle, config file, and 5 Codex review bug fixes. 306 tests passing.
 
 ### Next steps
 - Live validation with `--learning-rate 0.2` to confirm posterior entropy stays above 0 after cycle 0
