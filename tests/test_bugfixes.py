@@ -7830,3 +7830,82 @@ class TestConflictMap:
         # Should be a non-empty string suitable for prompt injection
         assert isinstance(summary, str)
         assert len(summary) > 0
+
+
+# =========================================================================
+# M6d: Pre-registration Output
+# =========================================================================
+
+
+class TestPreregistration:
+    """Tests for generate_preregistration output."""
+
+    def _make_protocol_with_data(self):
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state=state, agent_configs=agents)
+        for agent in agents:
+            state.register_theory(
+                TheoryCommitment(
+                    name=agent.theory_name,
+                    agent_name=agent.name,
+                    core_claims=["test"],
+                    model_name=agent.model_class.name.split()[0],
+                )
+            )
+        return protocol
+
+    def test_preregistration_contains_predictions(self):
+        """All models should have prediction entries."""
+        from antagonistic_collab.runner import generate_preregistration
+
+        protocol = self._make_protocol_with_data()
+        prereg = generate_preregistration(protocol, cycle=0)
+
+        assert "predictions" in prereg
+        agent_names = {a.name for a in protocol.agent_configs}
+        pred_agents = {p["agent"] for p in prereg["predictions"]}
+        assert agent_names == pred_agents
+
+    def test_preregistration_contains_criteria(self):
+        """Adjudication criteria should be present."""
+        from antagonistic_collab.runner import generate_preregistration
+
+        protocol = self._make_protocol_with_data()
+        prereg = generate_preregistration(protocol, cycle=0)
+
+        assert "adjudication_criteria" in prereg
+        assert len(prereg["adjudication_criteria"]) > 0
+
+    def test_preregistration_includes_cruxes(self):
+        """Active cruxes should be listed."""
+        from antagonistic_collab.runner import generate_preregistration
+        from antagonistic_collab.epistemic_state import Crux
+
+        protocol = self._make_protocol_with_data()
+        protocol.state.add_crux(
+            Crux(
+                id="c1",
+                proposer="A",
+                description="GCM vs RULEX on Type VI",
+                status="accepted",
+            )
+        )
+
+        prereg = generate_preregistration(protocol, cycle=0)
+        assert "cruxes" in prereg
+        assert len(prereg["cruxes"]) == 1
+
+    def test_preregistration_output_format(self):
+        """Pre-registration should be JSON-serializable."""
+        from antagonistic_collab.runner import generate_preregistration
+
+        protocol = self._make_protocol_with_data()
+        prereg = generate_preregistration(protocol, cycle=0)
+
+        # Should be JSON-serializable
+        json_str = json.dumps(prereg, default=str)
+        parsed = json.loads(json_str)
+        assert "predictions" in parsed
+        assert "adjudication_criteria" in parsed
+        assert "cycle" in parsed

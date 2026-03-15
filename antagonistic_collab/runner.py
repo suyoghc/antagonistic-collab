@@ -1819,6 +1819,86 @@ def cruxes_to_boost_specs(state: EpistemicState, boost: float = 2.0) -> list[dic
     return specs
 
 
+def generate_preregistration(protocol: DebateProtocol, cycle: int) -> dict:
+    """Generate pre-registration document for the current cycle.
+
+    Contains:
+    - Prediction table: each model's predicted accuracy for tested structures
+    - Adjudication criteria: what RMSE gap counts as decisive
+    - Active cruxes and their resolution criteria
+    - Claimed vs actual accuracy for prior cycles
+    """
+    # Build prediction table from current experiments
+    predictions = []
+    # Find the current cycle's approved experiment
+    current_exps = [
+        e
+        for e in protocol.state.experiments
+        if e.cycle == cycle and e.status in ("approved", "executed")
+    ]
+
+    for agent in protocol.agent_configs:
+        pred_entry = {"agent": agent.name, "model": agent.model_class.name.split()[0]}
+        if current_exps:
+            exp = current_exps[0]
+            struct_name = exp.design_spec.get("structure_name", "Type_II")
+            condition = exp.design_spec.get("condition", "baseline")
+            try:
+                preds = protocol.compute_model_predictions(
+                    agent, struct_name, condition
+                )
+                pred_entry["structure"] = struct_name
+                pred_entry["condition"] = condition
+                pred_entry["mean_accuracy"] = float(
+                    np.mean([v for k, v in preds.items() if k.startswith("item_")])
+                )
+            except Exception:
+                pred_entry["mean_accuracy"] = None
+        predictions.append(pred_entry)
+
+    # Adjudication criteria
+    adjudication = {
+        "decisive_rmse_gap": 0.10,
+        "description": (
+            "A model is considered decisively better if its RMSE is at least "
+            "0.10 lower than the next best model on the tested structure."
+        ),
+    }
+
+    # Active cruxes
+    active_cruxes = [
+        {
+            "id": c.id,
+            "description": c.description,
+            "resolution_criterion": c.resolution_criterion,
+            "supporters": c.supporters,
+        }
+        for c in protocol.state.get_active_cruxes()
+    ]
+
+    # Prior cycle accuracy
+    prior_accuracy = []
+    for pred in protocol.state.predictions:
+        if pred.score is not None:
+            prior_accuracy.append(
+                {
+                    "agent": pred.agent_name,
+                    "experiment": pred.experiment_id,
+                    "predicted": pred.predicted_pattern,
+                    "actual": pred.actual_pattern,
+                    "rmse": pred.score,
+                }
+            )
+
+    return {
+        "cycle": cycle,
+        "predictions": predictions,
+        "adjudication_criteria": adjudication,
+        "cruxes": active_cruxes,
+        "prior_accuracy": prior_accuracy,
+    }
+
+
 def run_audit(protocol: DebateProtocol, client, transcript: list) -> PhaseResult:
     """Phase 9: Summarize what was learned."""
     print("\n" + "=" * 70)
