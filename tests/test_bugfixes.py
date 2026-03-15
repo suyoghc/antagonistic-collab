@@ -7669,3 +7669,164 @@ class TestCruxIntegration:
         assert len(finalized) >= 1
         # Should have multiple supporters from negotiation
         assert len(finalized[0].supporters) >= 2
+
+
+# =========================================================================
+# M6e: Conflict Map
+# =========================================================================
+
+
+class TestConflictMap:
+    """Tests for DebateClaim category field and conflict_map_summary."""
+
+    def test_claim_category_field(self):
+        """DebateClaim should have a category field defaulting to 'general'."""
+        from antagonistic_collab.epistemic_state import DebateClaim
+
+        claim = DebateClaim(
+            agent="Exemplar_Agent",
+            claim_type="prediction",
+            content="GCM predicts 85% on Type I",
+            testable=True,
+        )
+        assert claim.category == "general"
+
+        claim2 = DebateClaim(
+            agent="Rule_Agent",
+            claim_type="prediction",
+            content="RULEX predicts 90% on Type I",
+            testable=True,
+            category="prediction",
+        )
+        assert claim2.category == "prediction"
+
+    def test_conflict_map_groups_by_structure(self):
+        """conflict_map_summary groups claims by structure."""
+        from antagonistic_collab.epistemic_state import DebateClaim
+
+        state = EpistemicState(domain="test")
+        state.add_claim(
+            DebateClaim(
+                agent="A",
+                claim_type="prediction",
+                content="A predicts 85%",
+                testable=True,
+                structure="Type_I",
+                category="prediction",
+            )
+        )
+        state.add_claim(
+            DebateClaim(
+                agent="B",
+                claim_type="prediction",
+                content="B predicts 60%",
+                testable=True,
+                structure="Type_I",
+                category="prediction",
+            )
+        )
+        state.add_claim(
+            DebateClaim(
+                agent="A",
+                claim_type="prediction",
+                content="A predicts 70%",
+                testable=True,
+                structure="Type_VI",
+                category="prediction",
+            )
+        )
+
+        summary = state.conflict_map_summary()
+        assert "Type_I" in summary
+        assert "Type_VI" in summary
+
+    def test_conflict_map_shows_disagreements(self):
+        """Conflicting predictions on same structure should be highlighted."""
+        from antagonistic_collab.epistemic_state import DebateClaim
+
+        state = EpistemicState(domain="test")
+        state.add_claim(
+            DebateClaim(
+                agent="Exemplar_Agent",
+                claim_type="prediction",
+                content="GCM: 85% on Type_I",
+                testable=True,
+                structure="Type_I",
+                predicted_outcome="accuracy=0.85",
+                category="prediction",
+            )
+        )
+        state.add_claim(
+            DebateClaim(
+                agent="Rule_Agent",
+                claim_type="prediction",
+                content="RULEX: 95% on Type_I",
+                testable=True,
+                structure="Type_I",
+                predicted_outcome="accuracy=0.95",
+                category="prediction",
+            )
+        )
+
+        summary = state.conflict_map_summary()
+        assert "Exemplar_Agent" in summary
+        assert "Rule_Agent" in summary
+
+    def test_conflict_map_empty_ledger(self):
+        """Empty ledger should produce empty or minimal summary."""
+        state = EpistemicState(domain="test")
+        summary = state.conflict_map_summary()
+        assert summary == "" or "No" in summary
+
+    def test_conflict_map_resolved_vs_unresolved(self):
+        """Resolved claims should be shown differently from untested."""
+        from antagonistic_collab.epistemic_state import DebateClaim
+
+        state = EpistemicState(domain="test")
+        state.add_claim(
+            DebateClaim(
+                agent="A",
+                claim_type="prediction",
+                content="prediction 1",
+                testable=True,
+                structure="Type_I",
+                status="confirmed",
+                category="prediction",
+            )
+        )
+        state.add_claim(
+            DebateClaim(
+                agent="B",
+                claim_type="prediction",
+                content="prediction 2",
+                testable=True,
+                structure="Type_I",
+                status="untested",
+                category="prediction",
+            )
+        )
+
+        summary = state.conflict_map_summary()
+        assert "confirmed" in summary.lower() or "CONFIRMED" in summary
+        assert "untested" in summary.lower() or "UNTESTED" in summary
+
+    def test_conflict_map_in_prompt(self):
+        """conflict_map_summary should be injectable into prompts."""
+        from antagonistic_collab.epistemic_state import DebateClaim
+
+        state = EpistemicState(domain="test")
+        state.add_claim(
+            DebateClaim(
+                agent="A",
+                claim_type="prediction",
+                content="test claim",
+                testable=True,
+                structure="Type_II",
+                category="prediction",
+            )
+        )
+
+        summary = state.conflict_map_summary()
+        # Should be a non-empty string suitable for prompt injection
+        assert isinstance(summary, str)
+        assert len(summary) > 0

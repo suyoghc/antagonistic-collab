@@ -1335,6 +1335,10 @@ def run_interpretation_debate(
 
     extended_context = results_context + "\n".join(extra_context_lines)
 
+    # Build conflict map once for all agents
+    conflict_map = protocol.state.conflict_map_summary()
+    conflict_block = f"\n{conflict_map}\n" if conflict_map else ""
+
     for agent in protocol.agent_configs:
         # Inject prior claims for accountability
         claims_context = protocol.state.claims_summary_for_agent(agent.name)
@@ -1347,6 +1351,7 @@ def run_interpretation_debate(
             f"You are interpreting experimental results. Analyze the data and "
             f"produce a structured response.\n\n"
             f"RESULTS AND CONTEXT:\n{extended_context}\n"
+            f"{conflict_block}"
             f"{claims_block}\n"
             f"You MUST output a JSON block with:\n"
             f'{{"interpretation": "your analysis of what the results show", '

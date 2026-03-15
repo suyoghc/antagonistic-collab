@@ -194,6 +194,7 @@ class DebateClaim:
     status: str = "untested"  # untested | confirmed | falsified | stale
     tested_at_cycle: Optional[int] = None
     evidence: Optional[str] = None  # what confirmed/falsified it
+    category: str = "general"  # "prediction" | "mechanism" | "scope" | "general"
 
 
 @dataclass
@@ -320,6 +321,44 @@ class EpistemicState:
                 status_str += f" ({c.evidence})"
             testable_str = " [TESTABLE]" if c.testable else ""
             lines.append(f"  {i + 1}. [{status_str}]{testable_str} {c.content}")
+        return "\n".join(lines)
+
+    def conflict_map_summary(self) -> str:
+        """Generate a structured summary of where models agree and disagree.
+
+        Groups claims by structure/condition, shows which agents made
+        conflicting predictions, and highlights unresolved disputes.
+        """
+        from collections import defaultdict
+
+        if not self.claim_ledger:
+            return ""
+
+        # Group claims by structure
+        by_structure: dict[str, list[DebateClaim]] = defaultdict(list)
+        for c in self.claim_ledger:
+            key = c.structure or "(no structure)"
+            by_structure[key].append(c)
+
+        lines = ["### Conflict Map"]
+        for structure, claims in sorted(by_structure.items()):
+            lines.append(f"\n**{structure}**")
+            for c in claims:
+                status_str = c.status.upper()
+                pred_str = f" → {c.predicted_outcome}" if c.predicted_outcome else ""
+                lines.append(f"  - [{status_str}] {c.agent}: {c.content}{pred_str}")
+
+            # Check for disagreements: multiple agents with different predictions
+            agents_with_preds = [
+                (c.agent, c.predicted_outcome)
+                for c in claims
+                if c.predicted_outcome and c.claim_type == "prediction"
+            ]
+            if len(agents_with_preds) >= 2:
+                unique_preds = set(p for _, p in agents_with_preds)
+                if len(unique_preds) > 1:
+                    lines.append("  ⚡ DISAGREEMENT: agents predict different outcomes")
+
         return "\n".join(lines)
 
     # --- Theory management ---
