@@ -109,13 +109,13 @@ antagonistic_collab/
     ├── rulex.py              # RULEX (Nosofsky, Palmeri & McKinley, 1994)
     └── category_structures.py  # 11 structures: Shepard I-VI, 5-4, etc.
 tests/
-    └── test_bugfixes.py     # 231 tests
+    └── test_bugfixes.py     # 287 tests
 Notes/                       # Analysis, decisions, lessons learned
 ```
 
 ## Key results
 
-Validated across 6 runs (3 ground truths × 2 modes, 5 cycles each) + 9 cross-LLM runs + 4 M5 replication runs. The correct model's agent wins in every condition:
+Validated across 6 runs (3 ground truths × 2 modes, 5 cycles each) + 9 cross-LLM runs + 4 M5 replication runs + 3 M6 ARBITER live runs. The correct model's agent wins in every condition:
 
 | Ground Truth | Mode | Winner | RMSE | Gap |
 |---|---|---|---|---|
@@ -126,22 +126,35 @@ Validated across 6 runs (3 ground truths × 2 modes, 5 cycles each) + 9 cross-LL
 | SUSTAIN | legacy | Clustering_Agent | 0.361 | 34% |
 | RULEX | legacy | Rule_Agent | 0.429 | 2.4% |
 
+**M6 ARBITER live validation** (GPT-4o, role-specialized agents + crux negotiation + conflict maps + pre-registration):
+
+| Ground Truth | Winner | RMSE | Gap | Cruxes | Claims Falsified |
+|---|---|---|---|---|---|
+| GCM | Exemplar_Agent | 0.151 | 36.4% | 4/34 accepted | 14 |
+| SUSTAIN | Clustering_Agent | 0.270 | 45.6% | 7/32 accepted | 15 |
+| RULEX | Rule_Agent | 0.119 | 67.6% | 4/35 accepted | 15 |
+
 **Key findings**:
 - **Learning curves** solved the hardest discrimination problem — RULEX gap went from 2.4% (legacy) to 68% (full_pool). GCM approximates RULEX's final accuracy but can't mimic its sudden learning dynamics.
 - **LLM-agnostic**: Correct model wins in 9/9 cross-LLM runs (GPT-4o, Claude Sonnet, Claude Opus).
 - **Debate now affects outcomes**: Post-M5, replication RMSE std=0.018 (was 0.000). Parameter revision persistence closes the debate→prediction feedback loop.
-- **Critique-as-falsification**: ~45 false claims detected across validation runs. Agents overclaim model accuracy by 3–5× when fact-checked against actual computation.
+- **Falsification engine**: 44 claims falsified vs 1 confirmed across M6 runs. Convergence occurs by ruling out wrong theories, not confirming the right one.
+- **Crux selectivity**: 15% acceptance rate with real LLMs (vs 100% in mock). Accepted cruxes map to genuine theoretical fault lines.
+- **Posterior collapse**: Primary architectural bottleneck — EIG≈0 after cycle 0–1, making later cycles uninformative despite crux negotiation.
+- **Winning theories need fewer revisions**: Rule_Agent made 0 revisions and won RULEX by 67.6%. Losing agents revise futilely (Lakatos-compatible).
 
-See [Notes/REPORT.md](Notes/REPORT.md) for the full write-up and [Notes/LESSONS_LEARNED.md](Notes/LESSONS_LEARNED.md) for 12 theses on LLM-mediated scientific debate.
+See [Notes/REPORT.md](Notes/REPORT.md) for the full write-up and [Notes/LESSONS_LEARNED.md](Notes/LESSONS_LEARNED.md) for 16 theses on LLM-mediated scientific debate.
 
 ## What's next
 
 - [x] ~~Close debate feedback loops~~ — parameter revision persistence, structured claim ledger, critique-as-falsification, debate-informed EIG weighting (M5, done)
 - [x] ~~Compare LLM backbones~~ — Claude Sonnet/Opus vs GPT-4o: correct model wins in 9/9 runs, framework is LLM-agnostic (M4, done)
-- [ ] ARBITER/CRUCIBLE integration — role-specialized agents, crux negotiation, HITL checkpoints, pre-registration output
+- [x] ~~ARBITER integration~~ — role-specialized meta-agents, crux negotiation, conflict maps, pre-registration output, HITL checkpoints (M6, done — 3/3 correct, 36–68% gaps)
+- [ ] Address posterior collapse — tempering, entropy-based re-exploration, or crux-driven experiment overrides
 - [ ] Additional cognitive domains — memory retrieval, associative learning, decision making
 - [ ] AutoRA integration — real data collection via Prolific
 - [ ] Longer runs (10+ cycles) — test whether novel structures and claim ledger produce cumulative scientific reasoning
+- [ ] Claim-responsive debate — agents should address prior falsified claims explicitly
 
 ## Key references
 

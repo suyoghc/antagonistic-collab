@@ -4,50 +4,49 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ---
 
-## Current focus — M5: Close Debate Feedback Loops — COMPLETE
+## Current focus — M6: ARBITER Integration — COMPLETE
 
-### M5 implementation (all 4 features done)
+### M6 implementation (all 5 features + 1 bugfix)
 
 | Feature | Status | Commit | Tests |
 |---|---|---|---|
-| 7.1 Parameter revision persistence | DONE | `1d12fde` | 6 |
-| 7.4 Structured claim ledger | DONE | `4625d53` | 8 |
-| 7.2 Critique-as-falsification | DONE | `84852bb` | 5 |
-| 7.3 Debate-informed EIG weighting | DONE | `f61eec4` | 5 |
+| M6a: MetaAgentConfig | DONE | `3109d14` | 8 |
+| M6b: Crux Negotiation (6 sub-commits) | DONE | `dfc6ed2`–`f49818c` | 32 |
+| M6e: Conflict Map | DONE | `7fb5de3` | 6 |
+| M6d: Pre-registration Output | DONE | `d7b8ca6` | 4 |
+| M6c: HITL Checkpoints | DONE | `be91b7b` | 4 |
+| Bugfix: dict new_predictions | DONE | `2a57937` | 2 |
 
-### M5 validation (2026-03-15, GPT-4o via Princeton)
+Total: 56 new tests (231 → 287), 11 commits.
 
-| Ground Truth | Winner | RMSE | Posterior | Correct? |
-|---|---|---|---|---|
-| GCM | Exemplar_Agent | 0.1836 | 1.0000 | ✓ |
-| SUSTAIN | Clustering_Agent | 0.2687 | 1.0000 | ✓ |
-| RULEX | Rule_Agent | 0.1580 | 1.0000 | ✓ |
+### M6 live validation (2026-03-15, GPT-4o via Princeton, all M6 features enabled)
 
-### Replication variance (4× GCM runs)
+| Ground Truth | Winner | RMSE | Gap% | Posterior | Cruxes | Claims | Time |
+|---|---|---|---|---|---|---|---|
+| GCM | Exemplar_Agent | 0.1512 | 36.4% | 1.0000 | 4/34 | 14F/1C/26U | 431s |
+| SUSTAIN | Clustering_Agent | 0.2700 | 45.6% | 1.0000 | 7/32 | 15F/0C/24U | 439s |
+| RULEX | Rule_Agent | 0.1187 | 67.6% | 1.0000 | 4/35 | 15F/0C/26U | 467s |
 
-| Run | Exemplar RMSE | Clustering RMSE | Rule RMSE |
-|---|---|---|---|
-| Initial | 0.1836 | 0.2123 | 0.3280 |
-| Rep 1 | 0.1587 | 0.2424 | 0.3379 |
-| Rep 2 | 0.1832 | 0.2571 | 0.3628 |
-| Rep 3 | 0.2082 | 0.2590 | 0.3558 |
-| **Std Dev** | **0.0177** | **0.0189** | **0.0153** |
+3/3 correct. F=falsified, C=confirmed, U=untested.
 
-**Key result:** RMSE variance is now non-zero (was 0.000 pre-M5). Debate causally affects outcomes through parameter revision persistence.
+### What the M6 validation reveals
 
-### M5 feature activity
-- ~45 FALSE CLAIMs detected across 6 runs (critique-as-falsification)
-- 1 verified claim (Rule_Agent predicted 0.600, actual 0.544)
-- Agents consistently overclaim model accuracy (predicting 0.65–0.90 when actual 0.10–0.48)
-- RULEX posterior trajectory: started P(Exemplar)=1.0 for cycles 0-1, flipped to P(Rule)=0.9998 at cycle 2
+**The system is a falsification engine.** 44 claims falsified, 1 confirmed, 76 untested. Convergence occurs by ruling out wrong theories, not by confirming the right one. Popper-compatible.
 
-### Key reference
-- **12 Theses on LLM-Mediated Scientific Debate** — synthesis of all findings, in LESSONS_LEARNED.md "Synthesis" section
+**Crux negotiation is genuinely selective with real LLMs.** 15% acceptance rate (vs 100% in mock). Accepted cruxes cluster around real theoretical fault lines: exemplars vs rules, presentation order effects, attention allocation.
+
+**Posterior collapse is the main bottleneck.** GCM and SUSTAIN lock to correct model on cycle 0. RULEX takes until cycle 2. After that, EIG≈0 and remaining cycles are uninformative. Crux boost can't overcome zero EIG.
+
+**Winning theories need fewer revisions.** Rule_Agent made 0 revisions and won RULEX by 67.6%. Clustering_Agent made 3 futile revisions in the same run. Lakatos-compatible: robust cores resist falsification.
+
+**RULEX is the most scientifically interesting case.** Non-monotonic posterior trajectory — system initially backs Exemplar_Agent, self-corrects by cycle 2 when Type_I structures disambiguate. GCM and SUSTAIN converge immediately.
 
 ### Next steps
-- ARBITER/CRUCIBLE integration (M6a-M6e roadmap exists)
-- New domain extensions
-- Cross-LLM replication with M5 features (compare variance across GPT-4o/Sonnet/Opus)
+- Address posterior collapse: tempering, entropy-based re-exploration, or multi-hypothesis tracking
+- New cognitive domains (memory retrieval, decision making)
+- AutoRA integration for real data
+- Longer runs (10+ cycles) to test cumulative reasoning
+- Claim-responsive debate: agents should address prior falsified claims
 
 ---
 

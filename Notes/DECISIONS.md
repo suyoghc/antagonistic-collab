@@ -557,3 +557,62 @@ Pattern covered `debate_cycle_*.json` but not `.md` transcripts.
 **Impact:** Debate now causally affects RMSE. First non-zero replication variance in project history.
 
 **Status:** Done.
+
+---
+
+## D28: M6 — ARBITER Integration: role-specialized agents & crux negotiation — 2026-03-15
+
+**Problem:** M5 closed feedback loops but debate structure remained flat: all agents share the same prompt template, there's no mechanism for identifying decisive questions, and no structured output summarizing predictions before experiments run. ARBITER (Kachergis et al.) provides an architecture with role-specialized meta-agents, crux-based negotiation, conflict maps, and pre-registration.
+
+**Solution:** Implemented 5 features (54 tests, 11 commits):
+
+1. **MetaAgentConfig (M6a)** — `MetaAgentConfig` dataclass with role-specific prompts. Integrator synthesizes across theories; Critic challenges weakest argument. Meta-agents respond after theory agents in interpretation debate but don't trigger parameter revisions.
+
+2. **Crux Negotiation (M6b, 6 sub-commits)** — `Crux` dataclass with lifecycle (proposed→accepted→resolved→rejected). `run_crux_identification()`: each agent proposes 1-2 cruxes. `run_crux_negotiation()`: agents accept/reject/counter-propose. `finalize_cruxes()`: 2+ supporters → accepted. Active cruxes converted to `crux_boost_specs` for EIG boosting.
+
+3. **Conflict Map (M6e)** — `category` field on `DebateClaim`, `conflict_map_summary()` groups claims by structure/condition, shows where models make conflicting predictions. Injected into interpretation prompts.
+
+4. **Pre-registration (M6d)** — `generate_preregistration()` produces prediction tables (each model's predicted accuracy per structure), adjudication criteria, active cruxes, prior accuracy. Saved per cycle.
+
+5. **HITL Checkpoints (M6c)** — `hitl_checkpoint()` at crux finalization, EIG selection, and pre-registration. Auto-continues in batch mode, prompts in interactive mode.
+
+**Bugfix:** `summary_for_agent()` crashed with `KeyError: slice(None, 2, None)` when `new_predictions` was a dict. Coerced to list before slicing (`2a57937`).
+
+**Alternatives considered:**
+- Could have made meta-agents own computational models — decided against it; meta-agents add value through cross-theory synthesis, not prediction
+- Could have used a lower crux acceptance threshold (1 supporter) — chose 2 to prevent rubber-stamping; validation confirmed 15% acceptance rate with real LLMs
+- Could have replaced `focus_pair` with `crux_boost_specs` — kept both; they serve complementary purposes (posterior-based vs debate-based)
+
+**Validation:** Live 5-cycle runs with GPT-4o for all 3 ground truths:
+- GCM → Exemplar_Agent (RMSE 0.1512, gap 36.4%) ✓
+- SUSTAIN → Clustering_Agent (RMSE 0.2700, gap 45.6%) ✓
+- RULEX → Rule_Agent (RMSE 0.1187, gap 67.6%) ✓
+
+**Key findings:**
+- Falsification dominates: 44 claims falsified, 1 confirmed across all 3 runs
+- Crux negotiation is selective: 15% acceptance rate (vs 100% in mock)
+- Posterior collapse remains the main bottleneck: EIG≈0 after cycle 0–1
+- Winning theories need fewer revisions (Rule_Agent: 0 revisions, 67.6% gap)
+- Meta-agents contribute substantively but don't override Bayesian machinery
+
+**Impact:** Full ARBITER architecture operational. System now has role specialization, focused debate via cruxes, conflict tracking, and pre-registered predictions. 287 tests total.
+
+**Status:** Done.
+
+---
+
+## D29: Posterior collapse as primary architectural bottleneck — 2026-03-15
+
+**Problem:** M6 live validation revealed that the Bayesian posterior collapses to certainty (P≈1.0) after cycle 0 or 1 in 2 of 3 runs (GCM, SUSTAIN). When the posterior is certain, EIG=0 for all candidates, making remaining cycles uninformative. Crux boost can't overcome zero EIG.
+
+**Observation:** RULEX is the exception — posterior initially favored Exemplar_Agent, then self-corrected by cycle 2 when five_four→Type_I structural variation provided disambiguating evidence. This non-monotonic trajectory demonstrates the value of structural diversity, but the system doesn't actively seek it once the posterior collapses.
+
+**Open question:** How to keep later cycles informative?
+
+**Options under consideration:**
+- **Posterior tempering** — raise log-probs to a power <1 to prevent collapse, ensuring later cycles still have non-zero EIG
+- **Entropy-based re-exploration** — when posterior entropy drops below threshold, force exploration of untested structures regardless of EIG
+- **Multi-hypothesis tracking** — maintain a particle set of posteriors to preserve uncertainty
+- **Crux-driven override** — when accepted cruxes exist but EIG=0, run the crux's discriminating experiment regardless
+
+**Status:** Open. Logged for M7 planning.

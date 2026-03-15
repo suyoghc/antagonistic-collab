@@ -1,13 +1,13 @@
 # Antagonistic Collaboration via LLM Debate: Can AI Agents Resolve Scientific Disputes?
 
-**Phase: M5 — Debate Feedback Loops (updated)**
-**Date: 2026-03-15** (originally 2026-03-14; updated with M5 validation results)
+**Phase: M6 — ARBITER Integration (updated)**
+**Date: 2026-03-15** (originally 2026-03-14; updated with M5 and M6 validation results)
 
 ---
 
 ## Abstract
 
-We present an antagonistic collaboration framework in which three LLM agents — each representing a competing theory of human category learning — debate through a structured protocol, propose experiments, and converge toward the theory that best explains synthetic data. The three models are the Generalized Context Model (GCM; Nosofsky 1986), SUSTAIN (Love, Medin & Gureckis 2004), and RULEX (Nosofsky, Palmeri & McKinley 1994). We compare two architectures: a *legacy* mode where LLM agents propose experiments through adversarial debate, and a *full-pool* mode where Bayesian expected information gain (EIG) selects experiments while agents shift to interpreting results and generating hypotheses. Across 6 validation runs (3 ground truths × 2 modes, 5 cycles each), the correct model's agent wins in every condition. Full-pool mode achieves dramatically better discrimination for hard model pairs (RULEX gap: 2.4% legacy vs. 68% full-pool), driven by learning curves as a second evidence channel. Cross-LLM comparison (GPT-4o, Claude Sonnet, Claude Opus) confirms the framework is LLM-agnostic (9/9 correct). After closing four broken feedback loops (M5), debate now causally affects RMSE through parameter revision persistence (replication std=0.018, previously 0.000), and critique-as-falsification reveals that agents overclaim model accuracy by 3–5×. We distill 12 theses on what LLM-mediated scientific debate can and cannot do.
+We present an antagonistic collaboration framework in which three LLM agents — each representing a competing theory of human category learning — debate through a structured protocol, propose experiments, and converge toward the theory that best explains synthetic data. The three models are the Generalized Context Model (GCM; Nosofsky 1986), SUSTAIN (Love, Medin & Gureckis 2004), and RULEX (Nosofsky, Palmeri & McKinley 1994). We compare two architectures: a *legacy* mode where LLM agents propose experiments through adversarial debate, and a *full-pool* mode where Bayesian expected information gain (EIG) selects experiments while agents shift to interpreting results and generating hypotheses. Across 6 validation runs (3 ground truths × 2 modes, 5 cycles each), the correct model's agent wins in every condition. Full-pool mode achieves dramatically better discrimination for hard model pairs (RULEX gap: 2.4% legacy vs. 68% full-pool), driven by learning curves as a second evidence channel. Cross-LLM comparison (GPT-4o, Claude Sonnet, Claude Opus) confirms the framework is LLM-agnostic (9/9 correct). After closing four broken feedback loops (M5), debate now causally affects RMSE through parameter revision persistence (replication std=0.018, previously 0.000), and critique-as-falsification reveals that agents overclaim model accuracy by 3–5×. M6 adds ARBITER-inspired architecture: role-specialized meta-agents (Integrator, Critic), crux-based negotiation for focusing debate on decisive questions, conflict maps, and pre-registration output. Live M6 validation with GPT-4o achieves 3/3 correct with decisive gaps (36–68%), reveals the system operates as a falsification engine (44 claims falsified, 1 confirmed), and identifies posterior collapse as the primary architectural bottleneck. We distill 12 theses on what LLM-mediated scientific debate can and cannot do.
 
 ---
 
@@ -149,9 +149,23 @@ Four features close the feedback loops between debate and the quantitative pipel
 
 4. **Debate-informed EIG weighting** — `select_from_pool()` accepts a `focus_pair` (the two models with closest posterior probabilities, or the most-disputed pair in the claim ledger) and multiplies EIG by 1.5× for candidates where those models have high prediction divergence.
 
-### 2.10 Validation protocol
+### 2.10 ARBITER features (M6)
 
-Six M4 runs: 3 ground truths × 2 modes, each 5 cycles. Nine cross-LLM runs: 3 ground truths × 3 LLMs. Three M5 validation runs: 3 ground truths, full_pool with GPT-4o. Four M5 replication runs: GCM ground truth, full_pool with GPT-4o (for variance analysis). 231 automated tests verify framework correctness.
+M6 adds five ARBITER-inspired features:
+
+1. **Role-specialized meta-agents** — `MetaAgentConfig` defines Integrator and Critic roles with dedicated system prompts. The Integrator synthesizes across all three theory agents' responses; the Critic identifies and challenges the weakest argument. Meta-agents respond after theory agents in interpretation debate but do not trigger parameter revisions or model predictions.
+
+2. **Crux negotiation** — A three-phase protocol between divergence mapping and experiment selection. *Identification*: each theory agent proposes 1–2 cruxes — questions whose answer would change their mind. *Negotiation*: agents accept, reject, or counter-propose each other's cruxes. *Finalization*: cruxes with 2+ supporters become active. Active cruxes are converted to `crux_boost_specs` that multiply EIG for matching experiment candidates, focusing experiment selection on decisive questions.
+
+3. **Conflict map** — `conflict_map_summary()` groups claims by structure and condition, showing where models agree and disagree. Claims carry a `category` field (prediction/mechanism/scope/general). The conflict map is injected into interpretation prompts to help agents engage with the structure of disagreement.
+
+4. **Pre-registration** — `generate_preregistration()` produces prediction tables (each model's predicted accuracy per tested structure), adjudication criteria (what RMSE gap counts as decisive), active cruxes and their resolution criteria, and claimed vs actual accuracy for prior cycles. Generated at the start of each cycle after cycle 0.
+
+5. **HITL checkpoints** — `hitl_checkpoint()` at crux finalization, EIG selection, and pre-registration. Auto-continues in batch mode; prompts human moderator in interactive mode. Controlled by `--hitl-checkpoints` CLI flag.
+
+### 2.11 Validation protocol
+
+Six M4 runs: 3 ground truths × 2 modes, each 5 cycles. Nine cross-LLM runs: 3 ground truths × 3 LLMs. Three M5 validation runs: 3 ground truths, full_pool with GPT-4o. Four M5 replication runs: GCM ground truth, full_pool with GPT-4o (for variance analysis). Three M6 live validation runs: 3 ground truths, full_pool with GPT-4o, all ARBITER features enabled. 287 automated tests verify framework correctness.
 
 ---
 
@@ -315,6 +329,54 @@ This 45:1 false-to-verified ratio quantifies the gap between LLM mechanistic int
 
 The structured claim ledger accumulates ~3 claims per agent per cycle (from interpretation debate) plus critique claims. Most claims remain "untested" because they reference conditions not subsequently selected by EIG. The focus pair mechanism activates after cycle 0 but has modest impact in 5-cycle runs because the posterior typically collapses quickly. The RULEX run shows the most interesting trajectory: focus pair correctly identifies Exemplar–Rule as the contested pair during cycles 1–2, when discrimination matters most.
 
+### 3.15 M6: ARBITER live validation — role-specialized agents and crux negotiation
+
+M6 adds ARBITER-inspired architecture (meta-agents, crux negotiation, conflict maps, pre-registration) and validates with GPT-4o on all three ground truths, 5 cycles each.
+
+| Ground Truth | Winner | RMSE | Gap% | Cruxes (accepted/total) | Claims (falsified/confirmed/untested) | Time |
+|---|---|---|---|---|---|---|
+| GCM | Exemplar_Agent | 0.1512 | 36.4% | 4/34 | 14/1/26 | 431s |
+| SUSTAIN | Clustering_Agent | 0.2700 | 45.6% | 7/32 | 15/0/24 | 439s |
+| RULEX | Rule_Agent | 0.1187 | 67.6% | 4/35 | 15/0/26 | 467s |
+
+3/3 correct, all decisive margins.
+
+### 3.16 The system as a falsification engine
+
+The claim ledger reveals a striking asymmetry: across all three M6 runs, 44 claims were falsified, 1 confirmed, and 76 remain untested. Agents make bold predictions during interpretation debate; experiments consistently disprove them; the Bayesian posterior accumulates evidence against wrong theories. Even the winning agent rarely makes predictions conservative enough to survive empirical test.
+
+This is the debate protocol's emergent methodology: convergence occurs not by proving the winner right, but by proving the losers wrong. The one confirmed claim (Rule_Agent predicting mean_accuracy=0.600 on Type_IV/low_attention, actual 0.500) is the exception that proves the rule.
+
+### 3.17 Crux negotiation is selective with real LLMs
+
+Approximately 100 cruxes were proposed across all three M6 runs; only 15 were accepted (15% acceptance rate). In mock validation with deterministic responses, acceptance was 100% — agents rubber-stamped every crux. Real GPT-4o agents reject proposals they find unpersuasive, producing genuine selectivity.
+
+Accepted cruxes cluster around real theoretical fault lines: "Do people store individual exemplars or use abstract rules?" (exemplar vs rule debate), "The role of presentation order in category learning" (relevant to SUSTAIN's order-sensitivity), "The necessity of cluster recruitment in learning complex structures" (SUSTAIN's core mechanism). These are precisely the questions that cognitive scientists disagree about.
+
+However, the crux→experiment pipeline is loose. Crux boost multiplies EIG for matching candidates, but when EIG≈0 due to posterior collapse, there is nothing to boost. The crux mechanism's full potential is constrained by the posterior collapse problem.
+
+### 3.18 Posterior collapse: the primary architectural bottleneck
+
+Two of three runs (GCM, SUSTAIN) achieve posterior certainty (P≈1.0) after cycle 0. Once the posterior collapses, EIG=0 for all candidates, making cycles 2–4 uninformative regardless of crux boost. The system spends most of its compute budget running experiments that cannot change the outcome.
+
+RULEX is the exception and the most scientifically interesting case. The posterior initially favors Exemplar_Agent after the five_four experiment (cycle 0), then self-corrects by cycle 2 once Type_I structures provide disambiguating evidence. This non-monotonic trajectory demonstrates the system's capacity for self-correction — but only when posterior uncertainty survives long enough for structural variation to take effect.
+
+### 3.19 Winning theories need fewer revisions
+
+| Ground Truth | Winner's Revisions | Losers' Total Revisions |
+|---|---|---|
+| GCM | 2 (Exemplar_Agent) | 5 |
+| SUSTAIN | 1 (Clustering_Agent) | 6 |
+| RULEX | 0 (Rule_Agent) | 5 |
+
+Theories aligned with ground truth require less parameter adjustment. In the RULEX run, Rule_Agent made zero revisions and won by 67.6%, while Clustering_Agent made 3 futile revisions trying to accommodate evidence it could not explain. This is Lakatos's criterion for progressive vs degenerative research programs, emerging naturally from the adversarial structure: robust theoretical cores resist falsification without auxiliary adjustments, while misaligned theories revise progressively but cannot close the gap.
+
+### 3.20 Meta-agent contributions
+
+Each M6 run produced 10 meta-agent responses (5 Integrator, 5 Critic, one per cycle). The Integrator synthesized across all three theory agents' responses, identifying areas of convergence and divergence. The Critic consistently identified the weakest argument among theory agents — typically challenging agents whose posterior probability had collapsed to zero but who continued making strong claims.
+
+Meta-agents did not override the Bayesian machinery. Their primary value is qualitative: they structure the debate's narrative, making human review more efficient by highlighting the key tensions and weaknesses. This is the intended division of labor — computation for quantitative adjudication, LLMs for semantic synthesis.
+
 ---
 
 ## 4. Discussion
@@ -348,43 +410,57 @@ The solution was a constrained menu (structure registry + condition effects) tha
 - Theory revision pressure — incorrect theories accommodate evidence progressively (Lakatos-compatible)
 - Human-readable mechanistic explanations of model behavior
 - Parameter revisions that causally affect subsequent predictions (M5 — replication std=0.018)
+- Crux negotiation that identifies genuine theoretical fault lines (M6 — 15% acceptance rate, accepted cruxes map to real scientific disagreements)
+- Role-specialized synthesis: Integrator identifies convergence, Critic identifies weakest arguments (M6)
+- Falsification as an emergent methodology: 44:1 falsified-to-confirmed ratio (M6)
 
 **What debate does not contribute:**
 - Experiment selection quality (EIG dominates; LLM proposals are narrative-driven)
 - Cumulative scientific reasoning (agents repeat talking points across cycles despite the claim ledger)
 - Data-grounded argumentation (posteriors cited as proxy; item-level data ignored)
 - Calibrated quantitative predictions (agents overclaim accuracy by 3–5× when fact-checked)
+- Overcoming posterior collapse (crux boost is active but powerless when EIG=0)
 
-Pre-M5, the debate was entirely epiphenomenal to RMSE — replication variance was zero, and convergence was driven by the Bayesian machinery alone. Post-M5, parameter revision persistence creates a modest but real causal link: different LLM runs produce different parameter revisions, which produce different model predictions. The correct winner is preserved, but the debate now leaves a quantitative fingerprint. The debate's primary value remains qualitative — mechanistic narratives and human-readable explanations — but it is no longer purely cosmetic.
+Pre-M5, the debate was entirely epiphenomenal to RMSE — replication variance was zero, and convergence was driven by the Bayesian machinery alone. Post-M5, parameter revision persistence creates a modest but real causal link: different LLM runs produce different parameter revisions, which produce different model predictions. Post-M6, the ARBITER architecture enriches debate quality (cruxes, conflict maps, meta-agents) but does not fundamentally alter the convergence mechanism, which remains Bayesian. The debate's primary value is qualitative — mechanistic narratives, structured disagreement, and human-readable explanations — augmented by M6's role specialization and crux-driven focus.
 
-### 4.5 Limitations
+### 4.5 Posterior collapse as the primary bottleneck
 
-1. **Modest debate impact.** Post-M5, replication variance is non-zero but small (std≈0.018 on RMSE≈0.18, ~10% coefficient of variation). The Bayesian machinery still dominates convergence. Whether stronger feedback loops (e.g., agents proposing entire parameter vectors, or debate-driven experiment vetoes) would increase the debate's causal role is untested.
+M6 validation reveals a structural problem: the Bayesian posterior collapses to certainty after 1–2 experiments, leaving remaining cycles with EIG≈0. This renders crux boost, meta-agent guidance, and later debate cycles uninformative. The posterior concentration is correct — the first five_four experiment often provides overwhelming evidence — but it eliminates the system's ability to explore structural questions raised by crux negotiation.
 
-2. **Synthetic data only.** The framework validates whether correct models are identifiable in principle, not whether the models are correct accounts of human behavior. Extending to real experimental data would require a lab-automation interface.
+The RULEX run demonstrates what happens when collapse is delayed: the posterior initially favors the wrong model, then self-corrects when structural variation provides disambiguating evidence. This non-monotonic trajectory is the system's most scientifically valuable behavior, and it only occurs when uncertainty survives long enough for the debate to matter.
 
-3. **Three models only.** The framework currently implements GCM, SUSTAIN, and RULEX. Generalization to other model families (neural networks, Bayesian cognitive models) is architecturally straightforward but untested.
+Potential solutions: posterior tempering (prevent collapse by raising log-probs to a power <1), entropy-based re-exploration (force untested structures when entropy is low), or crux-driven overrides (run a crux's discriminating experiment regardless of EIG).
 
-4. **LLM-agnostic convergence.** Cross-LLM comparison (Section 3.6) shows correct model wins regardless of backbone, which validates robustness but also suggests the LLM is currently a replaceable component. The debate quality differences between GPT-4o, Sonnet, and Opus do not translate into convergence differences.
+### 4.6 Limitations
 
-5. **No human evaluation of debate quality.** Our quality audit was systematic but not blind. Expert evaluation of whether agent reasoning constitutes genuine scientific reasoning would strengthen the findings.
+1. **Posterior collapse.** The most urgent limitation. EIG≈0 after cycle 0–1 in 2 of 3 ground truths makes later cycles uninformative. Crux negotiation identifies decisive questions, but the posterior is already certain, so there's nothing to decide. This limits the debate to 1–2 genuinely informative cycles despite running 5.
 
-6. **Claim ledger underutilized.** Agents don't spontaneously engage with the claim ledger in their interpretations despite it being injected into prompts. Stronger prompt engineering or explicit penalties for repeating falsified claims may be needed.
+2. **Modest debate impact.** Post-M5, replication variance is non-zero but small (std≈0.018 on RMSE≈0.18, ~10% coefficient of variation). Post-M6, ARBITER features enrich debate quality but do not fundamentally alter convergence. The Bayesian machinery still dominates.
 
-### 4.6 Future directions
+3. **Synthetic data only.** The framework validates whether correct models are identifiable in principle, not whether the models are correct accounts of human behavior. Extending to real experimental data would require a lab-automation interface.
 
-1. **Enforce numerical citation requirements** — agents must cite 3+ specific item predictions that diverge, not just posterior probabilities
+4. **Three models only.** The framework currently implements GCM, SUSTAIN, and RULEX. Generalization to other model families (neural networks, Bayesian cognitive models) is architecturally straightforward but untested.
+
+5. **LLM-agnostic convergence.** Cross-LLM comparison (Section 3.6) shows correct model wins regardless of backbone, which validates robustness but also suggests the LLM is currently a replaceable component. The debate quality differences between GPT-4o, Sonnet, and Opus do not translate into convergence differences.
+
+6. **No human evaluation of debate quality.** Our quality audit was systematic but not blind. Expert evaluation of whether agent reasoning constitutes genuine scientific reasoning would strengthen the findings.
+
+7. **Claim ledger underutilized.** Agents don't spontaneously engage with the claim ledger or conflict map in their interpretations despite injection into prompts. The 44:1 falsification ratio suggests agents make bold claims but don't learn from falsification.
+
+### 4.7 Future directions
+
+1. **Address posterior collapse** — posterior tempering, entropy-based re-exploration, or multi-hypothesis tracking to keep later cycles informative
 2. **Claim-responsive debate** — agents should explicitly address their prior claims ("I previously predicted X, which was falsified; I now revise to Y") rather than repeating generic talking points
 3. **Longer runs (10+ cycles)** — assess whether novel structures eventually outperform registry structures as the registry space is exhausted, and whether the claim ledger produces cumulative reasoning at longer horizons
 4. **Cross-domain generalization** — apply the framework to other multi-model disputes in cognitive science (memory models, decision-making theories)
-5. **ARBITER/CRUCIBLE integration** — role-specialized agents (Integrator, Critic, Moderator), explicit crux negotiation, HITL checkpoints, and pre-registration output (from Kachergis et al.)
-6. **Real data integration** — AutoRA + Prolific for closing the loop with human participants
+5. **Real data integration** — AutoRA + Prolific for closing the loop with human participants
+6. **Crux-driven experiment override** — when accepted cruxes exist but EIG=0, bypass Bayesian selection and run the crux's discriminating experiment directly
 
 ---
 
 ## 5. Conclusion
 
-Antagonistic collaboration via LLM debate can successfully identify the correct model from competing theories. The mechanism of convergence is primarily Bayesian computation, but M5's feedback loop closures demonstrate that debate can causally affect outcomes — parameter revisions proposed during interpretation now persist into subsequent predictions, producing non-zero replication variance for the first time. The optimal architecture separates computation (experiment selection, posterior update, learning curves) from language (interpretation, hypothesis generation, explanation), but connects them through validated feedback paths (parameter persistence, claim verification). LLM agents add genuine value as scientific narrators — translating statistical evidence into mechanistic understanding — and critique-as-falsification reveals they dramatically overclaim model accuracy (45:1 false-to-verified ratio), quantifying the gap between mechanistic intuition and computational reality. The framework demonstrates both the promise and the current limits of LLMs in the scientific method: they reason correctly about mechanisms, but cannot yet learn cumulatively from evidence or calibrate their quantitative expectations to their computational models.
+Antagonistic collaboration via LLM debate can successfully identify the correct model from competing theories. The mechanism of convergence is primarily Bayesian computation, but M5's feedback loop closures demonstrate that debate can causally affect outcomes — parameter revisions proposed during interpretation now persist into subsequent predictions, producing non-zero replication variance for the first time. M6's ARBITER integration adds role-specialized meta-agents, crux-based negotiation, conflict maps, and pre-registration output, enriching debate quality while preserving correct convergence (3/3 ground truths, 36–68% gaps). The system operates as a falsification engine: 44 claims falsified vs 1 confirmed across all M6 runs. Crux negotiation is genuinely selective with real LLMs (15% acceptance rate), and winning theories require fewer parameter revisions than losing theories (Lakatos-compatible). The primary architectural bottleneck is posterior collapse — the Bayesian posterior concentrates too quickly, leaving later cycles uninformative despite active crux negotiation. The optimal architecture separates computation (experiment selection, posterior update, learning curves) from language (interpretation, hypothesis generation, explanation), but connects them through validated feedback paths (parameter persistence, claim verification, crux-driven EIG boosting). The framework demonstrates both the promise and the current limits of LLMs in the scientific method: they identify genuine theoretical fault lines through crux negotiation, synthesize across competing accounts through meta-agents, and produce human-readable mechanistic narratives — but they cannot yet learn cumulatively from evidence, calibrate their quantitative expectations, or overcome the system's tendency toward premature certainty.
 
 ---
 

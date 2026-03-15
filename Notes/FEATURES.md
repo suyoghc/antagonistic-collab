@@ -354,6 +354,60 @@ and more targeted hypotheses.
 
 ---
 
+## 8. ARBITER Features (Implemented — M6, validated 2026-03-15)
+
+### 8.1 Role-specialized meta-agents (`MetaAgentConfig`)
+**What it does:** Adds Integrator and Critic meta-agents with role-specific system prompts.
+The Integrator synthesizes across all three theory agents' responses; the Critic challenges
+the weakest argument.
+**Where:** `debate_protocol.py` (MetaAgentConfig), `runner.py` (create_default_meta_agents,
+INTEGRATOR_PROMPT, CRITIC_PROMPT)
+**Why it matters:** Role specialization focuses agent effort. Integrator finds convergence;
+Critic finds weakness. Neither overrides Bayesian machinery — their value is qualitative
+(narrative structure, human readability).
+**M6 result:** 10 meta-agent responses per 5-cycle run. Critic consistently identifies
+weakest argument (often from agents with P≈0 posterior). Integrator synthesizes areas
+of agreement.
+
+### 8.2 Crux negotiation (`Crux` dataclass + 3-phase protocol)
+**What it does:** Three-phase protocol: identification (agents propose 1-2 cruxes per cycle),
+negotiation (accept/reject/counter-propose), finalization (2+ supporters → accepted).
+Active cruxes boost EIG for matching candidates via `crux_boost_specs`.
+**Where:** `epistemic_state.py` (Crux, add_crux, get_active_cruxes, resolve_crux, crux_summary),
+`runner.py` (run_crux_identification, run_crux_negotiation, finalize_cruxes, cruxes_to_boost_specs),
+`bayesian_selection.py` (crux_boost_specs param)
+**Why it matters:** Focuses debate on decisive questions rather than rehashing every disagreement.
+With real LLMs, only 15% of proposed cruxes are accepted — agents genuinely reject unpersuasive proposals.
+**M6 result:** ~100 cruxes proposed across 3 runs, 15 accepted. Accepted cruxes map to real
+theoretical fault lines in cognitive science. Crux boost is active but constrained by
+posterior collapse (can't boost zero EIG).
+**Open question:** Would crux-driven experiment overrides (bypass EIG when cruxes exist) help?
+
+### 8.3 Conflict map (`conflict_map_summary()`)
+**What it does:** Groups claims by structure and condition, showing where models agree and disagree.
+Claims carry a `category` field (prediction/mechanism/scope/general). Injected into interpretation prompts.
+**Where:** `epistemic_state.py` (conflict_map_summary, DebateClaim.category)
+**Why it matters:** Provides structured view of disagreement. Agents can see which predictions are
+contested vs settled, and where their theory is vulnerable.
+**M6 result:** 40-68 lines per run. Dominated by falsified prediction claims.
+
+### 8.4 Pre-registration (`generate_preregistration()`)
+**What it does:** Generates prediction tables (each model's predicted accuracy per structure),
+adjudication criteria, active cruxes, and prior accuracy. Saved per cycle.
+**Where:** `runner.py` (generate_preregistration)
+**Why it matters:** Scientific rigor — predictions committed before experiments run. Enables
+post-hoc analysis of which agents' predictions were closest.
+**M6 result:** Pre-registration files generated for cycles 1-4 in each run.
+
+### 8.5 HITL checkpoints (`hitl_checkpoint()`)
+**What it does:** Optional breakpoints at crux finalization, EIG selection, and pre-registration.
+Auto-continues in batch mode; prompts human in interactive mode.
+**Where:** `runner.py` (hitl_checkpoint), `__main__.py` (--hitl-checkpoints flag)
+**Why it matters:** Enables human oversight at key decision points without requiring fully interactive mode.
+**M6 result:** Auto-continued in all validation runs (batch mode). Not yet tested in interactive mode.
+
+---
+
 ## Summary: Features Most Likely to Alter Outcomes
 
 Ranked by estimated impact on which theory wins and how fast convergence occurs:
@@ -373,8 +427,17 @@ Ranked by estimated impact on which theory wins and how fast convergence occurs:
 13. **LLM model quality** — validated as non-critical: 3 LLMs produce identical outcomes (9/9 correct)
 14. **Lakatos trajectory completeness** — determines whether revision tracking is meaningful
 
+15. **Crux negotiation** (8.2) — implemented M6; 15% acceptance rate, focuses debate on decisive questions
+16. **Role-specialized meta-agents** (8.1) — implemented M6; Integrator + Critic shape debate narrative
+17. **Conflict map** (8.3) — implemented M6; structured disagreement view in interpretation prompts
+18. **Pre-registration** (8.4) — implemented M6; predictions committed before experiments run
+
 **Key finding (M4):** Features 1–4 fully determine outcomes in the current system.
 **Update (M5, 2026-03-15):** Features 5, 7, 9, 10 now implemented. Replication
 variance is non-zero (std=0.018 vs 0.000 pre-M5). Debate causally affects RMSE
 through parameter revision persistence. All 3 ground truths still correctly
 identified. Cross-LLM comparison (GPT-4o, Sonnet, Opus) confirms: 9/9 correct.
+**Update (M6, 2026-03-15):** Features 15–18 now implemented. ARBITER features
+enrich debate quality (crux selectivity, meta-agent synthesis, conflict tracking)
+but do not alter convergence mechanism. Posterior collapse (D29) is the primary
+bottleneck — crux boost cannot overcome zero EIG. 3/3 correct with 36–68% gaps.

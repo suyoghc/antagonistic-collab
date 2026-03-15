@@ -828,9 +828,57 @@ The RULEX ground truth run shows the most interesting trajectory: posterior star
 
 ---
 
+## Phase 11 — M6: ARBITER Integration — Live Validation (2026-03-15)
+
+### 11.1 The system is a falsification engine
+
+Across all three M6 live runs (GCM, SUSTAIN, RULEX), the claim ledger records 44 falsified claims, 1 confirmed, and 76 untested. Convergence occurs by ruling out wrong theories, not by confirming the right one. Agents make bold predictions during interpretation debate ("my model predicts 0.85 accuracy on Type I"); experiments consistently disprove them. The Bayesian posterior accumulates falsifications and concentrates on the surviving theory. Even the winning agent rarely makes predictions conservative enough to survive empirical test.
+
+This is Popperian epistemology emerging from the system's architecture: adversarial agents propose falsifiable claims, Bayesian experiment selection tests them, and the posterior eliminates theories that fail. No part of the system was designed to favor falsification over confirmation — it's an emergent property of combining bold prediction with rigorous testing.
+
+### 11.2 Crux negotiation is selective — but only with real LLMs
+
+In mock validation with deterministic responses, crux acceptance was 100% — agents rubber-stamped every proposal. In live validation with GPT-4o, acceptance dropped to 15% (~100 proposed, 15 accepted). Real LLMs reject cruxes they find unpersuasive, producing genuine selectivity.
+
+Accepted cruxes cluster around real theoretical fault lines: "Do people store individual exemplars or abstract rules?" (the GCM-vs-RULEX debate), "The role of presentation order in category learning" (SUSTAIN's order-sensitivity), "The necessity of cluster recruitment in complex structures" (SUSTAIN's core mechanism). These are precisely the questions that cognitive scientists actually disagree about.
+
+**Implication:** Mock testing of debate features can be misleading. The dynamics of crux negotiation, argument quality, and selectivity change fundamentally when real LLMs are involved. Always validate debate features with live LLM calls.
+
+### 11.3 Posterior collapse makes later cycles uninformative
+
+GCM and SUSTAIN posterior lock to P≈1.0 after cycle 0. RULEX takes until cycle 2. After collapse, EIG=0 for all candidates, making remaining cycles uninformative. The system spends 60–80% of its compute budget on experiments that cannot change the outcome. Crux boost multiplies EIG for crux-relevant candidates, but multiplying zero gives zero.
+
+This is the primary architectural bottleneck. The Bayesian posterior concentrates too aggressively given the strong evidence from a single well-chosen experiment. The RULEX run shows what happens when collapse is delayed: the system initially backs the wrong horse (Exemplar_Agent), then self-corrects when structural variation provides disambiguating evidence. This non-monotonic trajectory is the most scientifically valuable behavior — and it only occurs when posterior uncertainty survives long enough for the debate to matter.
+
+### 11.4 Winning theories need fewer revisions — Lakatos validated
+
+| Ground Truth | Winner's Revisions | Losers' Total Revisions |
+|---|---|---|
+| GCM | 2 | 5 |
+| SUSTAIN | 1 | 6 |
+| RULEX | 0 | 5 |
+
+Rule_Agent made zero revisions and won RULEX by 67.6%. Clustering_Agent made 3 futile revisions in the same run. Theories aligned with ground truth have robust cores that resist falsification without auxiliary adjustment; misaligned theories revise progressively but cannot close the gap. This is Lakatos's criterion for progressive vs degenerative research programs, emerging naturally from the adversarial structure.
+
+All revisions across all runs were parameter adjustments (sensitivity, threshold, learning rate), not core claim modifications. The debate protocol preserves core theoretical commitments while allowing auxiliary flexibility — exactly as Lakatos describes in productive science.
+
+### 11.5 RULEX shows the most scientifically interesting dynamics
+
+GCM and SUSTAIN converge immediately (cycle 0) — clean but uninformative. RULEX shows a non-monotonic trajectory: the system initially backs Exemplar_Agent after the five_four experiment, then flips to Rule_Agent by cycle 2 after Type_I structures disambiguate. This is self-correction via structural variation — the system recovers from early mistakes when it encounters evidence that distinguishes the models.
+
+RULEX also produces the largest gap (67.6%) and the clearest separation on the prediction leaderboard (RMSE 0.119 vs 0.366 and 0.401 for the other agents). Rule-based categories produce the sharpest model separation, consistent with the well-known difficulty of distinguishing exemplar from rule models on non-rule-like structures (Nosofsky 1991).
+
+### 11.6 Meta-agents: useful narrators, not decision-makers
+
+Each run produced 10 meta-agent responses (5 Integrator, 5 Critic). The Integrator synthesized across theories, finding areas of convergence ("All agents agree Type_I strongly favors rule-based accounts"). The Critic identified the weakest argument — typically challenging agents whose posterior had collapsed to zero but who continued making strong claims ("Exemplar_Agent's attribution of underperformance solely to low attention conditions is insufficient").
+
+Meta-agents don't override the Bayesian machinery. They add qualitative structure: highlighting tensions, identifying weak arguments, synthesizing across perspectives. Their value is for human review, not for machine convergence. This is the correct division of labor — role specialization improves debate readability without distorting quantitative adjudication.
+
+---
+
 ## Synthesis: 12 Theses on LLM-Mediated Scientific Debate
 
-Distilled from 10 phases of development, ~60 validation runs, and 4 LLM backbones.
+Distilled from 11 phases of development, ~70 validation runs, and 4 LLM backbones.
 
 ### On what debate can and cannot do
 
@@ -863,3 +911,13 @@ Distilled from 10 phases of development, ~60 validation runs, and 4 LLM backbone
 **11. Model flexibility is a real scientific finding, not a system bug.** GCM approximates rule-like behavior through attention weights (Nosofsky 1991). The system correctly detects this asymmetry — the 1.8% RULEX gap is scientifically honest. (Phases 5–6)
 
 **12. Closing feedback loops makes debate matter, but modestly.** Post-M5, replication variance went from zero to std≈0.018 (10% CV). The debate now causally affects outcomes through parameter revision persistence. But the Bayesian machinery still dominates — correct winners in all runs regardless of what agents say. The debate's primary value remains qualitative: human-readable explanations and mechanistic narratives. (Phase 10, M5)
+
+### On ARBITER features (M6)
+
+**13. Crux negotiation identifies real scientific questions, but only with real LLMs.** Mock validation showed 100% crux acceptance (rubber-stamping). Live GPT-4o showed 15% acceptance. Accepted cruxes map to genuine theoretical fault lines in cognitive science. Always validate debate features with live LLM calls. (Phase 11, M6)
+
+**14. The system is a falsification engine.** 44 claims falsified, 1 confirmed across three M6 runs. Convergence occurs by ruling out wrong theories, not confirming the right one. This Popperian methodology emerges from the architecture (adversarial agents + Bayesian testing), not from explicit design. (Phase 11, M6)
+
+**15. Posterior collapse is the primary bottleneck.** The Bayesian posterior concentrates to certainty after 1–2 experiments, making later cycles uninformative. Crux boost can't overcome zero EIG. The system's most scientifically valuable behavior (RULEX self-correction) only occurs when uncertainty survives long enough for structural variation. (Phase 11, M6)
+
+**16. Winning theories need fewer revisions.** Rule_Agent made 0 revisions and won by 67.6%. Losing agents revise futilely. This is Lakatos's criterion for progressive vs degenerative research programs, emerging naturally from adversarial structure. (Phase 11, M6)

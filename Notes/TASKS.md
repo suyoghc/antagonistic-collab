@@ -1,6 +1,48 @@
 # Tasks
 
-## Current Milestone: M5 — Close Debate Feedback Loops (DONE)
+## Current Milestone: M6 — ARBITER Integration (DONE)
+
+### M6 Tasks
+- [x] **M6a: MetaAgentConfig** — `MetaAgentConfig` dataclass (name, role, system_prompt), `create_default_meta_agents()` factory, Integrator + Critic role-specific prompts, wired into `run_interpretation_debate()`. 8 tests.
+- [x] **M6b: Crux Negotiation** — `Crux` dataclass + `EpistemicState` methods (`add_crux`, `get_active_cruxes`, `resolve_crux`, `crux_summary`), `run_crux_identification()`, `run_crux_negotiation()`, `finalize_cruxes()`, `crux_boost_specs` in `select_from_pool()`, wired into `run_cycle()`. 32 tests.
+- [x] **M6e: Conflict Map** — `category` field on `DebateClaim`, `conflict_map_summary()` on `EpistemicState`, injected into interpretation prompts. 6 tests.
+- [x] **M6d: Pre-registration Output** — `generate_preregistration()` produces prediction tables, adjudication criteria, active cruxes, prior accuracy. 4 tests.
+- [x] **M6c: HITL Checkpoints** — `hitl_checkpoint()` with auto-continue in batch mode, `--hitl-checkpoints` CLI flag. 4 tests.
+- [x] **Bugfix: dict new_predictions crash** — `summary_for_agent()` crashes when LLM returns `new_predictions` as dict. Coerce to list before slicing. 2 regression tests.
+- [x] **M6 Live Validation** — 5-cycle runs with all 3 ground truths (GPT-4o via Princeton, all M6 features enabled): GCM✓ (36.4% gap), SUSTAIN✓ (45.6% gap), RULEX✓ (67.6% gap). 3/3 correct winners.
+
+### M6 Commits
+- `3109d14` feat(M6a): MetaAgentConfig
+- `dfc6ed2` feat(M6b.1): Crux dataclass + EpistemicState crux management
+- `201ff06` feat(M6b.2): run_crux_identification
+- `35485d8` feat(M6b.3): run_crux_negotiation
+- `fde4949` feat(M6b.4): finalize_cruxes
+- `e1920a4` feat(M6b.5): crux_boost_specs in select_from_pool
+- `f49818c` feat(M6b.6): Wire crux phases into run_cycle
+- `7fb5de3` feat(M6e): Conflict Map
+- `d7b8ca6` feat(M6d): Pre-registration output
+- `be91b7b` feat(M6c): HITL checkpoints
+- `2a57937` fix: coerce new_predictions to list in summary_for_agent
+
+### M6 Live Validation Results (GPT-4o, 2026-03-15)
+
+| Ground Truth | Winner | RMSE | Gap% | Cruxes (accepted/total) | Claims (falsified/total) | Time |
+|---|---|---|---|---|---|---|
+| GCM | Exemplar_Agent | 0.1512 | 36.4% | 4/34 | 14/41 | 431s |
+| SUSTAIN | Clustering_Agent | 0.2700 | 45.6% | 7/32 | 15/39 | 439s |
+| RULEX | Rule_Agent | 0.1187 | 67.6% | 4/35 | 15/41 | 467s |
+
+### M6 Key Findings
+- **Crux negotiation is selective**: ~100 cruxes proposed, 15 accepted (15%). Real LLMs reject most proposals (mock validation showed 100% acceptance).
+- **Falsification dominates confirmation**: 44 claims falsified vs 1 confirmed across all 3 runs. System works as a falsification engine.
+- **Posterior collapse after cycle 0–1**: EIG drops to ~0, making later cycles uninformative. Main architectural weakness.
+- **Winning theories need fewer revisions**: Rule_Agent made 0 revisions and won RULEX by 67.6%. Losing agents revise futilely.
+- **RULEX shows non-monotonic dynamics**: Posterior initially favored Exemplar_Agent, flipped to Rule_Agent by cycle 2 — self-correction via structural variation.
+- **Meta-agents contribute substantively**: Critic identifies weakest arguments, Integrator synthesizes across theories. Neither overrides Bayesian machinery.
+
+---
+
+## Completed: M5 — Close Debate Feedback Loops (DONE)
 
 ### M5 Tasks
 - [x] **7.1 Parameter revision persistence** — `sync_params_from_theory()` copies `theory.model_params` → `agent_config.default_params` after each interpretation phase. Filters through `inspect.signature`. 6 tests.

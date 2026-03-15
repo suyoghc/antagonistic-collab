@@ -404,4 +404,39 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 
 ---
 
+## Session 17 — 2026-03-15
+
+**Commits:** `3109d14`, `dfc6ed2`, `201ff06`, `35485d8`, `fde4949`, `e1920a4`, `f49818c`, `7fb5de3`, `d7b8ca6`, `be91b7b`, `2a57937`
+
+**What we did:**
+- Implemented all 5 M6 ARBITER features via TDD (54 new tests):
+  - M6a: MetaAgentConfig — role-specialized Integrator & Critic meta-agents
+  - M6b: Crux Negotiation — 6 sub-commits covering Crux dataclass, identification, negotiation, finalization, EIG boosting, and run_cycle wiring
+  - M6e: Conflict Map — category field on claims, conflict_map_summary()
+  - M6d: Pre-registration Output — prediction tables + adjudication criteria
+  - M6c: HITL Checkpoints — optional breakpoints at key decision points
+- Fixed dict new_predictions crash in summary_for_agent (2 regression tests, commit `2a57937`)
+- Ran M6 live validation with GPT-4o via Princeton AI Sandbox, all M6 features enabled:
+  - GCM → Exemplar_Agent (RMSE 0.1512, gap 36.4%) ✓
+  - SUSTAIN → Clustering_Agent (RMSE 0.2700, gap 45.6%) ✓
+  - RULEX → Rule_Agent (RMSE 0.1187, gap 67.6%) ✓ (re-run after bugfix)
+- Analyzed results in depth
+
+**M6 live validation findings:**
+- **Falsification engine**: 44 claims falsified, 1 confirmed, 76 untested across all 3 runs. System converges by ruling out wrong theories, not confirming the right one.
+- **Crux selectivity**: 15% acceptance rate with real LLMs (vs 100% in mock). Accepted cruxes target real theoretical fault lines.
+- **Posterior collapse**: EIG≈0 after cycle 0–1 in GCM/SUSTAIN. Main architectural bottleneck — later cycles are uninformative.
+- **Winner revision asymmetry**: Rule_Agent made 0 revisions and won RULEX by 67.6%. Losing agents revise futilely. Lakatos-compatible pattern.
+- **RULEX self-correction**: Non-monotonic posterior trajectory — initially favored Exemplar_Agent, flipped by cycle 2. Most scientifically interesting case.
+- **Meta-agents substantive**: Critic consistently identifies weakest argument; Integrator synthesizes across theories. Neither overrides Bayesian machinery.
+
+**Key discussion:**
+- ARBITER architecture is now operational: role specialization, crux negotiation, conflict tracking, pre-registration
+- Posterior collapse identified as the primary bottleneck for M7 (D29)
+- Updated all project documentation (TASKS, SCRATCHPAD, DECISIONS, CHATLOG, REPORT, LESSONS_LEARNED, FEATURES, README)
+
+**Status:** M6 complete and validated. 287 tests, 3/3 correct, ARBITER features producing meaningful debate dynamics.
+
+---
+
 *This log is maintained manually. Update it at the end of each session.*
