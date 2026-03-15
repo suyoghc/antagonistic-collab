@@ -1614,6 +1614,74 @@ def run_interpretation_critique(
     )
 
 
+# ---------------------------------------------------------------------------
+# Crux negotiation phases
+# ---------------------------------------------------------------------------
+
+
+def run_crux_identification(
+    protocol: DebateProtocol,
+    client,
+    cycle: int,
+) -> list[dict]:
+    """Each theory agent proposes 1-2 cruxes: what experiment would change their mind?
+
+    Returns a list of raw crux dicts parsed from agent responses.
+    Cruxes are also added to protocol.state.cruxes.
+    """
+    from .epistemic_state import Crux
+
+    all_cruxes = []
+    crux_counter = len(protocol.state.cruxes)
+
+    print("\n" + "=" * 70)
+    print("PHASE: CRUX IDENTIFICATION — What would change your mind?")
+    print("=" * 70)
+
+    for agent in protocol.agent_configs:
+        prompt = (
+            "PHASE: Crux Identification\n\n"
+            "A 'crux' is a decisive question: an experiment whose outcome "
+            "would genuinely change your mind about which theory is correct.\n\n"
+            "Propose 1-2 cruxes. For each, specify:\n"
+            "- What experiment would be decisive\n"
+            "- What outcome would change your mind\n"
+            "- Why this is a genuine crux (not a question you already know the answer to)\n\n"
+            "Output a JSON block:\n"
+            '{"cruxes": [{"description": "...", '
+            '"discriminating_experiment": "structure/condition", '
+            '"resolution_criterion": "what outcome would be decisive"}]}\n'
+        )
+
+        print(f"\n--- {agent.name} proposes cruxes ---")
+        response = call_agent(client, agent.system_prompt, prompt)
+        print(response[:400] + "..." if len(response) > 400 else response)
+
+        json_block = extract_json(response) or {}
+        cruxes_raw = json_block.get("cruxes", [])
+        if not isinstance(cruxes_raw, list):
+            cruxes_raw = []
+
+        for c in cruxes_raw:
+            if not isinstance(c, dict) or not c.get("description"):
+                continue
+            crux_counter += 1
+            crux_id = f"crux_{crux_counter:03d}"
+            crux = Crux(
+                id=crux_id,
+                proposer=agent.name,
+                description=c["description"],
+                discriminating_experiment=c.get("discriminating_experiment"),
+                resolution_criterion=c.get("resolution_criterion"),
+                cycle_proposed=cycle,
+                supporters=[agent.name],
+            )
+            protocol.state.add_crux(crux)
+            all_cruxes.append(c)
+
+    return all_cruxes
+
+
 def run_audit(protocol: DebateProtocol, client, transcript: list) -> PhaseResult:
     """Phase 9: Summarize what was learned."""
     print("\n" + "=" * 70)

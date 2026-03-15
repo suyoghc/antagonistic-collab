@@ -6964,3 +6964,159 @@ class TestCruxDataclass:
         assert "c1" in summary
         assert "GCM vs RULEX" in summary
         assert "accepted" in summary.lower() or "ACCEPTED" in summary
+
+
+class TestCruxIdentification:
+    """Tests for run_crux_identification phase."""
+
+    def _make_protocol(self):
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state=state, agent_configs=agents)
+        for agent in agents:
+            state.register_theory(
+                TheoryCommitment(
+                    name=agent.theory_name,
+                    agent_name=agent.name,
+                    core_claims=["test"],
+                    model_name=agent.model_class.name.split()[0],
+                )
+            )
+        return protocol
+
+    def test_crux_identification_returns_crux_list(self):
+        """run_crux_identification returns a list of dicts."""
+        from antagonistic_collab.runner import run_crux_identification
+
+        protocol = self._make_protocol()
+
+        def fake_llm(client, system, user, **kw):
+            return (
+                '{"cruxes": [{"description": "Type VI accuracy test", '
+                '"discriminating_experiment": "Type_VI/baseline", '
+                '"resolution_criterion": "RMSE < 0.15"}]}'
+            )
+
+        import antagonistic_collab.runner as runner_mod
+
+        original = runner_mod.call_agent
+        runner_mod.call_agent = fake_llm
+        try:
+            result = run_crux_identification(protocol, None, cycle=0)
+        finally:
+            runner_mod.call_agent = original
+
+        assert isinstance(result, list)
+        assert len(result) > 0
+
+    def test_crux_identification_prompt_asks_for_cruxes(self):
+        """The prompt sent to agents should ask what would change their mind."""
+        from antagonistic_collab.runner import run_crux_identification
+
+        protocol = self._make_protocol()
+        captured_prompts = []
+
+        def fake_llm(client, system, user, **kw):
+            captured_prompts.append(user)
+            return '{"cruxes": []}'
+
+        import antagonistic_collab.runner as runner_mod
+
+        original = runner_mod.call_agent
+        runner_mod.call_agent = fake_llm
+        try:
+            run_crux_identification(protocol, None, cycle=0)
+        finally:
+            runner_mod.call_agent = original
+
+        assert len(captured_prompts) == 3  # one per theory agent
+        for prompt in captured_prompts:
+            assert "crux" in prompt.lower() or "change your mind" in prompt.lower()
+
+    def test_crux_identification_parses_cruxes(self):
+        """Parsed cruxes should have expected fields."""
+        from antagonistic_collab.runner import run_crux_identification
+
+        protocol = self._make_protocol()
+
+        def fake_llm(client, system, user, **kw):
+            return (
+                '{"cruxes": [{"description": "Test crux", '
+                '"discriminating_experiment": "Type_II/baseline", '
+                '"resolution_criterion": "accuracy > 0.8"}]}'
+            )
+
+        import antagonistic_collab.runner as runner_mod
+
+        original = runner_mod.call_agent
+        runner_mod.call_agent = fake_llm
+        try:
+            result = run_crux_identification(protocol, None, cycle=0)
+        finally:
+            runner_mod.call_agent = original
+
+        assert any("description" in c for c in result)
+
+    def test_crux_identification_adds_to_state(self):
+        """Identified cruxes should be added to EpistemicState."""
+        from antagonistic_collab.runner import run_crux_identification
+
+        protocol = self._make_protocol()
+
+        def fake_llm(client, system, user, **kw):
+            return (
+                '{"cruxes": [{"description": "Test crux", '
+                '"discriminating_experiment": "Type_II/baseline", '
+                '"resolution_criterion": "accuracy > 0.8"}]}'
+            )
+
+        import antagonistic_collab.runner as runner_mod
+
+        original = runner_mod.call_agent
+        runner_mod.call_agent = fake_llm
+        try:
+            run_crux_identification(protocol, None, cycle=0)
+        finally:
+            runner_mod.call_agent = original
+
+        assert len(protocol.state.cruxes) > 0
+
+    def test_crux_identification_handles_empty_response(self):
+        """Gracefully handles agents that return no cruxes."""
+        from antagonistic_collab.runner import run_crux_identification
+
+        protocol = self._make_protocol()
+
+        def fake_llm(client, system, user, **kw):
+            return '{"cruxes": []}'
+
+        import antagonistic_collab.runner as runner_mod
+
+        original = runner_mod.call_agent
+        runner_mod.call_agent = fake_llm
+        try:
+            result = run_crux_identification(protocol, None, cycle=0)
+        finally:
+            runner_mod.call_agent = original
+
+        assert result == []
+
+    def test_crux_identification_handles_malformed_json(self):
+        """Gracefully handles agents that return invalid JSON."""
+        from antagonistic_collab.runner import run_crux_identification
+
+        protocol = self._make_protocol()
+
+        def fake_llm(client, system, user, **kw):
+            return "I think we should test Type VI but I forgot the JSON format."
+
+        import antagonistic_collab.runner as runner_mod
+
+        original = runner_mod.call_agent
+        runner_mod.call_agent = fake_llm
+        try:
+            result = run_crux_identification(protocol, None, cycle=0)
+        finally:
+            runner_mod.call_agent = original
+
+        assert result == []
