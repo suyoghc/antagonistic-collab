@@ -1770,6 +1770,28 @@ def run_crux_negotiation(
     return all_responses
 
 
+def finalize_cruxes(
+    protocol: DebateProtocol,
+    cycle: int,
+    min_supporters: int = 2,
+) -> list:
+    """Cruxes accepted by >= min_supporters become active. Others get rejected.
+
+    Only operates on 'proposed' cruxes (not already accepted/resolved/rejected).
+    Returns the list of newly accepted Crux objects.
+    """
+    finalized = []
+    for crux in protocol.state.cruxes:
+        if crux.status != "proposed":
+            continue
+        if len(crux.supporters) >= min_supporters:
+            crux.status = "accepted"
+            finalized.append(crux)
+        else:
+            crux.status = "rejected"
+    return finalized
+
+
 def run_audit(protocol: DebateProtocol, client, transcript: list) -> PhaseResult:
     """Phase 9: Summarize what was learned."""
     print("\n" + "=" * 70)

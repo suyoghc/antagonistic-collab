@@ -7296,3 +7296,129 @@ class TestCruxNegotiation:
             runner_mod.call_agent = original
 
         assert result == []
+
+
+class TestFinalizeCruxes:
+    """Tests for finalize_cruxes — filter cruxes by supporter threshold."""
+
+    def test_finalize_cruxes_threshold(self):
+        """Only cruxes with >= 2 supporters become accepted."""
+        from antagonistic_collab.epistemic_state import Crux
+        from antagonistic_collab.runner import finalize_cruxes
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state=state, agent_configs=agents)
+
+        state.add_crux(
+            Crux(
+                id="c1",
+                proposer="A",
+                description="well supported",
+                supporters=["A", "B", "C"],
+            )
+        )
+        state.add_crux(
+            Crux(
+                id="c2",
+                proposer="A",
+                description="poorly supported",
+                supporters=["A"],
+            )
+        )
+
+        finalized = finalize_cruxes(protocol, cycle=0)
+        assert len(finalized) == 1
+        assert finalized[0].id == "c1"
+        assert finalized[0].status == "accepted"
+
+    def test_finalize_cruxes_rejects_unsupported(self):
+        """Cruxes with < 2 supporters get rejected."""
+        from antagonistic_collab.epistemic_state import Crux
+        from antagonistic_collab.runner import finalize_cruxes
+
+        state = EpistemicState(domain="test")
+        protocol = DebateProtocol(state=state, agent_configs=default_agent_configs())
+
+        state.add_crux(
+            Crux(id="c1", proposer="A", description="lonely", supporters=["A"])
+        )
+
+        finalized = finalize_cruxes(protocol, cycle=0)
+        assert finalized == []
+        assert protocol.state.cruxes[0].status == "rejected"
+
+    def test_finalize_cruxes_extracts_experiments(self):
+        """Finalized cruxes should preserve discriminating_experiment."""
+        from antagonistic_collab.epistemic_state import Crux
+        from antagonistic_collab.runner import finalize_cruxes
+
+        state = EpistemicState(domain="test")
+        protocol = DebateProtocol(state=state, agent_configs=default_agent_configs())
+
+        state.add_crux(
+            Crux(
+                id="c1",
+                proposer="A",
+                description="test",
+                discriminating_experiment="Type_VI/baseline",
+                supporters=["A", "B"],
+            )
+        )
+
+        finalized = finalize_cruxes(protocol, cycle=0)
+        assert finalized[0].discriminating_experiment == "Type_VI/baseline"
+
+    def test_finalize_cruxes_empty_list(self):
+        """No cruxes = empty result."""
+        from antagonistic_collab.runner import finalize_cruxes
+
+        state = EpistemicState(domain="test")
+        protocol = DebateProtocol(state=state, agent_configs=default_agent_configs())
+
+        finalized = finalize_cruxes(protocol, cycle=0)
+        assert finalized == []
+
+    def test_finalize_cruxes_skips_already_resolved(self):
+        """Already resolved cruxes should not be re-finalized."""
+        from antagonistic_collab.epistemic_state import Crux
+        from antagonistic_collab.runner import finalize_cruxes
+
+        state = EpistemicState(domain="test")
+        protocol = DebateProtocol(state=state, agent_configs=default_agent_configs())
+
+        state.add_crux(
+            Crux(
+                id="c1",
+                proposer="A",
+                description="already done",
+                status="resolved",
+                supporters=["A", "B", "C"],
+            )
+        )
+
+        finalized = finalize_cruxes(protocol, cycle=0)
+        assert finalized == []
+
+    def test_finalize_cruxes_custom_threshold(self):
+        """Custom supporter threshold should be respected."""
+        from antagonistic_collab.epistemic_state import Crux
+        from antagonistic_collab.runner import finalize_cruxes
+
+        # Test with threshold=3: crux with 2 supporters should NOT pass
+        state1 = EpistemicState(domain="test")
+        protocol1 = DebateProtocol(state=state1, agent_configs=default_agent_configs())
+        state1.add_crux(
+            Crux(id="c1", proposer="A", description="needs 3", supporters=["A", "B"])
+        )
+        finalized = finalize_cruxes(protocol1, cycle=0, min_supporters=3)
+        assert finalized == []
+
+        # Test with threshold=2: crux with 2 supporters SHOULD pass
+        state2 = EpistemicState(domain="test")
+        protocol2 = DebateProtocol(state=state2, agent_configs=default_agent_configs())
+        state2.add_crux(
+            Crux(id="c2", proposer="A", description="needs 2", supporters=["A", "B"])
+        )
+        finalized = finalize_cruxes(protocol2, cycle=0, min_supporters=2)
+        assert len(finalized) == 1
