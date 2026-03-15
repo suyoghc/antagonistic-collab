@@ -4,48 +4,50 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ---
 
-## Current focus — M4: Analysis & write-up
+## Current focus — M5: Close Debate Feedback Loops — COMPLETE
 
-### Analysis status (all complete)
+### M5 implementation (all 4 features done)
 
-| Analysis | Status | Location |
-|---|---|---|
-| EIG selection patterns | DONE | LESSONS 9.1 |
-| Posterior convergence speed | DONE | LESSONS 9.2 |
-| Novel structure generation | DONE | LESSONS 9.3 |
-| Legacy vs full_pool comparison | DONE | LESSONS 9.4 |
-| Theory revision patterns | DONE | LESSONS 9.5 |
-| Interpretation debate quality audit | DONE | LESSONS 9.6 |
-| Replication (zero variance) | DONE | LESSONS 9.7 |
-| Cross-LLM comparison | DONE | LESSONS 9.8, D26 |
-
-### M4 status: COMPLETE
-
-All tasks done. Next steps are M5 (close debate feedback loops) or new domain extensions.
-
-### 10 key findings (for write-up)
-
-1. Learning curves solved the GCM-RULEX discrimination problem (2.4% → 68% gap)
-2. Bayesian EIG beats LLM proposals for experiment selection
-3. LLMs add value for interpretation, not selection (architecture thesis)
-4. Posterior convergence is fast but not instant for hard model pairs (RULEX: 2-cycle lag)
-5. Novel structures are narratively interesting but statistically unselected (0/21 chosen by EIG)
-6. Interpretation debate quality is weak (posteriors as proxy, no cumulative learning)
-7. Theory revision follows Lakatos-compatible patterns (correct stable, incorrect revise progressively)
-8. GCM's flexibility is genuine, not a bug (approximates rule-like behavior via attention weights)
-9. Defensive type coercion essential for LLM-in-the-loop systems (3 crashes from same pattern)
-10. The specification gap is the fundamental bottleneck (LLMs can't close concept→code loop)
-
-### Validation data (in `runs/`)
-
-| Run | Winner | RMSE | Gap |
+| Feature | Status | Commit | Tests |
 |---|---|---|---|
-| validation_full_pool_GCM | Exemplar | 0.161 | 34% |
-| validation_full_pool_SUSTAIN | Clustering | 0.270 | 42% |
-| validation_full_pool_RULEX | Rule | 0.119 | 68% |
-| validation_legacy_GCM | Exemplar | 0.255 | 37% |
-| validation_legacy_SUSTAIN | Clustering | 0.361 | 34% |
-| validation_legacy_RULEX | Rule | 0.429 | 2.4% |
+| 7.1 Parameter revision persistence | DONE | `1d12fde` | 6 |
+| 7.4 Structured claim ledger | DONE | `4625d53` | 8 |
+| 7.2 Critique-as-falsification | DONE | `84852bb` | 5 |
+| 7.3 Debate-informed EIG weighting | DONE | `f61eec4` | 5 |
+
+### M5 validation (2026-03-15, GPT-4o via Princeton)
+
+| Ground Truth | Winner | RMSE | Posterior | Correct? |
+|---|---|---|---|---|
+| GCM | Exemplar_Agent | 0.1836 | 1.0000 | ✓ |
+| SUSTAIN | Clustering_Agent | 0.2687 | 1.0000 | ✓ |
+| RULEX | Rule_Agent | 0.1580 | 1.0000 | ✓ |
+
+### Replication variance (4× GCM runs)
+
+| Run | Exemplar RMSE | Clustering RMSE | Rule RMSE |
+|---|---|---|---|
+| Initial | 0.1836 | 0.2123 | 0.3280 |
+| Rep 1 | 0.1587 | 0.2424 | 0.3379 |
+| Rep 2 | 0.1832 | 0.2571 | 0.3628 |
+| Rep 3 | 0.2082 | 0.2590 | 0.3558 |
+| **Std Dev** | **0.0177** | **0.0189** | **0.0153** |
+
+**Key result:** RMSE variance is now non-zero (was 0.000 pre-M5). Debate causally affects outcomes through parameter revision persistence.
+
+### M5 feature activity
+- ~45 FALSE CLAIMs detected across 6 runs (critique-as-falsification)
+- 1 verified claim (Rule_Agent predicted 0.600, actual 0.544)
+- Agents consistently overclaim model accuracy (predicting 0.65–0.90 when actual 0.10–0.48)
+- RULEX posterior trajectory: started P(Exemplar)=1.0 for cycles 0-1, flipped to P(Rule)=0.9998 at cycle 2
+
+### Key reference
+- **12 Theses on LLM-Mediated Scientific Debate** — synthesis of all findings, in LESSONS_LEARNED.md "Synthesis" section
+
+### Next steps
+- ARBITER/CRUCIBLE integration (M6a-M6e roadmap exists)
+- New domain extensions
+- Cross-LLM replication with M5 features (compare variance across GPT-4o/Sonnet/Opus)
 
 ---
 

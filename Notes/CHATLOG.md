@@ -369,4 +369,39 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 
 ---
 
+## Session 16 — 2026-03-15
+
+**Commits:** `1d12fde`, `4625d53`, `84852bb`, `f61eec4`
+
+**What we did:**
+- Implemented all 4 M5 features (close debate feedback loops):
+  - 7.1: Parameter revision persistence (`sync_params_from_theory()`)
+  - 7.4: Structured claim ledger (`DebateClaim` dataclass + ledger methods)
+  - 7.2: Critique-as-falsification (`verify_prediction_claim()`)
+  - 7.3: Debate-informed EIG weighting (focus pair boosting in `select_from_pool()`)
+- 24 new tests (207 → 231 total), all passing, ruff clean
+- Added 8 "Compound Engineering" lessons to CLAUDE.md
+- Compared with ARBITER/CRUCIBLE repo (kachergis/ARBITER), produced M6 integration roadmap
+- Ran M5 validation: 5-cycle runs for all 3 ground truths (GPT-4o via Princeton)
+  - GCM → Exemplar_Agent (RMSE 0.1836) ✓
+  - SUSTAIN → Clustering_Agent (RMSE 0.2687) ✓
+  - RULEX → Rule_Agent (RMSE 0.1580) ✓
+- Ran 4× GCM replication: RMSE std=0.018 (was 0.000 pre-M5)
+- ~45 FALSE CLAIMs detected across validation runs
+
+**Key findings:**
+- **Debate now causally affects RMSE** — parameter revision persistence closes the theory→prediction loop
+- Replication variance non-zero for the first time in the project's history
+- Agents consistently overclaim model accuracy in critiques (predicting 0.65–0.90 when actual 0.10–0.48)
+- Correct winners preserved in all runs despite the new feedback paths
+- RULEX posterior shows interesting 2-cycle lag then flip (P(Exemplar)=1.0 → P(Rule)=1.0)
+
+**Key discussion:**
+- ARBITER/CRUCIBLE uses pure LLM (no computational models), role-specialized agents, HITL checkpoints, pre-registration output — complementary to this repo's Bayesian+computation approach
+- M6 integration roadmap: role specialization, crux negotiation, HITL checkpoints, pre-registration, multi-framework arbitration
+
+**Status:** M5 complete and validated. 231 tests, all 3 ground truths correct, non-zero RMSE variance.
+
+---
+
 *This log is maintained manually. Update it at the end of each session.*

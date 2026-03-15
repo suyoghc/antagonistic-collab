@@ -109,13 +109,13 @@ antagonistic_collab/
     ├── rulex.py              # RULEX (Nosofsky, Palmeri & McKinley, 1994)
     └── category_structures.py  # 11 structures: Shepard I-VI, 5-4, etc.
 tests/
-    └── test_bugfixes.py     # 207 tests
+    └── test_bugfixes.py     # 231 tests
 Notes/                       # Analysis, decisions, lessons learned
 ```
 
 ## Key results
 
-Validated across 6 runs (3 ground truths × 2 modes, 5 cycles each). The correct model's agent wins in every condition:
+Validated across 6 runs (3 ground truths × 2 modes, 5 cycles each) + 9 cross-LLM runs + 4 M5 replication runs. The correct model's agent wins in every condition:
 
 | Ground Truth | Mode | Winner | RMSE | Gap |
 |---|---|---|---|---|
@@ -126,16 +126,22 @@ Validated across 6 runs (3 ground truths × 2 modes, 5 cycles each). The correct
 | SUSTAIN | legacy | Clustering_Agent | 0.361 | 34% |
 | RULEX | legacy | Rule_Agent | 0.429 | 2.4% |
 
-**Key finding**: Learning curves solved the hardest discrimination problem — RULEX gap went from 2.4% (legacy) to 68% (full_pool). GCM approximates RULEX's final accuracy but can't mimic its sudden learning dynamics.
+**Key findings**:
+- **Learning curves** solved the hardest discrimination problem — RULEX gap went from 2.4% (legacy) to 68% (full_pool). GCM approximates RULEX's final accuracy but can't mimic its sudden learning dynamics.
+- **LLM-agnostic**: Correct model wins in 9/9 cross-LLM runs (GPT-4o, Claude Sonnet, Claude Opus).
+- **Debate now affects outcomes**: Post-M5, replication RMSE std=0.018 (was 0.000). Parameter revision persistence closes the debate→prediction feedback loop.
+- **Critique-as-falsification**: ~45 false claims detected across validation runs. Agents overclaim model accuracy by 3–5× when fact-checked against actual computation.
 
-See [Notes/REPORT.md](Notes/REPORT.md) for the full write-up.
+See [Notes/REPORT.md](Notes/REPORT.md) for the full write-up and [Notes/LESSONS_LEARNED.md](Notes/LESSONS_LEARNED.md) for 12 theses on LLM-mediated scientific debate.
 
 ## What's next
 
-- [ ] Close debate feedback loops — parameter revisions, hypothesis-driven EIG, critique-as-falsification
-- [ ] Compare LLM backbones — Claude Sonnet/Opus vs GPT-4o on debate quality
+- [x] ~~Close debate feedback loops~~ — parameter revision persistence, structured claim ledger, critique-as-falsification, debate-informed EIG weighting (M5, done)
+- [x] ~~Compare LLM backbones~~ — Claude Sonnet/Opus vs GPT-4o: correct model wins in 9/9 runs, framework is LLM-agnostic (M4, done)
+- [ ] ARBITER/CRUCIBLE integration — role-specialized agents, crux negotiation, HITL checkpoints, pre-registration output
 - [ ] Additional cognitive domains — memory retrieval, associative learning, decision making
 - [ ] AutoRA integration — real data collection via Prolific
+- [ ] Longer runs (10+ cycles) — test whether novel structures and claim ledger produce cumulative scientific reasoning
 
 ## Key references
 

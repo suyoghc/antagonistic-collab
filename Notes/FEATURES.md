@@ -268,23 +268,21 @@ causing parse failures.
 
 ---
 
-## 7. Debate Feedback Features (Planned — M5)
+## 7. Debate Feedback Features (Implemented — M5, validated 2026-03-15)
 
-Currently, the debate is **epiphenomenal to RMSE**: replication runs show zero
-variance across 3× replicates, and cross-LLM comparison (GPT-4o, Sonnet, Opus)
-produces correct winners in all 9/9 runs with near-identical RMSE. Convergence
-is driven entirely by the Bayesian machinery (EIG selection + posterior update),
-not by LLM reasoning. The features below close the 4 broken feedback loops
-identified in M4 analysis, making the debate causally relevant to outcomes.
+These features close the 4 broken feedback loops identified in M4 analysis,
+making the debate causally relevant to outcomes. Pre-M5, replication runs had
+zero RMSE variance; post-M5, std=0.018 across 4× GCM replicates. All 3 ground
+truths still correctly identified. ~45 FALSE CLAIMs detected across validation
+runs, confirming critique-as-falsification is active.
 
 ### 7.1 Parameter revision persistence
 **What it does:** When an agent revises its theory (updating `model_params` in
 the epistemic state), the revised parameters propagate back to
 `agent_config.default_params` so they affect the *next* cycle's predictions.
-**Current status:** Broken. `theory.model_params` is updated during
-interpretation but `agent_config.default_params` (used by
-`compute_model_predictions`) is never refreshed. Parameter revisions are
-recorded but have no downstream effect.
+**Status:** Implemented (commit `1d12fde`). `sync_params_from_theory()` in
+`runner.py` copies params after each interpretation phase, filtering through
+`inspect.signature` to reject invalid keys. 6 tests.
 **Why it matters:** This is the most direct feedback path from debate to RMSE.
 If an agent interprets results and concludes "my attention parameter should be
 higher", that insight should actually change predictions. Currently, agents
@@ -300,9 +298,9 @@ param_overrides is the only LLM→RMSE path, and it's ephemeral).
 ### 7.2 Critique-as-falsification
 **What it does:** When an agent claims "my model can also predict that outcome",
 the system runs the actual computation and checks whether the claim is true.
-**Current status:** Not implemented. Critiques are free text — agents make
-empirical claims that are never verified. The most common critique pattern
-("my model can also predict that") is unfalsifiable in the current system.
+**Status:** Implemented (commit `84852bb`). `verify_prediction_claim()` in
+`debate_protocol.py` compares claimed vs actual predictions. FALSE CLAIMs
+recorded in ledger. ~45 false claims detected across M5 validation. 5 tests.
 **Why it matters:** Unverified claims degrade debate quality. An agent claiming
 its model predicts something should be held to that claim. This would surface
 genuine model limitations rather than allowing agents to hand-wave.
@@ -319,9 +317,9 @@ unfounded defensive arguments that waste debate cycles.
 interpretation (e.g., "GCM and RULEX make similar predictions on Type I"),
 the system upweights EIG for candidates that discriminate between those
 specific models.
-**Current status:** Not implemented. EIG treats all model pairs equally.
-The debate identifies which comparisons are scientifically interesting, but
-this information is discarded before the next cycle's experiment selection.
+**Status:** Implemented (commit `f61eec4`). `select_from_pool()` accepts
+`focus_pair` + `pair_boost` (default 1.5×). Contested pairs extracted from
+claim ledger or posterior (closest probabilities). 5 tests.
 **Why it matters:** EIG optimizes for maximum posterior entropy reduction
 across all models. But after a few cycles, the real contest may be between
 two specific models. Debate can identify this before the posterior does
@@ -337,10 +335,10 @@ for hard discrimination problems (RULEX took 2 extra cycles in validation).
 **What it does:** Maintains a per-agent registry of empirical claims made
 during debate, tracking which claims have been tested, confirmed, or
 falsified by subsequent experiments.
-**Current status:** Not implemented. `agent_hypotheses` is stored in
-`epistemic_state` but never queried. Claims from one cycle don't carry
-forward or get tested. Agents repeat the same talking points across cycles
-(documented in LESSONS 9.6).
+**Status:** Implemented (commit `4625d53`). `DebateClaim` dataclass in
+`epistemic_state.py` with `claim_ledger` on `EpistemicState`. Claims parsed
+from agent JSON, statuses updated after execution. Summary injected into
+interpretation prompts. 8 tests.
 **Why it matters:** Without a claim ledger, the debate has no memory. Agents
 can't build on prior arguments or be held accountable for failed predictions.
 The ledger would force cumulative scientific progress — each cycle's debate
@@ -364,19 +362,19 @@ Ranked by estimated impact on which theory wins and how fast convergence occurs:
 2. **Structure registry composition** — determines the search space
 3. **Agent default parameters** — determines prior predictions
 4. **Condition effect magnitudes** — determines how revealing experiments are
-5. **Parameter revision persistence** (7.1) — currently broken; would make debate causally relevant to RMSE
+5. **Parameter revision persistence** (7.1) — implemented M5; makes debate causally relevant to RMSE
 6. **Divergence display format** — determines whether agents pick diagnostic experiments
-7. **Debate-informed EIG weighting** (7.3) — could accelerate convergence by 1–2 cycles
+7. **Debate-informed EIG weighting** (7.3) — implemented M5; focus pair boosting active
 8. **Prediction metric (RMSE vs correlation)** — determines what "winning" means
-9. **Critique-as-falsification** (7.2) — prevents hand-waving, improves debate quality
-10. **Structured claim ledger** (7.4) — enables cumulative scientific progress across cycles
+9. **Critique-as-falsification** (7.2) — implemented M5; ~45 FALSE CLAIMs detected in validation
+10. **Structured claim ledger** (7.4) — implemented M5; claims tracked and verified across cycles
 11. **Critique rounds** — determines depth of adversarial pressure
 12. **Batch arbitration rule** — determines which experiments get run (legacy mode only)
 13. **LLM model quality** — validated as non-critical: 3 LLMs produce identical outcomes (9/9 correct)
 14. **Lakatos trajectory completeness** — determines whether revision tracking is meaningful
 
 **Key finding (M4):** Features 1–4 fully determine outcomes in the current system.
-Features 5–10 are currently inert — the debate does not causally affect RMSE.
-Cross-LLM comparison (GPT-4o, Sonnet, Opus) confirms: all 9/9 runs produce
-correct winners regardless of LLM. The M5 features (5, 7, 9, 10) aim to close
-the feedback loops that would make debate matter.
+**Update (M5, 2026-03-15):** Features 5, 7, 9, 10 now implemented. Replication
+variance is non-zero (std=0.018 vs 0.000 pre-M5). Debate causally affects RMSE
+through parameter revision persistence. All 3 ground truths still correctly
+identified. Cross-LLM comparison (GPT-4o, Sonnet, Opus) confirms: 9/9 correct.

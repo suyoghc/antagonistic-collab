@@ -767,3 +767,99 @@ The entire quantitative pipeline is deterministic: EIG selection (same prior →
 4. **The variation source is `param_overrides`** — the only code path where LLM output affects RMSE. During execution, agents propose parameter tweaks that are applied to one prediction. Different LLMs propose different overrides, creating small RMSE differences.
 
 **Implication:** The framework is LLM-agnostic for convergence — the correct model wins regardless of backbone. RMSE varies slightly through param_overrides (the one surviving feedback path from LLM to quantitative pipeline), but not enough to change outcomes. This confirms the architecture thesis: convergence is driven by computation, not by which LLM generates the debate text.
+
+---
+
+## Phase 10 — M5: Closing Debate Feedback Loops (2026-03-15)
+
+Implemented 4 features to make debate causally relevant to RMSE: parameter revision persistence, structured claim ledger, critique-as-falsification, and debate-informed EIG weighting. Validated with 5-cycle runs for all 3 ground truths (GPT-4o via Princeton) plus 4× GCM replication for variance analysis. 24 new tests (231 total).
+
+### 10.1 Parameter revision persistence closes the theory→prediction loop
+
+**Expected:** Syncing `theory.model_params` → `agent_config.default_params` after each interpretation phase would make LLM-proposed parameter revisions affect subsequent predictions.
+
+**Actual:** Post-M5 replication runs show non-zero RMSE variance for the first time in the project's history:
+
+| Run | Exemplar RMSE | Clustering RMSE | Rule RMSE |
+|---|---|---|---|
+| Initial | 0.1836 | 0.2123 | 0.3280 |
+| Rep 1 | 0.1587 | 0.2424 | 0.3379 |
+| Rep 2 | 0.1832 | 0.2571 | 0.3628 |
+| Rep 3 | 0.2082 | 0.2590 | 0.3558 |
+| **Std Dev** | **0.0177** | **0.0189** | **0.0153** |
+
+Pre-M5, all replicates produced identical RMSE to 4 decimal places. Post-M5, std ≈ 0.018. The mechanism: different LLM runs propose different parameter revisions during interpretation, and those revisions now persist into subsequent cycles' model predictions.
+
+**Implication:** This is the single most impactful M5 change. A simple `sync_params_from_theory()` call (filtered through `inspect.signature` to reject invalid keys) closes a feedback loop that was identified as broken in M4 analysis. The variance is modest (std ≈ 0.018 on RMSE ≈ 0.18, i.e., ~10% coefficient of variation) but non-zero — debate now causally affects outcomes. Correct winners are preserved in all runs despite this new source of variation.
+
+### 10.2 Agents systematically overclaim model accuracy
+
+**Expected:** Critique-as-falsification would catch some false claims, improving debate honesty.
+
+**Actual:** ~45 FALSE CLAIMs detected across 6 validation runs (3 ground truths + 3 replications), with only 1 verified claim. Agents consistently predict their model's accuracy at 0.65–0.90 when the actual computation returns 0.10–0.48. The discrepancy is dramatic — often 3–5× overestimation.
+
+Example (RULEX validation, Cycle 4): Exemplar_Agent claims `"my_model_predicts": 0.75` on Type I / high attention. Actual computed prediction: 0.180. Rule_Agent claims 0.85 on Type I / high attention. Actual: 0.100. Clustering_Agent claims 0.68 on Type I / low attention. Actual: 0.158.
+
+The one verified claim (SUSTAIN validation, Cycle 2): Rule_Agent claimed 0.600 on five_four / baseline. Actual: 0.544. Within the 0.1 tolerance threshold.
+
+**Implication:** LLM agents have dramatically miscalibrated intuitions about their computational models' quantitative behavior. They reason about models at the mechanism level ("exemplar storage handles this well") and translate that into optimistic accuracy claims without running the computation. This is the numerical analogue of the Phase 1 finding (eloquent but ungrounded): agents argue fluently about mechanisms but cannot estimate the quantitative consequences. The 45:1 false-to-verified ratio is a stark measure of this gap. Critique-as-falsification makes this visible — previously, these overclaims went undetected and polluted the debate with unfounded assertions.
+
+### 10.3 Debate-informed EIG weighting is active but secondary
+
+**Expected:** Boosting EIG for experiments that distinguish contested model pairs (extracted from the claim ledger or posterior) would change which experiments are selected.
+
+**Actual:** The focus pair mechanism activates after cycle 0 (once the ledger has claims or the posterior has differentiated). However, the effect is modest in 5-cycle runs because:
+
+1. The posterior typically collapses to P(correct)=1.0 after 1–2 cycles, making all remaining models equally "contested" (all near 0.0)
+2. The claim ledger fills with FALSE CLAIMs that don't clearly identify a contested *pair* — they show all agents overclaiming, not a specific rivalry
+3. The 1.5× boost is small relative to the natural EIG variation across 55+ candidates
+
+The RULEX ground truth run shows the most interesting trajectory: posterior starts wrong (P(Exemplar)=1.0), flips at cycle 2 (P(Rule)=0.9998), then locks at cycle 3. The focus pair extraction correctly identifies Exemplar–Rule as the contested pair during cycles 1–2, which is when discrimination matters most.
+
+**Implication:** Focus pair boosting is a sound mechanism but its impact is limited by rapid posterior convergence. In longer runs (10+ cycles) or with more models (4+), the effect would likely be more pronounced. The ledger-based extraction needs refinement — currently it counts agents in disputes rather than identifying specific model pairs with close posterior probabilities, which is the more informative signal.
+
+### 10.4 The claim ledger reveals debate stagnation patterns
+
+**Expected:** Tracking claims across cycles would show cumulative scientific progress — early claims getting tested and resolved, later claims building on established results.
+
+**Actual:** The ledger fills quickly (3 claims per agent per cycle from interpretation debate, plus critique claims) but most claims remain "untested" because they reference conditions or structures not subsequently selected by EIG. Claims that are testable tend to be falsified rather than confirmed (see 10.2). No agent references the ledger's content in their subsequent interpretations — the claims_summary is injected into the prompt, but agents don't explicitly engage with it.
+
+**Implication:** The ledger infrastructure works, but its impact on debate quality is not yet visible in 5-cycle runs. The key missing piece is agents *responding* to the ledger — adjusting their claims based on what was confirmed or falsified, retiring stale claims, and building new claims on established results. This may require stronger prompt engineering (e.g., "You previously claimed X, which was falsified. How does this change your position?") or explicit penalties for agents that repeat falsified claims.
+
+---
+
+## Synthesis: 12 Theses on LLM-Mediated Scientific Debate
+
+Distilled from 10 phases of development, ~60 validation runs, and 4 LLM backbones.
+
+### On what debate can and cannot do
+
+**1. Argumentation without discriminating data is empty.** LLMs generate coherent narratives for any data, including data that is random relative to the question. The form of science was present; the function was absent. (Phase 1)
+
+**2. LLMs are good at semantics, bad at numerics.** Qualitative reasoning was correct throughout ("exemplars handle non-linear separability"). Quantitative prediction was consistently wrong — the wrong model won when agents guessed numbers. Separation of concerns: LLM for interpretation, computation for prediction. (Phases 2–3)
+
+**3. Agents overclaim model accuracy by 3–5×.** When forced to make verifiable predictions, agents predicted 0.65–0.90 when actual model output was 0.10–0.48. The 45:1 false-to-verified ratio measures the gap between mechanistic intuition and computational reality. (Phase 10, M5)
+
+### On experiment selection
+
+**4. Agents propose experiments that tell good stories, not diagnostic ones.** The highest-divergence structure was never selected by any agent across all runs. Bayesian EIG does experiment selection better, faster, and cheaper — 36% fewer LLM calls with better convergence. (Phases 2–5, 7)
+
+**5. Multiple evidence channels beat single channels.** Learning curves solved the GCM-RULEX discrimination problem (2.4% → 68% gap). Accuracy alone couldn't distinguish models with similar asymptotes but different learning dynamics. (Phase 8)
+
+**6. Information design for LLM agents matters as much as algorithm design.** Abstract divergence scores don't change behavior. Per-model predicted accuracy does. Structured JSON prompts with verifiable fields produce better output than freeform text. (Phases 5, 7, 10)
+
+### On debate dynamics
+
+**7. Critique is formulaic and unfalsifiable without verification.** "My model can also predict that" was the dominant pattern — logically valid but scientifically vacuous. Critique-as-falsification (M5) makes overclaiming visible but doesn't yet change agent behavior. (Phases 1, 4, 6, 10)
+
+**8. Debate has no memory without explicit infrastructure.** Agents repeat the same 2–3 talking points across all cycles. The structured claim ledger (M5) provides infrastructure, but agents don't yet engage with it spontaneously. (Phases 9, 10)
+
+**9. Theory revision follows Lakatos-compatible patterns.** Correct theories stay stable. Incorrect theories revise progressively. No theory degenerates. RULEX is most rigid (fewest parameters to adjust). This is a healthy scientific pattern that emerges naturally from the adversarial structure. (Phase 9)
+
+### On architecture
+
+**10. The specification gap is the fundamental bottleneck.** LLMs reason fluently about experimental design but cannot produce executable specifications. The fix is constrained choice with structured parameterization, not freeform generation. (Phase 1)
+
+**11. Model flexibility is a real scientific finding, not a system bug.** GCM approximates rule-like behavior through attention weights (Nosofsky 1991). The system correctly detects this asymmetry — the 1.8% RULEX gap is scientifically honest. (Phases 5–6)
+
+**12. Closing feedback loops makes debate matter, but modestly.** Post-M5, replication variance went from zero to std≈0.018 (10% CV). The debate now causally affects outcomes through parameter revision persistence. But the Bayesian machinery still dominates — correct winners in all runs regardless of what agents say. The debate's primary value remains qualitative: human-readable explanations and mechanistic narratives. (Phase 10, M5)

@@ -537,3 +537,23 @@ Pattern covered `debate_cycle_*.json` but not `.md` transcripts.
 **Cost:** ~$1/run (Sonnet), ~$5/run (Opus), ~$1/run (GPT-4o). 68 LLM calls per 5-cycle run.
 
 **Status:** Done.
+
+---
+
+## D27: M5 — Close debate feedback loops — 2026-03-15
+
+**Problem:** M4 analysis revealed debate is epiphenomenal to RMSE: replication runs have zero variance, cross-LLM comparison produces identical winners. Four feedback loops are broken: (1) theory params never propagate to agent_config, (2) param_overrides ephemeral, (3) agent_hypotheses never read, (4) critique content doesn't affect selection.
+
+**Solution:** Implemented 4 features (FEATURES.md 7.1–7.4):
+1. **Parameter revision persistence** — `sync_params_from_theory()` copies revised params after interpretation, filtered through `inspect.signature`
+2. **Structured claim ledger** — `DebateClaim` dataclass tracks testable predictions across cycles, statuses updated after execution
+3. **Critique-as-falsification** — `verify_prediction_claim()` fact-checks agent assertions against actual model computation
+4. **Debate-informed EIG weighting** — `select_from_pool()` boosts EIG for candidates distinguishing contested model pairs
+
+**Alternatives considered:** Could have tackled param_overrides persistence instead of theory params, but theory params are the more principled path (LLM reasons about theory, system validates). Could have used a penalty instead of a boost for EIG, but boosting the contested pair is more targeted.
+
+**Validation:** 3/3 ground truths correct. 4× GCM replication: RMSE std=0.018 (was 0.000). ~45 FALSE CLAIMs detected. 24 new tests (231 total).
+
+**Impact:** Debate now causally affects RMSE. First non-zero replication variance in project history.
+
+**Status:** Done.

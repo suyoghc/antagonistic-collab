@@ -1,13 +1,13 @@
 # Antagonistic Collaboration via LLM Debate: Can AI Agents Resolve Scientific Disputes?
 
-**Phase: M4 — Analysis & Write-up**
-**Date: 2026-03-14**
+**Phase: M5 — Debate Feedback Loops (updated)**
+**Date: 2026-03-15** (originally 2026-03-14; updated with M5 validation results)
 
 ---
 
 ## Abstract
 
-We present an antagonistic collaboration framework in which three LLM agents — each representing a competing theory of human category learning — debate through a structured protocol, propose experiments, and converge toward the theory that best explains synthetic data. The three models are the Generalized Context Model (GCM; Nosofsky 1986), SUSTAIN (Love, Medin & Gureckis 2004), and RULEX (Nosofsky, Palmeri & McKinley 1994). We compare two architectures: a *legacy* mode where LLM agents propose experiments through adversarial debate, and a *full-pool* mode where Bayesian expected information gain (EIG) selects experiments while agents shift to interpreting results and generating hypotheses. Across 6 validation runs (3 ground truths × 2 modes, 5 cycles each), the correct model's agent wins in every condition. Full-pool mode achieves dramatically better discrimination for hard model pairs (RULEX gap: 2.4% legacy vs. 68% full-pool), driven by learning curves as a second evidence channel. We find that LLM agents add value for mechanistic interpretation but not for experiment selection, and that adversarial debate does not produce cumulative scientific reasoning within the current architecture.
+We present an antagonistic collaboration framework in which three LLM agents — each representing a competing theory of human category learning — debate through a structured protocol, propose experiments, and converge toward the theory that best explains synthetic data. The three models are the Generalized Context Model (GCM; Nosofsky 1986), SUSTAIN (Love, Medin & Gureckis 2004), and RULEX (Nosofsky, Palmeri & McKinley 1994). We compare two architectures: a *legacy* mode where LLM agents propose experiments through adversarial debate, and a *full-pool* mode where Bayesian expected information gain (EIG) selects experiments while agents shift to interpreting results and generating hypotheses. Across 6 validation runs (3 ground truths × 2 modes, 5 cycles each), the correct model's agent wins in every condition. Full-pool mode achieves dramatically better discrimination for hard model pairs (RULEX gap: 2.4% legacy vs. 68% full-pool), driven by learning curves as a second evidence channel. Cross-LLM comparison (GPT-4o, Claude Sonnet, Claude Opus) confirms the framework is LLM-agnostic (9/9 correct). After closing four broken feedback loops (M5), debate now causally affects RMSE through parameter revision persistence (replication std=0.018, previously 0.000), and critique-as-falsification reveals that agents overclaim model accuracy by 3–5×. We distill 12 theses on what LLM-mediated scientific debate can and cannot do.
 
 ---
 
@@ -137,9 +137,21 @@ For each selected experiment, the ground-truth model generates "observed" data:
 
 All validation runs used GPT-4o via Princeton/Portkey gateway. Each agent receives a role-specific system prompt defining its theoretical commitments, model description, and output format. API calls include exponential-backoff retry (up to 3 attempts).
 
-### 2.9 Validation protocol
+### 2.9 Debate feedback features (M5)
 
-Six runs: 3 ground truths (GCM, SUSTAIN, RULEX) × 2 modes (full_pool, legacy), each 5 cycles. The correct agent should achieve the lowest RMSE in every condition. 207 automated tests verify framework correctness.
+Four features close the feedback loops between debate and the quantitative pipeline:
+
+1. **Parameter revision persistence** — `sync_params_from_theory()` copies theory params revised during interpretation back to `agent_config.default_params`, filtered through `inspect.signature` to reject invalid keys. This is the primary debate→RMSE feedback path.
+
+2. **Structured claim ledger** — `DebateClaim` dataclass tracks testable predictions across cycles. Claims are parsed from agent JSON during interpretation, and statuses are updated (confirmed/falsified) after execution. Active claims are injected into subsequent interpretation prompts.
+
+3. **Critique-as-falsification** — `verify_prediction_claim()` runs the actual model computation when an agent claims a specific prediction value, comparing claimed vs actual output. FALSE CLAIMs are flagged and recorded in the ledger.
+
+4. **Debate-informed EIG weighting** — `select_from_pool()` accepts a `focus_pair` (the two models with closest posterior probabilities, or the most-disputed pair in the claim ledger) and multiplies EIG by 1.5× for candidates where those models have high prediction divergence.
+
+### 2.10 Validation protocol
+
+Six M4 runs: 3 ground truths × 2 modes, each 5 cycles. Nine cross-LLM runs: 3 ground truths × 3 LLMs. Three M5 validation runs: 3 ground truths, full_pool with GPT-4o. Four M5 replication runs: GCM ground truth, full_pool with GPT-4o (for variance analysis). 231 automated tests verify framework correctness.
 
 ---
 
@@ -257,6 +269,52 @@ We audited all 30 debate cycles across 6 runs on four dimensions:
 
 The adversarial critique forcing function does produce improvement in later cycles (more specific proposals after 3+ cycles of critique pressure), but the debate does not generate cumulative scientific reasoning.
 
+### 3.11 M5: Debate feedback loops — debate now affects outcomes
+
+After closing four broken feedback loops (Section 2.9), we re-ran validation with GPT-4o via Princeton (5 cycles, full_pool mode):
+
+| Ground Truth | Winner | RMSE | Posterior | Correct? |
+|---|---|---|---|---|
+| GCM | Exemplar_Agent | 0.1836 | 1.0000 | Yes |
+| SUSTAIN | Clustering_Agent | 0.2687 | 1.0000 | Yes |
+| RULEX | Rule_Agent | 0.1580 | 1.0000 | Yes |
+
+All 3 ground truths correctly identified, consistent with M4 results. The key new finding is replication variance.
+
+### 3.12 Post-M5 replication: non-zero variance
+
+Four GCM replication runs with identical settings:
+
+| Run | Exemplar RMSE | Clustering RMSE | Rule RMSE |
+|---|---|---|---|
+| Initial | 0.1836 | 0.2123 | 0.3280 |
+| Rep 1 | 0.1587 | 0.2424 | 0.3379 |
+| Rep 2 | 0.1832 | 0.2571 | 0.3628 |
+| Rep 3 | 0.2082 | 0.2590 | 0.3558 |
+| **Std Dev** | **0.0177** | **0.0189** | **0.0153** |
+
+Pre-M5, all replicates produced identical RMSE (Section 3.5). Post-M5, std ≈ 0.018. The mechanism: different LLM runs propose different parameter revisions during interpretation, and those revisions now persist into subsequent cycles via `sync_params_from_theory()`. The correct winner is preserved across all runs — the variance is within-winner, not winner-changing.
+
+### 3.13 Critique-as-falsification: agents overclaim by 3–5×
+
+Across 6 validation runs, `verify_prediction_claim()` checked agent assertions during the critique phase:
+
+| Metric | Value |
+|---|---|
+| Total prediction claims checked | ~46 |
+| FALSE CLAIMs (discrepancy > 0.1) | ~45 |
+| Verified claims (discrepancy ≤ 0.1) | 1 |
+| Typical claimed accuracy | 0.65–0.90 |
+| Typical actual accuracy | 0.10–0.48 |
+
+Agents systematically overclaim their model's performance. When an agent asserts "my model predicts 0.75 on Type I / high attention," the actual computed prediction is typically 0.10–0.18. The one verified claim: Rule_Agent predicted 0.600 on five_four / baseline; actual was 0.544 (within tolerance).
+
+This 45:1 false-to-verified ratio quantifies the gap between LLM mechanistic intuition ("exemplars handle this well") and computational reality. Agents reason correctly about mechanisms but cannot estimate quantitative consequences.
+
+### 3.14 Claim ledger and EIG weighting
+
+The structured claim ledger accumulates ~3 claims per agent per cycle (from interpretation debate) plus critique claims. Most claims remain "untested" because they reference conditions not subsequently selected by EIG. The focus pair mechanism activates after cycle 0 but has modest impact in 5-cycle runs because the posterior typically collapses quickly. The RULEX run shows the most interesting trajectory: focus pair correctly identifies Exemplar–Rule as the contested pair during cycles 1–2, when discrimination matters most.
+
 ---
 
 ## 4. Discussion
@@ -289,39 +347,44 @@ The solution was a constrained menu (structure registry + condition effects) tha
 - Adversarial critique as a forcing function — pressures agents to refine proposals in later cycles
 - Theory revision pressure — incorrect theories accommodate evidence progressively (Lakatos-compatible)
 - Human-readable mechanistic explanations of model behavior
+- Parameter revisions that causally affect subsequent predictions (M5 — replication std=0.018)
 
 **What debate does not contribute:**
-- Experiment selection quality (0% of value — EIG dominates)
-- Cumulative scientific reasoning (agents repeat talking points across cycles)
+- Experiment selection quality (EIG dominates; LLM proposals are narrative-driven)
+- Cumulative scientific reasoning (agents repeat talking points across cycles despite the claim ledger)
 - Data-grounded argumentation (posteriors cited as proxy; item-level data ignored)
+- Calibrated quantitative predictions (agents overclaim accuracy by 3–5× when fact-checked)
 
-The debate produces the *form* of scientific discourse — agents argue, cite mechanisms, revise theories — but not its *function*. The convergence is driven entirely by the Bayesian machinery. Whether this reflects a fundamental limitation of current LLMs or a fixable prompt engineering problem is an open question.
+Pre-M5, the debate was entirely epiphenomenal to RMSE — replication variance was zero, and convergence was driven by the Bayesian machinery alone. Post-M5, parameter revision persistence creates a modest but real causal link: different LLM runs produce different parameter revisions, which produce different model predictions. The correct winner is preserved, but the debate now leaves a quantitative fingerprint. The debate's primary value remains qualitative — mechanistic narratives and human-readable explanations — but it is no longer purely cosmetic.
 
 ### 4.5 Limitations
 
-1. **Deterministic pipeline.** Replication runs (Section 3.5) showed zero variance in full-pool mode RMSE — the quantitative outcome is fully deterministic given the same initial conditions. This means the RMSE gaps are exact rather than estimated, but it also means the results are conditioned on a specific set of model default parameters. Sensitivity analysis across parameter ranges would assess robustness.
+1. **Modest debate impact.** Post-M5, replication variance is non-zero but small (std≈0.018 on RMSE≈0.18, ~10% coefficient of variation). The Bayesian machinery still dominates convergence. Whether stronger feedback loops (e.g., agents proposing entire parameter vectors, or debate-driven experiment vetoes) would increase the debate's causal role is untested.
 
 2. **Synthetic data only.** The framework validates whether correct models are identifiable in principle, not whether the models are correct accounts of human behavior. Extending to real experimental data would require a lab-automation interface.
 
 3. **Three models only.** The framework currently implements GCM, SUSTAIN, and RULEX. Generalization to other model families (neural networks, Bayesian cognitive models) is architecturally straightforward but untested.
 
-4. **GPT-4o as the agent backbone.** Debate quality may differ with other LLMs. The specification gap and cumulative reasoning limitations may be model-specific.
+4. **LLM-agnostic convergence.** Cross-LLM comparison (Section 3.6) shows correct model wins regardless of backbone, which validates robustness but also suggests the LLM is currently a replaceable component. The debate quality differences between GPT-4o, Sonnet, and Opus do not translate into convergence differences.
 
 5. **No human evaluation of debate quality.** Our quality audit was systematic but not blind. Expert evaluation of whether agent reasoning constitutes genuine scientific reasoning would strengthen the findings.
+
+6. **Claim ledger underutilized.** Agents don't spontaneously engage with the claim ledger in their interpretations despite it being injected into prompts. Stronger prompt engineering or explicit penalties for repeating falsified claims may be needed.
 
 ### 4.6 Future directions
 
 1. **Enforce numerical citation requirements** — agents must cite 3+ specific item predictions that diverge, not just posterior probabilities
-2. **Structured claim tracking** — maintain a per-agent claim registry that is updated each cycle, flagging stale claims that haven't been revised despite contradicting data
-3. **Longer runs (10+ cycles)** — assess whether novel structures eventually outperform registry structures as the registry space is exhausted
+2. **Claim-responsive debate** — agents should explicitly address their prior claims ("I previously predicted X, which was falsified; I now revise to Y") rather than repeating generic talking points
+3. **Longer runs (10+ cycles)** — assess whether novel structures eventually outperform registry structures as the registry space is exhausted, and whether the claim ledger produces cumulative reasoning at longer horizons
 4. **Cross-domain generalization** — apply the framework to other multi-model disputes in cognitive science (memory models, decision-making theories)
-5. **Hybrid mode** — EIG for selection, but with agents interpreting the EIG landscape to generate hypotheses about why certain experiments are informative (bridging computation and reasoning)
+5. **ARBITER/CRUCIBLE integration** — role-specialized agents (Integrator, Critic, Moderator), explicit crux negotiation, HITL checkpoints, and pre-registration output (from Kachergis et al.)
+6. **Real data integration** — AutoRA + Prolific for closing the loop with human participants
 
 ---
 
 ## 5. Conclusion
 
-Antagonistic collaboration via LLM debate can successfully identify the correct model from competing theories, but the mechanism of convergence is Bayesian computation, not argumentation. The optimal architecture separates computation (experiment selection, posterior update, learning curves) from language (interpretation, hypothesis generation, explanation). LLM agents add genuine value as scientific narrators — translating statistical evidence into mechanistic understanding — but they do not yet function as autonomous scientific reasoners who learn cumulatively from evidence. The framework demonstrates both the promise and the current limits of LLMs in the scientific method.
+Antagonistic collaboration via LLM debate can successfully identify the correct model from competing theories. The mechanism of convergence is primarily Bayesian computation, but M5's feedback loop closures demonstrate that debate can causally affect outcomes — parameter revisions proposed during interpretation now persist into subsequent predictions, producing non-zero replication variance for the first time. The optimal architecture separates computation (experiment selection, posterior update, learning curves) from language (interpretation, hypothesis generation, explanation), but connects them through validated feedback paths (parameter persistence, claim verification). LLM agents add genuine value as scientific narrators — translating statistical evidence into mechanistic understanding — and critique-as-falsification reveals they dramatically overclaim model accuracy (45:1 false-to-verified ratio), quantifying the gap between mechanistic intuition and computational reality. The framework demonstrates both the promise and the current limits of LLMs in the scientific method: they reason correctly about mechanisms, but cannot yet learn cumulatively from evidence or calibrate their quantitative expectations to their computational models.
 
 ---
 

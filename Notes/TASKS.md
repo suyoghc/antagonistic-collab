@@ -1,6 +1,25 @@
 # Tasks
 
-## Current Milestone: M4 — Analysis & write-up
+## Current Milestone: M5 — Close Debate Feedback Loops (DONE)
+
+### M5 Tasks
+- [x] **7.1 Parameter revision persistence** — `sync_params_from_theory()` copies `theory.model_params` → `agent_config.default_params` after each interpretation phase. Filters through `inspect.signature`. 6 tests.
+- [x] **7.4 Structured claim ledger** — `DebateClaim` dataclass + `claim_ledger` on `EpistemicState`. Methods: `add_claim`, `update_claim_status`, `get_active_claims`, `stale_claims`, `claims_summary_for_agent`. Claims parsed from agent JSON, shown in interpretation prompts. 8 tests.
+- [x] **7.2 Critique-as-falsification** — `verify_prediction_claim()` runs actual model computation when agents claim prediction values. FALSE CLAIMs flagged and recorded in ledger. 5 tests.
+- [x] **7.3 Debate-informed EIG weighting** — `select_from_pool()` accepts `focus_pair` + `pair_boost`. Extracts contested pairs from ledger or posterior. 5 tests.
+- [x] **M5 Validation** — 5-cycle runs with all 3 ground truths (GPT-4o via Princeton): GCM✓, SUSTAIN✓, RULEX✓. All correct winners.
+- [x] **Replication variance** — 4× GCM runs: Exemplar RMSE std=0.018 (was 0.000 pre-M5). Debate now causally affects outcomes.
+- [x] **Critique-as-falsification activity** — ~45 FALSE CLAIMs detected across 6 runs, 1 verified. Agents consistently overclaim model accuracy.
+
+### M5 Commits
+- `1d12fde` feat(M5/7.1): Parameter revision persistence
+- `4625d53` feat(M5/7.4): Structured claim ledger
+- `84852bb` feat(M5/7.2): Critique-as-falsification
+- `f61eec4` feat(M5/7.3): Debate-informed EIG weighting + lint/format cleanup
+
+---
+
+## Completed: M4 — Analysis & write-up
 
 ### M4 Tasks
 - [x] **Analyze EIG selection patterns** — five_four/fast universal cycle-0 pick; RULEX run shifts to Type_I/low_attention; EIG repeats optimal structure rather than diversifying (LESSONS 9.1)
