@@ -1,7 +1,5 @@
 # Automated Antagonistic Collaboration: AI Agents as Adversarial Scientists
 
-**Suyog Chandramouli & George Kachergis**
-
 *Working draft — last updated March 2026*
 
 ---
