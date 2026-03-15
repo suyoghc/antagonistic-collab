@@ -11,10 +11,12 @@
   - [x] Fix #4: RULEX curve missing exceptions → use predict() not _evaluate_rule()
   - [x] Fix #5: n_subjects not threaded → data.get("n_subjects", default)
   - 5 new tests (306 total passing)
+- [x] **Tempering Calibration** (D32) — tau=0.2 still caused collapse; recalibrated to tau=0.005 + prediction clip [0.05, 0.95]. Live validation: entropy=0.635 after cycle 0, EIG=0.233 on cycle 1, correct winner. 2 new tests (308 total).
 
 ### M7 Commits
 - `0c43faf` feat(M7): likelihood tempering, ARBITER toggle, and config file
-- (pending) fix: 5 Codex review bugs — ground-truth leakage, novel structures, LOO mismatch, RULEX curves, n_subjects threading
+- `b79829c` fix: 5 Codex review bugs — ground-truth leakage, novel structures, LOO mismatch, RULEX curves, n_subjects threading
+- `9138b42` fix(M7): calibrate tempering — tau=0.005, clip [0.05, 0.95]
 
 ---
 

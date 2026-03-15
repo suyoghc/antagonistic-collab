@@ -921,3 +921,52 @@ Distilled from 11 phases of development, ~70 validation runs, and 4 LLM backbone
 **15. Posterior collapse is the primary bottleneck.** The Bayesian posterior concentrates to certainty after 1–2 experiments, making later cycles uninformative. Crux boost can't overcome zero EIG. The system's most scientifically valuable behavior (RULEX self-correction) only occurs when uncertainty survives long enough for structural variation. (Phase 11, M6)
 
 **16. Winning theories need fewer revisions.** Rule_Agent made 0 revisions and won by 67.6%. Losing agents revise futilely. This is Lakatos's criterion for progressive vs degenerative research programs, emerging naturally from adversarial structure. (Phase 11, M6)
+
+---
+
+## Phase 12 — M7: Likelihood Tempering Calibration (2026-03-15)
+
+M7 addressed posterior collapse (D29/D30) with likelihood tempering. The initial implementation (tau=0.2) was correct in principle but failed in practice — the posterior still collapsed to entropy=0.000 on cycle 0. Diagnosing and fixing this required understanding the interaction between model prediction extremity, prediction clipping, and temper strength.
+
+### 12.1 Hyperparameters calibrated on toy examples fail on real model outputs
+
+**Expected:** tau=0.2 would slow posterior convergence enough to maintain meaningful uncertainty across multiple cycles (the unit tests confirmed this with synthetic log-likelihoods of ±10).
+
+**Actual:** With real model predictions, the posterior still collapsed to entropy=0.000 on cycle 0, with all EIG=0.000 on cycle 1. The tempering had zero practical effect.
+
+**Root cause:** SUSTAIN produces near-binary predictions (0.0005/0.999) due to its softmax over 1–2 recruited clusters. Even clipped to [0.01, 0.99], these predictions generate per-item LL gaps of ~53 nats. Across 20 items × n_subjects=30, the total LL range was ~1000 nats. tau=0.2 × 1000 = 200 nats — a probability ratio of e^200 ≈ 10^87, which is effectively infinite.
+
+**Fix:** Two-pronged: (1) Widen prediction clip from [0.01, 0.99] to [0.05, 0.95] — no cognitive model should predict >95% confidence on individual items. (2) Lower tau from 0.2 to 0.005, calibrated empirically so that 1 cycle gives H≈0.64, 2 cycles H≈0.32, 5 cycles H≈0.02.
+
+**Implication:** Unit tests with small synthetic log-likelihoods cannot catch calibration failures. The actual evidence strength in the pipeline (thousands of nats per experiment) is orders of magnitude larger than what toy tests exercise. This is a general lesson for any system with configurable tempering or regularization: always validate the hyperparameter against the actual scale of the quantities it modulates, not against convenient test values. The math was correct; the calibration was wrong.
+
+### 12.2 Prediction clipping is a modeling assumption, not just a numerical guard
+
+**Expected:** Clipping predictions to [0.01, 0.99] was a numerical convenience to prevent log(0).
+
+**Actual:** The clip range is a consequential modeling assumption. At [0.01, 0.99], a model that predicts 0.001 (after clipping to 0.01) when the observed data is 0.50 generates ~53 nats of evidence per item. At [0.05, 0.95], the same scenario generates ~18 nats — a 3× reduction in evidence strength per item, which compounds across 20 items.
+
+**Implication:** The clip range implicitly answers: "How confident can any model be about a single item's accuracy?" In human categorization with 30 subjects, observed accuracies have a standard error of ~0.09. A model prediction of 0.01 (1% correct) when participants get 50% correct is not a slightly wrong prediction — it's a category error in the model's assumptions. Clipping to [0.05, 0.95] is defensible: it says "no cognitive model should be more than 95% confident about any single item's accuracy." This is a scientific judgment, not a numerical hack.
+
+### 12.3 Tempering success: gradual convergence enables multi-cycle reasoning
+
+**Expected:** With calibrated tau=0.005, the posterior would maintain uncertainty long enough for experiment selection to matter across cycles.
+
+**Actual:** Confirmed. 2-cycle GCM validation:
+- Cycle 0: P(GCM)=0.73, entropy=0.635/1.099 (58% of max), EIG=0.369
+- Cycle 1: P(GCM)=0.90, entropy=0.325/1.099 (30% of max), EIG=0.233
+- Correct winner identified with gradual convergence
+
+Previously (tau=0.2 or tau=1.0), entropy hit 0.000 on cycle 0 and every subsequent cycle had EIG=0.000 — making the entire multi-cycle debate framework pointless. Now the system can genuinely accumulate evidence across cycles, with experiment selection adapting to the evolving posterior.
+
+**Implication:** The fundamental premise of the antagonistic collaboration framework — that multiple cycles of experiment→debate→update are scientifically valuable — was hollow until tempering was properly calibrated. All prior validation results (M3–M6) showed correct winners despite posterior collapse, not because of multi-cycle reasoning. The correct winner was identified on cycle 0 and never changed. With calibrated tempering, the system can now test whether later cycles genuinely improve convergence or whether cycle 0 is always sufficient. This is the first version where the multi-cycle structure is load-bearing.
+
+### Emerging Principles (updated)
+
+### On posterior calibration (M7)
+
+**17. Calibrate hyperparameters against actual pipeline quantities, not toy examples.** tau=0.2 worked in unit tests with ±10 nat log-likelihoods but failed with real models producing ~1000 nat ranges. Always validate tempering/regularization at the actual scale of the quantities it modulates. (Phase 12, M7)
+
+**18. Prediction clipping is a modeling assumption.** The clip range [0.05, 0.95] implicitly asserts "no cognitive model should be >95% confident about individual items." This is defensible given sampling noise (SE≈0.09 with n=30) and is more consequential than it appears — it determines evidence strength per item. (Phase 12, M7)
+
+**19. Multi-cycle debate was hollow until tempering worked.** All prior validations (M3–M6) got correct winners despite posterior collapse — the answer was determined on cycle 0. Only with calibrated tempering (tau=0.005) does the multi-cycle structure become load-bearing, enabling genuinely adaptive experiment selection. (Phase 12, M7)

@@ -439,8 +439,12 @@ through parameter revision persistence. All 3 ground truths still correctly
 identified. Cross-LLM comparison (GPT-4o, Sonnet, Opus) confirms: 9/9 correct.
 **Update (M6, 2026-03-15):** Features 15–18 now implemented. ARBITER features
 enrich debate quality (crux selectivity, meta-agent synthesis, conflict tracking)
-but do not alter convergence mechanism. Posterior collapse (D29) is the primary
+but do not alter convergence mechanism. Posterior collapse (D29) was the primary
 bottleneck — crux boost cannot overcome zero EIG. 3/3 correct with 36–68% gaps.
+**Update (M7, 2026-03-15):** Posterior collapse fixed via likelihood tempering
+(tau=0.005, clip [0.05, 0.95]). Entropy=0.635 after cycle 0 (was 0.000), EIG=0.233
+on cycle 1 (was 0.000). Multi-cycle debate is now load-bearing — experiment
+selection adapts to evolving posterior across cycles.
 
 ---
 
@@ -454,13 +458,21 @@ keeping the posterior spread across models longer and maintaining nonzero EIG.
 `select_from_pool`, `select_experiment`, `update_posterior_from_experiment`),
 `runner.py` (`_LEARNING_RATE` global, 3 call sites, `--learning-rate` CLI),
 `__main__.py` (`--learning-rate` flag)
-**Current default:** 1.0 (no tempering, backward compatible)
-**Recommended:** 0.1–0.3 for synthetic data with known generative models
+**Current default:** tau=0.005 (calibrated for synthetic data)
 **Why it matters:** M6 validation showed posterior collapse to P≈1.0 after 1–2
 experiments, making EIG=0 for all remaining candidates. Crux boost can't overcome
 zero EIG. Tempering keeps later cycles informative by preventing the posterior
 from concentrating too rapidly. Well-established in Bayesian statistics (Grünwald
 2012, Bissiri et al. 2016, Miller & Dunson 2019).
-**M7 result:** 9 tests confirm: tempered updates are slower, preserve ordering,
-maintain backward compatibility, keep EIG nonzero after strong evidence, and
-thread correctly through the full pipeline.
+**Calibration (D32):** Initial tau=0.2 was insufficient — SUSTAIN's near-binary
+predictions (0.0005/0.999) create ~1000 nat LL range, and 0.2 × 1000 = 200 nats
+still overwhelms. Two-pronged fix: (1) widen prediction clip from [0.01, 0.99]
+to [0.05, 0.95], (2) lower tau from 0.2 to 0.005. Calibrated empirically for
+gradual convergence: 1 cycle → H=0.64, 2 cycles → H=0.32, 5 cycles → H=0.02.
+**M7 result:** Live validation with tau=0.005: P(GCM)=0.73→0.90 over 2 cycles,
+entropy=0.635→0.325, EIG=0.233 on cycle 1 (was 0.000 with tau=0.2). Correct
+winner identified. 12 tests across `TestLikelihoodTempering`, `TestConfig`, and
+`TestPredictionClipping` (308 total passing).
+**Toggles:** `--no-tempering` sets tau=1.0 (standard Bayesian). `--no-arbiter`
+disables ARBITER features (crux negotiation, meta-agents, conflict map).
+Both configurable via YAML config file with layered precedence.

@@ -76,12 +76,24 @@ models/
 - [x] Theory revision — Lakatos-compatible (LESSONS 9.5)
 - [x] Legacy vs full_pool comparison — debate hurts experiment selection (LESSONS 9.4)
 
+### M5: Close debate feedback loops (DONE)
+- Parameter revision persistence, critique-as-falsification, debate-informed EIG, claim ledger
+- Replication variance went from 0.000 to std=0.018
+
+### M6: ARBITER integration (DONE)
+- MetaAgentConfig, crux negotiation, conflict map, pre-registration, HITL checkpoints
+- Live validation: 3/3 correct (GCM 36.4%, SUSTAIN 45.6%, RULEX 67.6%)
+- Identified posterior collapse as primary bottleneck (D29)
+
 ### M7: Likelihood tempering (DONE)
 - [x] Add `learning_rate` (tau) param to `ModelPosterior.update()`, `compute_eig()`, `select_from_pool()`, `select_experiment()`, `update_posterior_from_experiment()`
 - [x] Wire `_LEARNING_RATE` global through `runner.py` call sites
-- [x] Add `--learning-rate` CLI flag to `__main__.py` and `runner.py`
-- [x] 9 tests, 296 total passing
-- [ ] Live validation with `--learning-rate 0.2`
+- [x] Add `--learning-rate` CLI flag, `--no-tempering`, `--no-arbiter` toggles
+- [x] YAML config file with layered precedence (built-in → user config → CLI)
+- [x] 5 Codex review bug fixes: ground-truth leakage, novel structures, LOO mismatch, RULEX curves, n_subjects threading
+- [x] Calibrated tau: 0.2 → 0.005 + prediction clip [0.01, 0.99] → [0.05, 0.95] (D32)
+- [x] Live validation: entropy=0.635 after cycle 0 (was 0.000), EIG=0.233 on cycle 1 (was 0.000)
+- [x] 308 tests passing
 
 ## Key constraints
 
