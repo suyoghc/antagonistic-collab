@@ -7909,3 +7909,70 @@ class TestPreregistration:
         assert "predictions" in parsed
         assert "adjudication_criteria" in parsed
         assert "cycle" in parsed
+
+
+# =========================================================================
+# M6c: HITL Checkpoints
+# =========================================================================
+
+
+class TestHITLCheckpoints:
+    """Tests for human-in-the-loop checkpoint system."""
+
+    def test_hitl_batch_mode_auto_continues(self):
+        """In batch mode (default), checkpoint should auto-continue without blocking."""
+        from antagonistic_collab.runner import hitl_checkpoint
+
+        state = EpistemicState(domain="test")
+        protocol = DebateProtocol(state=state, agent_configs=default_agent_configs())
+
+        result = hitl_checkpoint(
+            protocol,
+            "test_checkpoint",
+            {"question": "Approve?"},
+            interactive=False,
+        )
+        assert result["action"] == "continue"
+        assert result["checkpoint"] == "test_checkpoint"
+
+    def test_hitl_interactive_mode_prompts(self):
+        """In interactive mode, checkpoint should present context."""
+        from antagonistic_collab.runner import hitl_checkpoint
+
+        state = EpistemicState(domain="test")
+        protocol = DebateProtocol(state=state, agent_configs=default_agent_configs())
+
+        # Mock input to simulate user response
+        with patch("builtins.input", return_value="y"):
+            result = hitl_checkpoint(
+                protocol,
+                "test_checkpoint",
+                {"question": "Do these cruxes capture the key questions?"},
+                interactive=True,
+            )
+        assert result["action"] == "continue"
+        assert "user_input" in result
+
+    def test_hitl_checkpoint_returns_context(self):
+        """Context dict should be passed through in result."""
+        from antagonistic_collab.runner import hitl_checkpoint
+
+        state = EpistemicState(domain="test")
+        protocol = DebateProtocol(state=state, agent_configs=default_agent_configs())
+
+        context = {"cruxes": ["c1", "c2"], "eig": 0.45}
+        result = hitl_checkpoint(protocol, "post_crux", context, interactive=False)
+        assert result["context"] == context
+
+    def test_hitl_flag_parsed(self):
+        """CLI should recognize --hitl-checkpoints flag."""
+
+        # Import the argument parser setup
+        from antagonistic_collab.__main__ import _build_argparser
+
+        parser = _build_argparser()
+        args = parser.parse_args(["--hitl-checkpoints"])
+        assert args.hitl_checkpoints is True
+
+        args_default = parser.parse_args([])
+        assert args_default.hitl_checkpoints is False

@@ -1899,6 +1899,39 @@ def generate_preregistration(protocol: DebateProtocol, cycle: int) -> dict:
     }
 
 
+def hitl_checkpoint(
+    protocol: DebateProtocol,
+    checkpoint_name: str,
+    context: dict,
+    interactive: bool = False,
+) -> dict:
+    """Optional human-in-the-loop breakpoint.
+
+    In batch mode (interactive=False), auto-continues.
+    In interactive mode, presents context and waits for input.
+
+    Returns dict with action, checkpoint name, context, and optional user_input.
+    """
+    result = {
+        "checkpoint": checkpoint_name,
+        "context": context,
+        "action": "continue",
+    }
+
+    if interactive:
+        print(f"\n{'=' * 50}")
+        print(f"HITL CHECKPOINT: {checkpoint_name}")
+        print(f"{'=' * 50}")
+        for key, value in context.items():
+            print(f"  {key}: {value}")
+        user_input = input("\nContinue? (y/n/comment): ").strip()
+        result["user_input"] = user_input
+        if user_input.lower() in ("n", "no", "stop"):
+            result["action"] = "stop"
+
+    return result
+
+
 def run_audit(protocol: DebateProtocol, client, transcript: list) -> PhaseResult:
     """Phase 9: Summarize what was learned."""
     print("\n" + "=" * 70)
@@ -2506,6 +2539,12 @@ def main():
         choices=["full_pool", "legacy"],
         default="legacy",
         help="Phase flow: full_pool (EIG + interpretation debate) or legacy (9-phase)",
+    )
+    parser.add_argument(
+        "--hitl-checkpoints",
+        action="store_true",
+        default=False,
+        help="Enable human-in-the-loop checkpoints (default: off)",
     )
     args = parser.parse_args()
 
