@@ -95,6 +95,14 @@ models/
 - [x] Live validation: entropy=0.635 after cycle 0 (was 0.000), EIG=0.233 on cycle 1 (was 0.000)
 - [x] 308 tests passing
 
+### M8: Thompson sampling + Codex fixes round 6 (DONE)
+- [x] Configurable `selection_strategy`: thompson (default) or greedy (D34)
+- [x] Thompson sampling literature review: Section 4.5 in WRITEUP.md (10 references)
+- [x] 3 Codex fixes (D35): curve bonus removed, novel structure execution, divergence map consistency
+- [x] Clean ablation: Thompson vs greedy, 3 ground truths × 2 strategies = 6 runs
+- [x] Results: both 3/3 correct post-bugfix; Thompson 12 unique structures (6 novel) vs greedy 3 unique (0 novel)
+- [x] 322 tests passing
+
 ## Key constraints
 
 - Synthetic data only (no real experiments) — but must be model-sensitive

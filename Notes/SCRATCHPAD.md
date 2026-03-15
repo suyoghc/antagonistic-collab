@@ -4,24 +4,21 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ---
 
-## Current focus — M7 Validation Complete
+## Current status — M8 complete
 
-5-cycle validation done: 2/3 correct (GCM, SUSTAIN). RULEX misidentified as GCM (8.2% RMSE gap — genuine model overlap). 308 tests passing.
+M8 Thompson sampling implemented, validated, and documented. Clean ablation (6 runs) shows both Thompson and greedy 3/3 correct. All documentation updated.
 
-### Open issues from validation
-
-1. **RULEX misidentification** — GCM approximates RULEX via attention weights (Nosofsky 1991). Need structures that specifically discriminate these two (e.g., structures where rule discovery is discrete vs gradual, verbal load manipulations).
-
-2. **EIG lacks exploration diversity** — selected same structure 5/5 times for GCM and SUSTAIN runs. Greedy EIG is locally optimal but doesn't explore. Candidate fix: structure diversity bonus or forced coverage.
-
-3. **SUSTAIN converges too fast** — even tau=0.005 can't slow it because predictions are categorically different. Not a bug — reflects genuine model distinctiveness.
+### Open issues
+1. **SUSTAIN converges too fast** — even tau=0.005 can't slow it because predictions are categorically different. Not a bug — reflects genuine model distinctiveness.
+2. **Debate still epiphenomenal to convergence** — parameter revisions produce replication variance (std≈0.018) but debate doesn't causally affect which model wins. Thompson stochastically selects debate-proposed novel structures, but this is random exploration, not debate-directed.
 
 ### Next steps
-- EIG diversity bonus to improve experiment selection variety
+- Crux-directed experiment selection: bias Thompson weights toward crux-resolving experiments
 - Claim-responsive debate: agents should address prior falsified claims
 - New cognitive domains (memory retrieval, decision making)
 - AutoRA integration for real data
 - Longer runs (10+ cycles) to test cumulative reasoning
+- WRITEUP.md Results section (still marked "[To be populated]")
 
 ---
 
@@ -32,4 +29,5 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 - **Divergence ranking without per-model predictions** — agents can't interpret abstract divergence scores. They need to see which model wins on each structure.
 - **Trusting LLM param overrides** — LLM agents invent parameter names (e.g., `w_i`). Always filter through `inspect.signature`.
 - **Pure divergence-driven selection without diversity** — picks the same high-divergence structure every cycle (Type_VI). RULEX never gets tested on favorable structures.
-- **EIG greedy optimization** — selects the same structure repeatedly (Phase 13). Need diversity incentive for multi-cycle runs.
+- **EIG greedy optimization** — selects the same structure repeatedly (Phase 13). Thompson sampling (D34) fixes this.
+- **Pairwise curve divergence as posterior evidence** — rewards model distinctiveness, not fit to data. Data-independent bonus distorts posterior. Removed in D35.

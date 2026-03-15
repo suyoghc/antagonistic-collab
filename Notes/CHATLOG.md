@@ -548,4 +548,54 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 
 ---
 
+## Session 22 — 2026-03-15
+
+**Commits:** `8ff7793`, `4bb559e`
+
+**What we did:**
+- Implemented Thompson sampling for experiment selection (D34): `_select_index()` helper, `selection_strategy` config/CLI option, default `thompson`
+- Added Section 4.5 to WRITEUP.md on sequential BOED literature (10 new references: Thompson 1933, Russo & Van Roy 2018, Kandasamy et al. 2019, Kim et al. 2017, Foster et al. 2021, Huan & Marzouk 2016, Rainforth et al. 2024, Cavagnaro et al. 2010, Chapelle & Li 2011)
+- Updated REPORT.md future directions with Thompson sampling as principled replacement for greedy EIG
+- Fixed runner.py duplicate argparser (missing `--selection-strategy` flag)
+- Ran preliminary M8 validation (3-4 cycles per ground truth, pre-bugfix):
+  - 3/3 correct including RULEX (was 2/3 with greedy M7)
+  - Thompson explored 3 novel structures; diverged from greedy in cycles 2-3
+- Fixed 3 Codex review round 6 bugs (D35):
+  - P1: Removed data-independent curve bonus from posterior
+  - P1: `_synthetic_runner` now executes novel structures from `temporary_structures`
+  - P2: `compute_divergence_map` includes `temporary_structures`
+- 322 tests passing (10 Thompson + 4 Codex regression)
+
+**Key discussion:**
+- Thompson sampling is the principled fix for greedy EIG repetition (Kandasamy et al. 2019)
+- Preliminary results: Thompson fixes RULEX misidentification by exploring `complex_conjunctive`
+- Curve bonus was subtly wrong: asymmetric distinctiveness bonus, not evidence
+- Novel structures now actually execute (critical since Thompson selects them)
+
+**Status:** Docs updated. Clean validation pending.
+
+---
+
+## Session 23 — 2026-03-15
+
+**Commits:** (pending)
+
+**What we did:**
+- Ran clean M8 ablation: 6 runs (3 ground truths × 2 strategies), all post-bugfix (D35)
+- Results: both Thompson and greedy achieve 3/3 correct; Thompson explores 12 unique structures (6 novel) vs greedy's 3 (0 novel)
+- Updated all documentation with M8 ablation results:
+  - REPORT.md: new Sections 3.21 (M7 tempering results), 3.22 (M8 ablation), updated Sections 2.4/2.11-2.13 (methods), 4.4-4.7 (discussion), 5 (conclusion)
+  - DECISIONS.md: added D36 (clean ablation results)
+  - TASKS.md, PLANNING.md, SCRATCHPAD.md, FEATURES.md, LESSONS_LEARNED.md (updated in prior session continuation)
+
+**Key findings from ablation:**
+- Curve bonus removal (D35) was the critical fix for RULEX — both strategies correct post-bugfix
+- Thompson trades ~50% convergence tightness for ~4× structural diversity
+- First time novel structures selected and executed in the framework (6 novel via Thompson)
+- Debate contributes novel structure proposals but not experiment strategy
+
+**Status:** Documentation complete. Ready to commit and push.
+
+---
+
 *This log is maintained manually. Update it at the end of each session.*

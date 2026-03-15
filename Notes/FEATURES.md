@@ -476,3 +476,22 @@ winner identified. 12 tests across `TestLikelihoodTempering`, `TestConfig`, and
 **Toggles:** `--no-tempering` sets tau=1.0 (standard Bayesian). `--no-arbiter`
 disables ARBITER features (crux negotiation, meta-agents, conflict map).
 Both configurable via YAML config file with layered precedence.
+
+### 9.2 Experiment selection strategy (`--selection-strategy`)
+**What it does:** Controls how experiments are chosen from EIG scores. `thompson`
+(default) samples proportional to EIG scores, naturally balancing exploration and
+exploitation. `greedy` always picks argmax(EIG), which is locally optimal but
+selects the same experiment every cycle.
+**Where:** `bayesian_selection.py` (`_select_index`, `select_from_pool`,
+`select_experiment`), `runner.py` (`_SELECTION_STRATEGY` global, 2 call sites),
+`__main__.py` (`--selection-strategy` flag), `default_config.yaml`
+**Current default:** thompson
+**Why it matters:** Greedy EIG selected the same structure 5/5 cycles for GCM and
+SUSTAIN (D33). Thompson sampling (Russo & Van Roy 2018, Kandasamy et al. 2019)
+addresses this by exploring underexplored design regions without ad-hoc diversity
+bonuses. In clean ablation (D36), Thompson explored 12 unique structures (6 novel
+agent-proposed) across 3 ground truths vs 3 unique (0 novel) for greedy.
+**M8 result:** Both strategies 3/3 correct post-bugfix. Thompson maintains higher
+entropy longer (later cycles informative). Greedy gets lower winner RMSE by
+hammering the single best structure. Thompson is more robust — was correct even
+with pre-bugfix curve bonus that caused greedy RULEX misidentification in M7.

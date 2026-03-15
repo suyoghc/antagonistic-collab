@@ -1,13 +1,13 @@
 # Antagonistic Collaboration via LLM Debate: Can AI Agents Resolve Scientific Disputes?
 
-**Phase: M6 — ARBITER Integration (updated)**
-**Date: 2026-03-15** (originally 2026-03-14; updated with M5 and M6 validation results)
+**Phase: M8 — Thompson Sampling + Ablation (updated)**
+**Date: 2026-03-15** (originally 2026-03-14; updated through M8 ablation results)
 
 ---
 
 ## Abstract
 
-We present an antagonistic collaboration framework in which three LLM agents — each representing a competing theory of human category learning — debate through a structured protocol, propose experiments, and converge toward the theory that best explains synthetic data. The three models are the Generalized Context Model (GCM; Nosofsky 1986), SUSTAIN (Love, Medin & Gureckis 2004), and RULEX (Nosofsky, Palmeri & McKinley 1994). We compare two architectures: a *legacy* mode where LLM agents propose experiments through adversarial debate, and a *full-pool* mode where Bayesian expected information gain (EIG) selects experiments while agents shift to interpreting results and generating hypotheses. Across 6 validation runs (3 ground truths × 2 modes, 5 cycles each), the correct model's agent wins in every condition. Full-pool mode achieves dramatically better discrimination for hard model pairs (RULEX gap: 2.4% legacy vs. 68% full-pool), driven by learning curves as a second evidence channel. Cross-LLM comparison (GPT-4o, Claude Sonnet, Claude Opus) confirms the framework is LLM-agnostic (9/9 correct). After closing four broken feedback loops (M5), debate now causally affects RMSE through parameter revision persistence (replication std=0.018, previously 0.000), and critique-as-falsification reveals that agents overclaim model accuracy by 3–5×. M6 adds ARBITER-inspired architecture: role-specialized meta-agents (Integrator, Critic), crux-based negotiation for focusing debate on decisive questions, conflict maps, and pre-registration output. Live M6 validation with GPT-4o achieves 3/3 correct with decisive gaps (36–68%), reveals the system operates as a falsification engine (44 claims falsified, 1 confirmed), and identifies posterior collapse as the primary architectural bottleneck. We distill 12 theses on what LLM-mediated scientific debate can and cannot do.
+We present an antagonistic collaboration framework in which three LLM agents — each representing a competing theory of human category learning — debate through a structured protocol, propose experiments, and converge toward the theory that best explains synthetic data. The three models are the Generalized Context Model (GCM; Nosofsky 1986), SUSTAIN (Love, Medin & Gureckis 2004), and RULEX (Nosofsky, Palmeri & McKinley 1994). We compare two architectures: a *legacy* mode where LLM agents propose experiments through adversarial debate, and a *full-pool* mode where Bayesian expected information gain (EIG) selects experiments while agents shift to interpreting results and generating hypotheses. Across 6 validation runs (3 ground truths × 2 modes, 5 cycles each), the correct model's agent wins in every condition. Full-pool mode achieves dramatically better discrimination for hard model pairs (RULEX gap: 2.4% legacy vs. 68% full-pool), driven by learning curves as a second evidence channel. Cross-LLM comparison (GPT-4o, Claude Sonnet, Claude Opus) confirms the framework is LLM-agnostic (9/9 correct). After closing four broken feedback loops (M5), debate now causally affects RMSE through parameter revision persistence (replication std=0.018, previously 0.000), and critique-as-falsification reveals that agents overclaim model accuracy by 3–5×. M6 adds ARBITER-inspired architecture: role-specialized meta-agents (Integrator, Critic), crux-based negotiation for focusing debate on decisive questions, conflict maps, and pre-registration output. Live M6 validation with GPT-4o achieves 3/3 correct with decisive gaps (36–68%), reveals the system operates as a falsification engine (44 claims falsified, 1 confirmed), and identifies posterior collapse as the primary architectural bottleneck. M7 introduces likelihood tempering (tau=0.005, prediction clip [0.05, 0.95]) to address posterior collapse, achieving gradual convergence but revealing that greedy EIG selection repeats the same experiment every cycle. M8 adds Thompson sampling for experiment selection: sampling proportional to EIG scores instead of argmax. A clean 6-run ablation (3 ground truths × 2 strategies) shows both Thompson and greedy achieve 3/3 correct post-bugfix, but Thompson explores far more broadly (12 unique structures including 6 novel vs greedy's 3 unique, 0 novel). We distill 24 principles on what LLM-mediated scientific debate can and cannot do.
 
 ---
 
@@ -105,11 +105,13 @@ The Bayesian module maintains a posterior distribution P(model | data) across th
 EIG(experiment) = H(prior) − E[H(posterior | data)]
 ```
 
-For each hypothetical ground truth model (weighted by current prior), `n_sim` synthetic datasets are simulated via binomial sampling. Each dataset is scored under all three models via item-level log-likelihood, the posterior is updated, and the resulting entropy is averaged. The experiment with the highest EIG is selected.
+For each hypothetical ground truth model (weighted by current prior), `n_sim` synthetic datasets are simulated via binomial sampling. Each dataset is scored under all three models via item-level log-likelihood, the posterior is updated, and the resulting entropy is averaged.
 
-**Posterior update** combines two evidence sources:
-1. **Accuracy evidence** (primary): item-level log-likelihoods from `binom.logpmf(observed, n_subjects, predicted)` for each model
-2. **Curve evidence** (secondary, weight=0.5): RMSE between each model's predicted learning curve and the ground-truth curve, converted to log-likelihood via `curve_ll = −curve_rmse × n_subjects × curve_weight`
+**Experiment selection** supports two strategies:
+- **Greedy** (`--selection-strategy greedy`): selects `argmax(EIG)`. Deterministic but prone to repeating the same experiment every cycle.
+- **Thompson** (`--selection-strategy thompson`, default): samples experiments proportional to EIG scores. Provides principled exploration of the candidate space while still favoring high-EIG experiments (Russo & Van Roy 2018; Kandasamy et al. 2019).
+
+**Posterior update** uses item-level log-likelihoods from `binom.logpmf(observed, n_subjects, predicted)` for each model, with optional likelihood tempering (Section 2.12). Learning curve predictions are computed for agent interpretation but are not used in the posterior update — the synthetic framework does not generate observed learning curves, so there is no valid comparison target (D35).
 
 ### 2.5 Learning curves as a second evidence channel
 
@@ -163,9 +165,33 @@ M6 adds five ARBITER-inspired features:
 
 5. **HITL checkpoints** — `hitl_checkpoint()` at crux finalization, EIG selection, and pre-registration. Auto-continues in batch mode; prompts human moderator in interactive mode. Controlled by `--hitl-checkpoints` CLI flag.
 
-### 2.11 Validation protocol
+### 2.11 Likelihood tempering (M7)
 
-Six M4 runs: 3 ground truths × 2 modes, each 5 cycles. Nine cross-LLM runs: 3 ground truths × 3 LLMs. Three M5 validation runs: 3 ground truths, full_pool with GPT-4o. Four M5 replication runs: GCM ground truth, full_pool with GPT-4o (for variance analysis). Three M6 live validation runs: 3 ground truths, full_pool with GPT-4o, all ARBITER features enabled. 287 automated tests verify framework correctness.
+The Bayesian posterior concentrates to P≈1.0 after 1–2 experiments (D29), making EIG=0 for all remaining candidates. Root cause: binomial log-likelihood with n_subjects=20 across ~10 items generates ~10 nats of evidence per experiment. After 2 experiments, log-odds reach ~50 nats (ratio ~5×10²¹).
+
+**Fix:** Likelihood tempering (power posteriors) — multiply log-likelihoods by a learning rate tau ∈ (0, 1] before adding to the prior:
+
+```
+log_posterior += tau × log_likelihood
+```
+
+This is well-established in Bayesian statistics (Grünwald 2012, Bissiri et al. 2016, Miller & Dunson 2019). Additionally, model predictions are clipped to [0.05, 0.95] — no cognitive model should predict individual items with >95% confidence.
+
+Default tau=0.005, calibrated so entropy ≈ 0.6 after cycle 0 and ≈ 0.02 after 5 cycles. Configurable via `--learning-rate` CLI flag.
+
+### 2.12 Thompson sampling for experiment selection (M8)
+
+Greedy EIG selection (`argmax`) selects the same experiment every cycle once the posterior begins to concentrate (D33). Thompson sampling replaces argmax with sampling proportional to EIG scores:
+
+```
+P(select experiment i) = EIG(i) / Σ_j EIG(j)
+```
+
+When all EIG scores are zero (or negative), falls back to uniform random selection. This is a simplified form of Myopic Posterior Sampling (Kandasamy et al. 2019), providing principled exploration without ad-hoc diversity bonuses. Configurable via `--selection-strategy thompson|greedy`.
+
+### 2.13 Validation protocol
+
+Six M4 runs: 3 ground truths × 2 modes, each 5 cycles. Nine cross-LLM runs: 3 ground truths × 3 LLMs. Three M5 validation runs: 3 ground truths, full_pool with GPT-4o. Four M5 replication runs: GCM ground truth, full_pool with GPT-4o (for variance analysis). Three M6 live validation runs: 3 ground truths, full_pool with GPT-4o, all ARBITER features enabled. Three M7 validation runs: 3 ground truths, full_pool with tau=0.005. Six M8 ablation runs: 3 ground truths × 2 strategies (Thompson vs greedy), full_pool with tau=0.005. 322 automated tests verify framework correctness.
 
 ---
 
@@ -377,6 +403,45 @@ Each M6 run produced 10 meta-agent responses (5 Integrator, 5 Critic, one per cy
 
 Meta-agents did not override the Bayesian machinery. Their primary value is qualitative: they structure the debate's narrative, making human review more efficient by highlighting the key tensions and weaknesses. This is the intended division of labor — computation for quantitative adjudication, LLMs for semantic synthesis.
 
+### 3.21 M7: Likelihood tempering — gradual convergence but greedy repetition
+
+M7 introduces likelihood tempering (tau=0.005, prediction clip [0.05, 0.95]) to address posterior collapse. Three 5-cycle validation runs with GPT-4o:
+
+| Ground Truth | Winner | Correct? | RMSE gap | Entropy trajectory |
+|---|---|---|---|---|
+| GCM | Exemplar_Agent | YES | 81.1% | 0.64→0.33→0.13→0.03→0.00 |
+| RULEX | Exemplar_Agent | **NO** | 8.2% | 0.65→0.69→0.70→0.48→0.16 |
+| SUSTAIN | Clustering_Agent | YES | 97.1% | 0.22→0.01→0.00→0.00→0.00 |
+
+**Tempering achieves its design goal:** GCM shows textbook gradual convergence — entropy drops monotonically from 0.64→0.00 over 5 cycles, with EIG remaining nonzero through cycle 4 (0.029). This is the first validation where later cycles are genuinely informative.
+
+**RULEX misidentification reveals genuine model overlap.** GCM and RULEX produce very similar predictions on the structures the system selects (linear_separable_4d, nonlinear_complex_5d). The posterior oscillated — RULEX led on cycles 0 and 2, GCM on cycles 1, 3, 4. This mirrors the known theoretical result that GCM approximates rule-like behavior through attention weights (Nosofsky 1991). The 8.2% RMSE gap (down from 67.6% in M6) reflects genuine model overlap, not a system failure.
+
+**Greedy EIG repeats the same experiment every cycle.** The GCM run selected linear_separable_4d 5/5 times. SUSTAIN selected it 5/5 times. Only RULEX showed variation (alternating with nonlinear_complex_5d). With tempering preventing posterior collapse, the greedy argmax still concentrates on a single high-EIG structure, preventing exploration of the candidate space.
+
+### 3.22 M8: Thompson sampling ablation — exploration vs exploitation
+
+M8 replaces greedy EIG selection with Thompson sampling (proportional to EIG scores). A clean ablation compares both strategies across all 3 ground truths (6 runs total, post-bugfix D35):
+
+| Ground Truth | Strategy | Correct? | Winner RMSE | Unique structs | Novel structs | Final entropy |
+|---|---|---|---|---|---|---|
+| GCM | Thompson | Yes | 0.085 | 5 | 3 | 0.12 |
+| GCM | Greedy | Yes | 0.077 | 2 | 0 | 0.01 |
+| RULEX | Thompson | Yes | 0.189 | 4 | 2 | 0.16 |
+| RULEX | Greedy | Yes | 0.050 | 2 | 0 | 0.06 |
+| SUSTAIN | Thompson | Yes | 0.022 | 3 | 1 | 0.00 |
+| SUSTAIN | Greedy | Yes | 0.018 | 1 | 0 | 0.00 |
+
+**Both strategies achieve 3/3 correct.** Post-bugfix (D35: curve bonus removal, novel structure execution), both Thompson and greedy correctly identify all ground truths. The bugfix resolved M7's RULEX misidentification for both strategies.
+
+**Thompson explores far more broadly.** Across 3 runs, Thompson selected 12 unique structures (including 6 novel agent-proposed structures) vs greedy's 3 unique structures (0 novel). This is the first time novel structures have been selected and executed in the framework.
+
+**Greedy achieves tighter convergence.** Greedy's final entropies are lower (0.01–0.06 vs 0.12–0.16 for Thompson on GCM/RULEX), and winner RMSE is slightly lower. This is expected: greedy concentrates on the single most informative experiment, maximizing evidence per cycle. Thompson trades convergence speed for exploration breadth.
+
+**The exploration–exploitation tradeoff is real.** Thompson sacrifices ~50% convergence tightness for ~4× structural diversity. Whether this tradeoff is worthwhile depends on the research question: greedy is optimal for fast model selection; Thompson is preferable when the goal is understanding the full prediction landscape or when the candidate space may contain unexplored discriminating structures.
+
+**Debate's causal role remains modest.** Thompson's random exploration, not debate-guided selection, drives structural diversity. The debate contributes parameter revisions (replication variance) and novel structure proposals (6 novel structures selected by Thompson), but the exploration itself is stochastic, not semantically directed.
+
 ---
 
 ## 4. Discussion
@@ -393,7 +458,7 @@ However, LLMs contribute genuine interpretive value. Agent reasoning correctly i
 
 GCM and RULEX produce similar final accuracies across most structures because GCM can approximate rule-like behavior through attention weights (Nosofsky 1991). This is a genuine property of GCM's flexibility, not a system bug. Final accuracy alone cannot distinguish them.
 
-Learning curves break the tie because the models predict qualitatively different dynamics: GCM gradual, RULEX sudden, SUSTAIN stepwise. The curve evidence (weighted at 0.5× accuracy in the Bayesian update) increased the RULEX discrimination gap from 2.4% to 68% — the single largest improvement in the project.
+Learning curves break the tie because the models predict qualitatively different dynamics: GCM gradual, RULEX sudden, SUSTAIN stepwise. In M4, curve evidence in the Bayesian update increased the RULEX discrimination gap from 2.4% to 68%. However, M8 analysis (D35) revealed that the curve bonus was data-independent — it measured inter-model curve distinctiveness rather than fit to observed data. After removing the curve bonus, both greedy and Thompson strategies still achieve 3/3 correct, indicating that item-level accuracy evidence alone is sufficient when combined with proper tempering and diverse experiment selection.
 
 **Implication for cognitive science:** Empirical studies that rely only on endpoint accuracy may systematically underestimate model differences. Learning dynamics carry diagnostic information orthogonal to final performance.
 
@@ -421,19 +486,19 @@ The solution was a constrained menu (structure registry + condition effects) tha
 - Calibrated quantitative predictions (agents overclaim accuracy by 3–5× when fact-checked)
 - Overcoming posterior collapse (crux boost is active but powerless when EIG=0)
 
-Pre-M5, the debate was entirely epiphenomenal to RMSE — replication variance was zero, and convergence was driven by the Bayesian machinery alone. Post-M5, parameter revision persistence creates a modest but real causal link: different LLM runs produce different parameter revisions, which produce different model predictions. Post-M6, the ARBITER architecture enriches debate quality (cruxes, conflict maps, meta-agents) but does not fundamentally alter the convergence mechanism, which remains Bayesian. The debate's primary value is qualitative — mechanistic narratives, structured disagreement, and human-readable explanations — augmented by M6's role specialization and crux-driven focus.
+Pre-M5, the debate was entirely epiphenomenal to RMSE — replication variance was zero, and convergence was driven by the Bayesian machinery alone. Post-M5, parameter revision persistence creates a modest but real causal link: different LLM runs produce different parameter revisions, which produce different model predictions. Post-M6, the ARBITER architecture enriches debate quality (cruxes, conflict maps, meta-agents) but does not fundamentally alter the convergence mechanism, which remains Bayesian. Post-M8, debate contributes novel structure proposals that Thompson sampling actually selects (6 novel structures in ablation), but the exploration is stochastic, not debate-directed. The debate's primary value is qualitative — mechanistic narratives, structured disagreement, and human-readable explanations — augmented by M6's role specialization and M8's ability to execute debate-proposed structures.
 
-### 4.5 Posterior collapse as the primary bottleneck
+### 4.5 Posterior collapse: diagnosis and treatment
 
-M6 validation reveals a structural problem: the Bayesian posterior collapses to certainty after 1–2 experiments, leaving remaining cycles with EIG≈0. This renders crux boost, meta-agent guidance, and later debate cycles uninformative. The posterior concentration is correct — the first five_four experiment often provides overwhelming evidence — but it eliminates the system's ability to explore structural questions raised by crux negotiation.
+M6 validation revealed that the Bayesian posterior collapses to certainty after 1–2 experiments, leaving remaining cycles with EIG≈0. M7 addressed this with likelihood tempering (tau=0.005, prediction clip [0.05, 0.95]), achieving gradual convergence: GCM entropy drops 0.64→0.00 over 5 cycles instead of collapsing on cycle 0.
 
-The RULEX run demonstrates what happens when collapse is delayed: the posterior initially favors the wrong model, then self-corrects when structural variation provides disambiguating evidence. This non-monotonic trajectory is the system's most scientifically valuable behavior, and it only occurs when uncertainty survives long enough for the debate to matter.
+However, tempering exposed a second problem: greedy EIG selection repeats the same experiment when the posterior concentrates even slightly. M8's Thompson sampling addresses this by sampling proportional to EIG scores, producing 4× structural diversity.
 
-Potential solutions: posterior tempering (prevent collapse by raising log-probs to a power <1), entropy-based re-exploration (force untested structures when entropy is low), or crux-driven overrides (run a crux's discriminating experiment regardless of EIG).
+The combined M7+M8 solution (tempering + Thompson) keeps later cycles informative and structurally diverse. The remaining limitation is that exploration is stochastic, not crux-directed — Thompson randomly samples from the EIG distribution rather than selecting experiments that resolve specific theoretical disagreements identified during debate.
 
 ### 4.6 Limitations
 
-1. **Posterior collapse.** The most urgent limitation. EIG≈0 after cycle 0–1 in 2 of 3 ground truths makes later cycles uninformative. Crux negotiation identifies decisive questions, but the posterior is already certain, so there's nothing to decide. This limits the debate to 1–2 genuinely informative cycles despite running 5.
+1. **Residual posterior concentration.** M7 tempering (tau=0.005) prevents immediate collapse but the posterior still concentrates within 3–5 cycles. Combined with Thompson sampling (M8), later cycles are informative and structurally diverse, but the system still converges faster than may be ideal for extended runs. Deeper solutions include sequential BOED framed as POMDP (Huan & Marzouk 2016) or deep adaptive design (Foster et al. 2021).
 
 2. **Modest debate impact.** Post-M5, replication variance is non-zero but small (std≈0.018 on RMSE≈0.18, ~10% coefficient of variation). Post-M6, ARBITER features enrich debate quality but do not fundamentally alter convergence. The Bayesian machinery still dominates.
 
@@ -449,19 +514,18 @@ Potential solutions: posterior tempering (prevent collapse by raising log-probs 
 
 ### 4.7 Future directions
 
-1. **Thompson sampling for experiment selection** — Replace greedy `argmax(EIG)` with sampling proportional to EIG scores, following Kandasamy, Schneider & Póczos (2019). This addresses the greedy repetition problem (same structure 5/5 cycles) via a principled exploration mechanism grounded in the Thompson sampling literature (Russo & Van Roy, 2018). MPS naturally explores underexplored design regions without ad-hoc diversity bonuses. Kim et al. (2017) demonstrate non-myopic benefits specifically for cognitive model discrimination with partially overlapping models (our GCM-RULEX case).
-2. **Posterior collapse** — M7 likelihood tempering (tau=0.005, clip [0.05, 0.95]) addresses the immediate problem; deeper solutions include sequential BOED framed as POMDP (Huan & Marzouk, 2016) or deep adaptive design (Foster et al., 2021).
-3. **Claim-responsive debate** — agents should explicitly address their prior claims ("I previously predicted X, which was falsified; I now revise to Y") rather than repeating generic talking points
-4. **Longer runs (10+ cycles)** — assess whether novel structures eventually outperform registry structures as the registry space is exhausted, and whether the claim ledger produces cumulative reasoning at longer horizons
+1. **Crux-directed experiment selection** — Thompson sampling explores stochastically; a natural next step is crux-directed selection where accepted cruxes override or bias Thompson weights toward experiments that resolve specific theoretical disagreements. This would make debate causally relevant to experiment selection for the first time.
+2. **Claim-responsive debate** — agents should explicitly address their prior claims ("I previously predicted X, which was falsified; I now revise to Y") rather than repeating generic talking points
+3. **Longer runs (10+ cycles)** — assess whether Thompson sampling's structural diversity compounds over many cycles, whether novel structures eventually outperform registry structures, and whether the claim ledger produces cumulative reasoning at longer horizons
+4. **Non-myopic experiment selection** — full Myopic Posterior Sampling (Kandasamy et al. 2019) or deep adaptive design (Foster et al. 2021) could replace the current simplified Thompson implementation
 5. **Cross-domain generalization** — apply the framework to other multi-model disputes in cognitive science (memory models, decision-making theories)
 6. **Real data integration** — AutoRA + Prolific for closing the loop with human participants
-7. **Crux-driven experiment override** — when accepted cruxes exist but EIG=0, bypass Bayesian selection and run the crux's discriminating experiment directly
 
 ---
 
 ## 5. Conclusion
 
-Antagonistic collaboration via LLM debate can successfully identify the correct model from competing theories. The mechanism of convergence is primarily Bayesian computation, but M5's feedback loop closures demonstrate that debate can causally affect outcomes — parameter revisions proposed during interpretation now persist into subsequent predictions, producing non-zero replication variance for the first time. M6's ARBITER integration adds role-specialized meta-agents, crux-based negotiation, conflict maps, and pre-registration output, enriching debate quality while preserving correct convergence (3/3 ground truths, 36–68% gaps). The system operates as a falsification engine: 44 claims falsified vs 1 confirmed across all M6 runs. Crux negotiation is genuinely selective with real LLMs (15% acceptance rate), and winning theories require fewer parameter revisions than losing theories (Lakatos-compatible). The primary architectural bottleneck is posterior collapse — the Bayesian posterior concentrates too quickly, leaving later cycles uninformative despite active crux negotiation. The optimal architecture separates computation (experiment selection, posterior update, learning curves) from language (interpretation, hypothesis generation, explanation), but connects them through validated feedback paths (parameter persistence, claim verification, crux-driven EIG boosting). The framework demonstrates both the promise and the current limits of LLMs in the scientific method: they identify genuine theoretical fault lines through crux negotiation, synthesize across competing accounts through meta-agents, and produce human-readable mechanistic narratives — but they cannot yet learn cumulatively from evidence, calibrate their quantitative expectations, or overcome the system's tendency toward premature certainty.
+Antagonistic collaboration via LLM debate can successfully identify the correct model from competing theories. The mechanism of convergence is primarily Bayesian computation, but M5's feedback loop closures demonstrate that debate can causally affect outcomes — parameter revisions proposed during interpretation now persist into subsequent predictions, producing non-zero replication variance for the first time. M6's ARBITER integration adds role-specialized meta-agents, crux-based negotiation, conflict maps, and pre-registration output, enriching debate quality while preserving correct convergence (3/3 ground truths, 36–68% gaps). M7's likelihood tempering (tau=0.005) resolves the posterior collapse bottleneck, achieving gradual convergence where later cycles are genuinely informative (EIG>0 through cycle 4). M8's Thompson sampling replaces greedy experiment selection with principled exploration: a clean ablation (6 runs) shows both strategies achieve 3/3 correct, but Thompson explores 12 unique structures (6 novel) vs greedy's 3 (0 novel) — the first time agent-proposed novel structures have been selected and executed. The system operates as a falsification engine: 44 claims falsified vs 1 confirmed across M6 runs. The optimal architecture separates computation (experiment selection via tempered EIG + Thompson sampling, posterior update) from language (interpretation, hypothesis generation, novel structure design), connecting them through validated feedback paths (parameter persistence, claim verification, novel structure registration). The framework demonstrates both the promise and the current limits of LLMs in the scientific method: they identify genuine theoretical fault lines through crux negotiation, propose novel experimental structures that Thompson sampling explores, and produce human-readable mechanistic narratives — but they cannot yet learn cumulatively from evidence, calibrate their quantitative expectations, or direct experiment selection semantically rather than stochastically.
 
 ---
 

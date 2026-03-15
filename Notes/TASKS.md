@@ -1,6 +1,34 @@
 # Tasks
 
-## Current Milestone: M7 — Likelihood Tempering + Codex Fixes (DONE)
+## Completed: M8 — Thompson Sampling + Codex Fixes Round 6 (DONE)
+
+### M8 Tasks
+- [x] **Thompson sampling for experiment selection** — Replace greedy `argmax(EIG)` with configurable `selection_strategy`. Thompson (default) samples proportional to EIG scores; greedy preserved for backward compatibility. New `_select_index()` helper, config option, CLI flag `--selection-strategy`. 10 tests.
+- [x] **Thompson sampling literature** — Added Section 4.5 to WRITEUP.md covering sequential BOED (Huan & Marzouk 2016, Foster et al. 2021, Kandasamy et al. 2019, Kim et al. 2017, Russo & Van Roy 2018). Updated REPORT.md future directions. 10 new references.
+- [x] **Codex review round 6** — 3 bugs:
+  - [x] P1: Curve bonus data-independent → removed from posterior (curves remain for interpretation)
+  - [x] P1: Novel structures not executable → `_synthetic_runner` checks `temporary_structures`
+  - [x] P2: Legacy divergence map drops temporary structures → includes them
+  - 4 new regression tests (322 total)
+- [x] **M8 preliminary validation** (pre-bugfix, 3-4 cycles per ground truth):
+  - GCM: correct, Exemplar_Agent, RMSE 0.057-0.100, explored 2 structures
+  - RULEX: **correct** (was misidentified in M7 greedy), Rule_Agent, RMSE 0.047-0.231
+  - SUSTAIN: correct, Clustering_Agent, RMSE 0.017-0.205
+  - Thompson explored 3 novel structures (order_sensitive_4d, complex_conjunctive, xor_high_dim)
+- [x] **M8 clean ablation** — 6 runs (3 ground truths × 2 strategies), all post-bugfix (D36):
+  - Both Thompson and greedy: 3/3 correct
+  - Thompson: 12 unique structures (6 novel) vs greedy: 3 unique (0 novel)
+  - Greedy converges tighter (entropy 0.01-0.06 vs 0.12-0.16)
+  - First time novel structures selected and executed
+- [x] **Update all docs** — REPORT.md (Sections 3.21, 3.22, updated methods/discussion/conclusion), DECISIONS.md (D36), CHATLOG.md (Session 23), SCRATCHPAD.md, TASKS.md
+
+### M8 Commits
+- `8ff7793` feat(M8): Thompson sampling for experiment selection + literature review
+- `4bb559e` fix: 3 Codex review bugs — curve bonus, novel structure execution, divergence map
+
+---
+
+## Completed: M7 — Likelihood Tempering + Codex Fixes (DONE)
 
 ### M7 Tasks
 - [x] **M7: Likelihood Tempering** — Add `learning_rate` (tau) parameter to Bayesian posterior updates to prevent posterior collapse. Multiplies log-likelihoods by tau ∈ (0, 1] before adding to prior. Threaded through `ModelPosterior.update()`, `compute_eig()`, `select_from_pool()`, `select_experiment()`, `update_posterior_from_experiment()`. Default tau=0.2 with `--no-tempering` to disable. `--no-arbiter` toggle for ARBITER features. YAML config file with layered precedence. 10 tests.

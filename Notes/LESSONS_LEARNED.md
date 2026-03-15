@@ -1020,3 +1020,51 @@ First multi-cycle validation where tempering prevents posterior collapse. Three 
 **20. Correct model identification depends on model discriminability, not system performance.** 2/3 correct with tempering vs 3/3 without reflects genuine model overlap (GCM approximates RULEX), not system degradation. The "failure" is the scientifically honest answer. (Phase 13, M7)
 
 **21. EIG greedy optimization lacks exploration diversity.** Selecting the same structure 5/5 times is locally optimal but globally suboptimal. Multi-cycle systems need exploration incentives (structure diversity bonus, forced coverage) to discover discriminating evidence across different experimental contexts. (Phase 13, M7)
+
+---
+
+## Phase 14: Thompson sampling ablation (M8, 2026-03-15)
+
+Clean ablation: Thompson vs greedy, 3 ground truths × 2 strategies = 6 runs, 5 cycles each, GPT-4o via Princeton, tau=0.005, all bug fixes applied (D35: curve bonus removed, novel structure execution fixed).
+
+### 14.1 Thompson sampling fixes greedy repetition without sacrificing correctness
+
+**Expected:** Thompson would explore more structures while still identifying the correct model.
+
+**Actual:** Thompson explored 12 unique structures (6 novel agent-proposed) across 3 ground truths. Greedy explored 3 unique structures (0 novel). Both strategies 3/3 correct. Thompson's exploration was proportional to EIG, so high-EIG candidates were still selected most often — exploration happened in later cycles when EIG scores were closer.
+
+**Implication:** Thompson sampling is a strict upgrade over greedy for multi-cycle runs. It preserves the core Bayesian selection quality (high-EIG candidates favored) while adding principled exploration. The literature (Kandasamy et al. 2019) predicts this: Thompson achieves the same asymptotic convergence as greedy while exploring more broadly in finite samples.
+
+### 14.2 Novel agent-proposed structures execute and contribute evidence
+
+**Expected:** Novel structures would be selected by Thompson and executed correctly (post D35 bugfix).
+
+**Actual:** 6 novel structures were selected and executed: `complex_subgroup_overlap`, `presentation_order_variation`, `random_assignment` (GCM run); `random_distributed_6d`, `staggered_overlap` (RULEX run); `non_linear_complex` (SUSTAIN run). All executed without fallback. The correct model won on every novel structure, though with higher RMSE than on registry structures (expected — novel structures aren't optimized for discriminability).
+
+**Implication:** The debate→experiment pipeline now works end-to-end: agents propose structures during interpretation, Thompson selects them, and they execute. This is the one clear causal path from debate to experiment selection. The structures themselves are narratively motivated (agents propose them based on theoretical reasoning) but their selection is computationally driven.
+
+### 14.3 Greedy's narrow evidence base is fragile
+
+**Expected:** Greedy would perform identically across bug fix versions.
+
+**Actual:** Greedy RULEX was misidentified in M7 (with buggy curve bonus) but correct in M8 (without it). Thompson RULEX was correct in both versions. Greedy selected only `linear_separable_4d` variants for all 3 ground truths, so its correctness depends entirely on that one structure being diagnostic. Thompson's broader base provides insurance.
+
+**Implication:** Greedy's lower RMSE is misleading — it reflects intensity of evidence from one structure, not breadth. In real-data settings where the best structure might not exist in the registry or might be confounded, Thompson's exploration would be essential.
+
+### 14.4 Exploration–exploitation tradeoff has a clear signature
+
+**Expected:** Thompson would trade RMSE for exploration.
+
+**Actual:** Thompson winner RMSE: 0.085 / 0.189 / 0.022. Greedy winner RMSE: 0.077 / 0.050 / 0.018. Thompson's RMSE is higher because novel structures are harder to predict (not optimized for model fit). But Thompson maintains higher posterior entropy longer: final entropy 0.12–0.16 vs 0.00–0.06 for greedy. This means Thompson's later cycles are genuinely informative, while greedy's last 2–3 cycles are wasted.
+
+**Implication:** The RMSE difference is the cost of exploration. Whether this is worth it depends on the setting: for synthetic data with known ground truth, greedy suffices. For real data where the design space is uncertain, Thompson's exploration is essential.
+
+### Emerging Principles (continued)
+
+### On exploration vs exploitation (M8)
+
+**22. Thompson sampling is a strict upgrade over greedy EIG for multi-cycle design.** Both converge to the correct answer, but Thompson does so on a broader evidence base with principled exploration. Greedy's narrow base is fragile — correctness can depend on a single structure being diagnostic. (Phase 14, M8)
+
+**23. Novel structures provide a causal path from debate to experiment selection.** Agents propose structures during interpretation (semantic contribution), Thompson samples them from the EIG pool (computational selection), and they execute correctly (formal grounding). This is the architecture's one clear debate→selection feedback loop. (Phase 14, M8)
+
+**24. Data-independent bonuses in posterior updates are modeling errors, not evidence.** The curve divergence bonus rewarded model distinctiveness without comparing against observed data. With 3+ models, asymmetric distinctiveness distorts the posterior. Only data-dependent terms belong in likelihood computation. (Phase 14, D35)
