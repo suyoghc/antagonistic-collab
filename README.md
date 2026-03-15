@@ -2,9 +2,7 @@
 
 **Automated adversarial scientific debate for theory advancement.**
 
-A framework where AI agents — each committed to a competing scientific theory — debate experiment design, critique each other's proposals, and have their predictions scored against data. A human moderator arbitrates.
-
-> *"A simulation of the way we do science: a theory-driven debate between agents, with pairwise comparisons and rejection of models that fail."*
+A framework where AI agents — each committed to a competing scientific theory — debate experiment design, critique each other's proposals, and have their predictions scored against data. Bayesian experiment selection finds maximally informative experiments; LLM agents interpret results and generate hypotheses.
 
 ## Why this exists
 
@@ -12,44 +10,45 @@ Current approaches to automated science (e.g., [AutoRA](https://autoresearch.git
 
 This framework operationalizes that process with a **dual-layer architecture**:
 
-- **Semantic layer**: LLM agents argue in natural language — interpreting results, identifying confounds, proposing theory modifications
-- **Formal layer**: Executable computational models generate quantitative predictions — ensuring arguments are grounded in actual model behavior, not LLM confabulation
+- **Computational layer**: Bayesian expected information gain (EIG) selects experiments from 55+ candidates; executable models generate quantitative predictions; learning curves provide a second evidence channel
+- **Semantic layer**: LLM agents interpret results, identify confounds, propose novel structures, and revise theories in natural language
 
 ## Current domain: Human categorization
 
 The prototype uses category learning as a testbed because it has:
 
-- **Deep, contested model landscape**: Exemplar models (GCM), rule-based models (RULEX), clustering models (SUSTAIN), and hybrids — debated for 40+ years
-- **Rich experimental design space**: Stimulus dimensionality, category structure, training regime, transfer tests, dependent measures
-- **Known critical experiments**: Shepard types, Medin & Schaffer's 5-4 structure, COVIS dissociations — benchmarks for evaluating whether the system produces scientifically sensible proposals
+- **Deep, contested model landscape**: Exemplar models (GCM), rule-based models (RULEX), clustering models (SUSTAIN) — debated for 40+ years
+- **Rich experimental design space**: 11 category structures × 5 experimental conditions = 55 candidate experiments
+- **Known critical experiments**: Shepard types, Medin & Schaffer's 5-4 structure — benchmarks for evaluating whether the system produces scientifically sensible proposals
 
 ## Architecture
 
+The framework supports two operating modes:
+
+**Full-pool mode** (`--mode full_pool`) — recommended:
 ```
-┌───────────────────────────────────────────┐
-│           DEBATE PROTOCOL                 │
-│  9 phases per cycle:                      │
-│  commit → diverge → propose → critique    │
-│  → revise → arbitrate → execute →         │
-│  interpret → audit                        │
-├───────────────────────────────────────────┤
-│        EPISTEMIC STATE TRACKER            │
-│  Theories, predictions, disputes,         │
-│  established facts, leaderboard           │
-├───────────────────────────────────────────┤
-│           FORMAL LAYER                    │
-│  GCM · SUSTAIN · RULEX                    │
-│  Category structures · Divergence maps    │
-└───────────────────────────────────────────┘
+Cycle N:
+  1. Commitment (cycle 0 only)
+  2. Divergence mapping
+  3. Bayesian EIG selection — searches all 55+ candidates (no LLM calls)
+  4. Execution — item-level scoring + learning curve comparison
+  5. Interpretation debate — agents interpret results, propose hypotheses
+  6. Interpretation critique — agents challenge each other
+  7. Audit — convergence check
 ```
 
-**Key design choice**: Agents can't just *assert* what their theory predicts — they must *call their model*. When the Exemplar agent claims GCM predicts a smooth generalization gradient, it runs `gcm.predict_generalization_gradient()`. When the Clustering agent critiques, it runs SUSTAIN on the same conditions and shows a different pattern. Arguments are backed by computation.
+**Legacy mode** (`--mode legacy`) — 9-phase flow with LLM-driven experiment proposals:
+```
+  commit → diverge → propose → critique → revise → arbitrate → execute → interpret → audit
+```
+
+**Key design choice**: Agents can't just *assert* what their theory predicts — they must *call their model*. Predictions come from `model.predict()`, not LLM guessing. Arguments are backed by computation.
 
 ## Quickstart
 
 ```bash
 # Clone and install
-git clone https://github.com/YOUR_USERNAME/antagonistic-collab.git
+git clone https://github.com/suyoghc/antagonistic-collab.git
 cd antagonistic-collab
 pip install -r requirements.txt
 ```
@@ -60,46 +59,38 @@ pip install -r requirements.txt
 python -m antagonistic_collab --demo
 ```
 
-This runs the models, divergence mapping, and epistemic state tracker with synthetic data. Use this to verify the formal layer works and to see model predictions on Shepard types, 5-4, etc.
+Runs models, divergence mapping, and epistemic state tracker with synthetic data.
 
-### 2. Live debate — interactive with human moderator
+### 2. Full-pool mode with Bayesian EIG (recommended)
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
-python -m antagonistic_collab
+python -m antagonistic_collab --batch --cycles 5 --true-model GCM --mode full_pool --selection bayesian
 ```
 
-This runs the full 9-phase debate protocol. Three agents (Exemplar, Rule, Clustering) argue about experiment design. You act as the human moderator, approving or editing proposals at each cycle. Full transcripts and epistemic state are saved to JSON after each cycle.
+EIG selects the most informative experiment each cycle. Agents interpret results and propose hypotheses. No human input needed.
 
-### 3. Batch mode — no human input needed
+### 3. Legacy mode — interactive with human moderator
 
 ```bash
-python -m antagonistic_collab --batch --cycles 3 --true-model SUSTAIN
+python -m antagonistic_collab --cycles 3 --true-model SUSTAIN
 ```
 
-Auto-approves the first proposal at each cycle. Use this for systematic comparisons (e.g., running 10 debates with different ground-truth models) or on compute clusters.
+Full 9-phase debate protocol. You act as the human moderator, approving or editing proposals at each cycle.
 
-### Full CLI options
+### CLI options
 
 ```
 --cycles N              Number of debate cycles (default: 1)
 --true-model MODEL      Ground truth for synthetic data: GCM, SUSTAIN, or RULEX
---batch                 Non-interactive mode (auto-approve proposals)
+--batch                 Non-interactive mode (for automated runs)
+--mode MODE             full_pool (EIG + interpretation debate) or legacy (9-phase)
+--selection METHOD      bayesian (EIG) or heuristic (diversity penalty)
+--backend BACKEND       anthropic (default) or princeton (Azure OpenAI via Portkey)
 --model MODEL_ID        LLM model string (default: claude-sonnet-4-20250514)
 --critique-rounds N     Adversarial critique rounds per cycle (default: 2)
 --output-dir DIR        Where to save transcripts and state
 ```
-
-### Running on a cluster (e.g., Della)
-
-The LLM debate requires outbound HTTPS access to `api.anthropic.com`, which most HPC clusters block. Two options:
-
-1. **If your cluster allows outbound HTTPS** (or you have a proxy): Run in batch mode directly.
-   ```bash
-   sbatch --wrap="python -m antagonistic_collab --batch --cycles 5 --true-model GCM"
-   ```
-
-2. **If not**: Split the workflow. Run the debate on a local machine, then run model fitting / evaluation sweeps on the cluster. The `models/` module and `epistemic_state.py` have no API dependency and run anywhere with numpy/scipy.
 
 ## Project structure
 
@@ -107,43 +98,44 @@ The LLM debate requires outbound HTTPS access to `api.anthropic.com`, which most
 antagonistic_collab/
 ├── __init__.py
 ├── __main__.py              # Entry point: python -m antagonistic_collab
-├── runner.py                # LLM debate runner (needs API key)
-├── debate_protocol.py       # 9-phase state machine + agent system prompts
-├── epistemic_state.py       # Cumulative knowledge tracker
+├── runner.py                # LLM debate runner, phase orchestration
+├── debate_protocol.py       # Phase state machine, synthetic data, agent prompts
+├── epistemic_state.py       # Theory commitments, predictions, scoring
+├── bayesian_selection.py    # Bayesian EIG experiment selection
 ├── demo.py                  # Formal layer demo (no API key)
 └── models/
-    ├── __init__.py
     ├── gcm.py               # Generalized Context Model (Nosofsky, 1986)
     ├── sustain.py            # SUSTAIN (Love, Medin & Gureckis, 2004)
     ├── rulex.py              # RULEX (Nosofsky, Palmeri & McKinley, 1994)
-    └── category_structures.py  # Shepard types, 5-4, generators
+    └── category_structures.py  # 11 structures: Shepard I-VI, 5-4, etc.
+tests/
+    └── test_bugfixes.py     # 207 tests
+Notes/                       # Analysis, decisions, lessons learned
 ```
 
-## What's working now
+## Key results
 
-- [x] GCM, SUSTAIN, and RULEX as callable models with `predict()`, `predict_learning_curve()`, and `fit()` interfaces
-- [x] Standard category structures (Shepard 6 types, 5-4, rule-plus-exception, linear separable)
-- [x] Automatic divergence mapping across models × structures
-- [x] Epistemic state tracker with theory registration, prediction registry, dispute tracking, and cumulative leaderboard
-- [x] Term glossary on each theory — maps natural language terms to specific model parameters (eliminates terminology confusion)
-- [x] ModelClaim dataclass — structured, verifiable claims about model predictions (eliminates straw-manning)
-- [x] Critique → revision provenance chain — every proposal revision must link back to the critique(s) it addresses
-- [x] Progressive vs. degenerative theory revision tracking (Lakatos) with `theory_trajectory()` computation
-- [x] 9-phase debate protocol with phase specs, context generators, and transition logic
-- [x] Synthetic experiment runner (ground-truth model generates noisy data)
-- [x] Agent system prompts for the categorization domain
-- [x] **LLM runner**: Interactive debate via Claude API — raw calls, no framework, human moderator in terminal
-- [x] Transcript and epistemic state saved to JSON after each cycle
+Validated across 6 runs (3 ground truths × 2 modes, 5 cycles each). The correct model's agent wins in every condition:
+
+| Ground Truth | Mode | Winner | RMSE | Gap |
+|---|---|---|---|---|
+| GCM | full_pool | Exemplar_Agent | 0.161 | 34% |
+| SUSTAIN | full_pool | Clustering_Agent | 0.270 | 42% |
+| RULEX | full_pool | Rule_Agent | 0.119 | 68% |
+| GCM | legacy | Exemplar_Agent | 0.255 | 37% |
+| SUSTAIN | legacy | Clustering_Agent | 0.361 | 34% |
+| RULEX | legacy | Rule_Agent | 0.429 | 2.4% |
+
+**Key finding**: Learning curves solved the hardest discrimination problem — RULEX gap went from 2.4% (legacy) to 68% (full_pool). GCM approximates RULEX's final accuracy but can't mimic its sudden learning dynamics.
+
+See [Notes/REPORT.md](Notes/REPORT.md) for the full write-up.
 
 ## What's next
 
-- [ ] **Run the first debate** and iterate on system prompts based on transcript quality
-- [ ] **Three-condition comparison**: single-agent vs. multi-agent (no formal layer) vs. multi-agent (with formal layer)
-- [ ] **Tool use**: Expose models as callable tools so agents invoke them mid-debate (not just pre-computed divergence maps)
-- [ ] **Convergence monitor**: Detect premature agreement in audit phase, inject disruptions
-- [ ] **AutoRA integration**: Plug in AutoRA's experiment runners for real data collection via Prolific
-- [ ] **Evaluation harness**: Blind comparison rated by domain experts
-- [ ] **Additional domains**: Cross-situational word learning, working memory, recognition memory
+- [ ] Close debate feedback loops — parameter revisions, hypothesis-driven EIG, critique-as-falsification
+- [ ] Compare LLM backbones — Claude Sonnet/Opus vs GPT-4o on debate quality
+- [ ] Additional cognitive domains — memory retrieval, associative learning, decision making
+- [ ] AutoRA integration — real data collection via Prolific
 
 ## Key references
 
@@ -151,7 +143,7 @@ antagonistic_collab/
 - Love, B. C., Medin, D. L., & Gureckis, T. M. (2004). SUSTAIN: A network model of category learning. *Psychological Review*, 111(2), 309–332.
 - Nosofsky, R. M., Palmeri, T. J., & McKinley, S. C. (1994). Rule-plus-exception model of classification learning. *Psychological Review*, 101(1), 53–79.
 - Shepard, R. N., Hovland, C. I., & Jenkins, H. M. (1961). Learning and memorization of classifications. *Psychological Monographs*, 75(13), 1–42.
-- Musslick, S., et al. AutoRA: Automated Research Assistant. https://autoresearch.github.io/autora/
+- Mellers, B., Hertwig, R., & Kahneman, D. (2001). Do frequency representations eliminate conjunction effects? *Psychological Science*, 12(4), 269–275.
 
 ## License
 
