@@ -7526,3 +7526,146 @@ class TestCruxBoostSpecs:
 
         # Should not crash; scores should be valid
         assert all(s >= 0 for s in scores_both)
+
+
+class TestCruxIntegration:
+    """Integration tests for crux flow: identification → negotiation → EIG."""
+
+    def test_crux_phases_wired_into_run_cycle(self):
+        """In full_pool mode, crux phases should run between divergence and EIG."""
+        from antagonistic_collab.runner import run_cycle
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state=state, agent_configs=agents)
+
+        call_log = []
+
+        def fake_llm(client, system, user, **kw):
+            call_log.append(user[:80])
+            # Return valid JSON for any phase
+            if "crux" in user.lower() and "negotiat" in user.lower():
+                return '{"responses": [{"crux_id": "crux_001", "action": "accept"}]}'
+            if "crux" in user.lower():
+                return (
+                    '{"cruxes": [{"description": "test crux", '
+                    '"discriminating_experiment": "Type_II/baseline", '
+                    '"resolution_criterion": "RMSE < 0.2"}]}'
+                )
+            return (
+                '{"interpretation": "test", "confounds_flagged": [], '
+                '"hypothesis": "test", "claims": [], '
+                '"core_claims": ["test"], "auxiliary_assumptions": [], '
+                '"model_evidence": {}, "disputed_interpretation": "none", '
+                '"audit": "test"}'
+            )
+
+        import antagonistic_collab.runner as runner_mod
+
+        original = runner_mod.call_agent
+        runner_mod.call_agent = fake_llm
+        try:
+            transcript = []
+            run_cycle(
+                protocol,
+                None,
+                transcript,
+                true_model="GCM",
+                mode="full_pool",
+                output_dir="/tmp/test_crux_integration",
+            )
+        finally:
+            runner_mod.call_agent = original
+
+        # Crux identification should have been called
+        crux_prompts = [c for c in call_log if "crux" in c.lower()]
+        assert len(crux_prompts) > 0
+
+    def test_cruxes_flow_to_eig(self):
+        """Active cruxes should produce boost specs for EIG selection."""
+        from antagonistic_collab.runner import cruxes_to_boost_specs
+        from antagonistic_collab.epistemic_state import Crux
+
+        state = EpistemicState(domain="test")
+        state.add_crux(
+            Crux(
+                id="c1",
+                proposer="A",
+                description="test",
+                status="accepted",
+                discriminating_experiment="Type_VI/baseline",
+            )
+        )
+
+        specs = cruxes_to_boost_specs(state)
+        assert len(specs) == 1
+        assert specs[0]["structure"] == "Type_VI"
+        assert specs[0]["condition"] == "baseline"
+        assert specs[0]["boost"] > 1.0
+
+    def test_cruxes_without_experiment_skipped(self):
+        """Cruxes without a discriminating_experiment produce no boost spec."""
+        from antagonistic_collab.runner import cruxes_to_boost_specs
+        from antagonistic_collab.epistemic_state import Crux
+
+        state = EpistemicState(domain="test")
+        state.add_crux(
+            Crux(id="c1", proposer="A", description="vague crux", status="accepted")
+        )
+
+        specs = cruxes_to_boost_specs(state)
+        assert specs == []
+
+    def test_crux_negotiation_output_used(self):
+        """After negotiation, accepted cruxes should have multiple supporters."""
+        from antagonistic_collab.runner import (
+            run_crux_identification,
+            run_crux_negotiation,
+            finalize_cruxes,
+        )
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state=state, agent_configs=agents)
+        for agent in agents:
+            state.register_theory(
+                TheoryCommitment(
+                    name=agent.theory_name,
+                    agent_name=agent.name,
+                    core_claims=["test"],
+                    model_name=agent.model_class.name.split()[0],
+                )
+            )
+
+        # Phase 1: identification
+        def id_llm(client, system, user, **kw):
+            return (
+                '{"cruxes": [{"description": "Type VI test", '
+                '"discriminating_experiment": "Type_VI/baseline", '
+                '"resolution_criterion": "RMSE < 0.2"}]}'
+            )
+
+        # Phase 2: negotiation — all agents accept
+        def neg_llm(client, system, user, **kw):
+            return '{"responses": [{"crux_id": "crux_001", "action": "accept"}]}'
+
+        import antagonistic_collab.runner as runner_mod
+
+        original = runner_mod.call_agent
+
+        runner_mod.call_agent = id_llm
+        try:
+            run_crux_identification(protocol, None, cycle=0)
+        finally:
+            runner_mod.call_agent = original
+
+        runner_mod.call_agent = neg_llm
+        try:
+            run_crux_negotiation(protocol, None, cycle=0)
+        finally:
+            runner_mod.call_agent = original
+
+        finalized = finalize_cruxes(protocol, cycle=0)
+        assert len(finalized) >= 1
+        # Should have multiple supporters from negotiation
+        assert len(finalized[0].supporters) >= 2

@@ -1191,6 +1191,11 @@ def run_full_pool_selection(
         if focus_pair:
             print(f"  Focus pair: {focus_pair[0]} vs {focus_pair[1]}")
 
+    # Convert active cruxes to boost specs for EIG
+    boost_specs = cruxes_to_boost_specs(protocol.state)
+    if boost_specs:
+        print(f"  Crux boost: {len(boost_specs)} active cruxes boosting EIG")
+
     best_idx, eig_scores = select_from_pool(
         protocol,
         posterior,
@@ -1200,6 +1205,7 @@ def run_full_pool_selection(
         seed=42,
         focus_pair=focus_pair,
         pair_boost=1.5,
+        crux_boost_specs=boost_specs or None,
     )
 
     best_struct, best_cond = pool[best_idx]
@@ -1792,6 +1798,22 @@ def finalize_cruxes(
     return finalized
 
 
+def cruxes_to_boost_specs(state: EpistemicState, boost: float = 2.0) -> list[dict]:
+    """Convert active cruxes with discriminating experiments into boost specs.
+
+    Parses "structure/condition" from crux.discriminating_experiment.
+    Returns list of {"structure": ..., "condition": ..., "boost": ...}.
+    """
+    specs = []
+    for crux in state.get_active_cruxes():
+        exp = crux.discriminating_experiment
+        if not exp or "/" not in exp:
+            continue
+        parts = exp.split("/", 1)
+        specs.append({"structure": parts[0], "condition": parts[1], "boost": boost})
+    return specs
+
+
 def run_audit(protocol: DebateProtocol, client, transcript: list) -> PhaseResult:
     """Phase 9: Summarize what was learned."""
     print("\n" + "=" * 70)
@@ -1924,6 +1946,11 @@ def run_cycle(
     protocol.advance_phase(result)
 
     if mode == "full_pool":
+        # Crux negotiation: identify, negotiate, finalize decisive questions
+        run_crux_identification(protocol, client, cycle=protocol.state.cycle)
+        run_crux_negotiation(protocol, client, cycle=protocol.state.cycle)
+        finalize_cruxes(protocol, cycle=protocol.state.cycle)
+
         # Full-pool mode: EIG selection replaces phases 3-6.
         # Skip the state machine forward to HUMAN_ARBITRATION so that
         # advance_phase correctly transitions to EXECUTION.
