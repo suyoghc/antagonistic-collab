@@ -1112,8 +1112,30 @@ def run_full_pool_selection(
     pool = generate_full_candidate_pool(protocol, extra_structures=extra or None)
     print(f"  Evaluating {len(pool)} candidates...")
 
+    # Extract focus pair from posterior and/or claim ledger
+    focus_pair = None
+    if protocol.state.cycle > 0:
+        from .bayesian_selection import (
+            extract_focus_pair_from_posterior,
+            extract_focus_pair_from_ledger,
+        )
+
+        # Prefer ledger (debate-informed) over posterior (statistical)
+        focus_pair = extract_focus_pair_from_ledger(protocol.state)
+        if focus_pair is None:
+            focus_pair = extract_focus_pair_from_posterior(posterior)
+        if focus_pair:
+            print(f"  Focus pair: {focus_pair[0]} vs {focus_pair[1]}")
+
     best_idx, eig_scores = select_from_pool(
-        protocol, posterior, pool, n_subjects=20, n_sim=200, seed=42
+        protocol,
+        posterior,
+        pool,
+        n_subjects=20,
+        n_sim=200,
+        seed=42,
+        focus_pair=focus_pair,
+        pair_boost=1.5,
     )
 
     best_struct, best_cond = pool[best_idx]

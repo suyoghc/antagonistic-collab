@@ -6286,20 +6286,32 @@ class TestClaimLedger:
         state = EpistemicState(domain="test")
         state.add_claim(
             DebateClaim(
-                agent="GCM_Advocate", claim_type="prediction",
-                content="c1", testable=True, cycle_made=0, status="untested",
+                agent="GCM_Advocate",
+                claim_type="prediction",
+                content="c1",
+                testable=True,
+                cycle_made=0,
+                status="untested",
             )
         )
         state.add_claim(
             DebateClaim(
-                agent="GCM_Advocate", claim_type="prediction",
-                content="c2", testable=True, cycle_made=0, status="confirmed",
+                agent="GCM_Advocate",
+                claim_type="prediction",
+                content="c2",
+                testable=True,
+                cycle_made=0,
+                status="confirmed",
             )
         )
         state.add_claim(
             DebateClaim(
-                agent="RULEX_Advocate", claim_type="prediction",
-                content="c3", testable=True, cycle_made=0, status="untested",
+                agent="RULEX_Advocate",
+                claim_type="prediction",
+                content="c3",
+                testable=True,
+                cycle_made=0,
+                status="untested",
             )
         )
 
@@ -6342,7 +6354,6 @@ class TestClaimLedger:
         """When an agent includes claims in their interpretation JSON,
         they should be parsed and added to the ledger."""
         from antagonistic_collab.runner import parse_claims_from_json
-        from antagonistic_collab.epistemic_state import DebateClaim
 
         json_block = {
             "interpretation": "...",
@@ -6443,9 +6454,7 @@ class TestCritiqueAsFalsification:
         agent = protocol.agent_configs[0]
 
         # Claim something wildly wrong
-        result = verify_prediction_claim(
-            protocol, agent, "Type_I", "baseline", 0.01
-        )
+        result = verify_prediction_claim(protocol, agent, "Type_I", "baseline", 0.01)
         assert result["verified"] is False
         assert result["discrepancy"] > 0.1
 
@@ -6456,9 +6465,7 @@ class TestCritiqueAsFalsification:
         protocol = self._make_protocol()
         agent = protocol.agent_configs[0]
 
-        result = verify_prediction_claim(
-            protocol, agent, "Type_I", "baseline", 0.01
-        )
+        result = verify_prediction_claim(protocol, agent, "Type_I", "baseline", 0.01)
 
         # Add the result as a claim to the ledger
         from antagonistic_collab.epistemic_state import DebateClaim
@@ -6466,7 +6473,7 @@ class TestCritiqueAsFalsification:
         claim = DebateClaim(
             agent=agent.name,
             claim_type="critique",
-            content=f"Claimed mean_accuracy=0.01 on Type_I",
+            content="Claimed mean_accuracy=0.01 on Type_I",
             testable=True,
             structure="Type_I",
             predicted_outcome="mean_accuracy=0.01",
@@ -6484,7 +6491,6 @@ class TestCritiqueAsFalsification:
         # We check that run_interpretation_critique's prompt mentions structured format
         # by inspecting the function source code
         import antagonistic_collab.runner as runner_mod
-        import textwrap
 
         source = inspect.getsource(runner_mod.run_interpretation_critique)
         assert "alternative_prediction" in source or "disputed_interpretation" in source
@@ -6520,3 +6526,168 @@ class TestCritiqueAsFalsification:
 
         # With c=0.1 (very low sensitivity), predictions should differ
         assert actual_before != actual_after
+
+
+# =========================================================================
+# Feature 7.3: Debate-Informed EIG Weighting (M5)
+# =========================================================================
+
+
+class TestDebateInformedEIG:
+    """
+    EIG treats all model pairs equally. After a few cycles, the real
+    contest may be between two specific models. Debate identifies this,
+    but the insight is discarded. focus_pair boosting directs EIG toward
+    experiments that distinguish the contested pair.
+    """
+
+    def _make_protocol_and_posterior(self):
+        """Helper: create protocol + uniform posterior."""
+        agents = default_agent_configs()
+        state = EpistemicState(domain="test")
+        for agent in agents:
+            state.register_theory(
+                TheoryCommitment(
+                    name=agent.theory_name,
+                    agent_name=agent.name,
+                    core_claims=agent.model_class.core_claims,
+                    model_name=agent.model_class.name,
+                    model_params=dict(agent.default_params),
+                )
+            )
+        protocol = DebateProtocol(state=state, agent_configs=agents)
+        model_names = [a.name for a in agents]
+        posterior = ModelPosterior.uniform(model_names)
+        return protocol, posterior
+
+    def test_no_focus_pair_unchanged(self):
+        """Without focus_pair, select_from_pool should work as before."""
+        from antagonistic_collab.bayesian_selection import (
+            generate_full_candidate_pool,
+            select_from_pool,
+        )
+
+        protocol, posterior = self._make_protocol_and_posterior()
+        pool = generate_full_candidate_pool(protocol)
+
+        # Without focus_pair (backward compat)
+        best_idx, eig_scores = select_from_pool(
+            protocol, posterior, pool, n_sim=50, seed=42
+        )
+        assert best_idx >= 0
+        assert len(eig_scores) == len(pool)
+
+    def test_pairwise_boost_changes_selection(self):
+        """With a focus_pair and high boost, selection should prefer
+        experiments that distinguish the focus pair."""
+        from antagonistic_collab.bayesian_selection import (
+            generate_full_candidate_pool,
+            select_from_pool,
+        )
+
+        protocol, posterior = self._make_protocol_and_posterior()
+        pool = generate_full_candidate_pool(protocol)
+
+        # Without boost
+        best_no_boost, scores_no_boost = select_from_pool(
+            protocol, posterior, pool, n_sim=50, seed=42
+        )
+
+        # With focus pair and very high boost
+        agent_names = [a.name for a in protocol.agent_configs]
+        focus = (agent_names[0], agent_names[1])
+        best_boosted, scores_boosted = select_from_pool(
+            protocol,
+            posterior,
+            pool,
+            n_sim=50,
+            seed=42,
+            focus_pair=focus,
+            pair_boost=5.0,
+        )
+
+        # Boosted scores should be >= unboosted for divergent candidates
+        assert max(scores_boosted) >= max(scores_no_boost)
+
+    def test_focus_pair_extracted_from_posterior(self):
+        """extract_focus_pair_from_posterior should identify the two models
+        with closest posterior probabilities."""
+        from antagonistic_collab.bayesian_selection import (
+            extract_focus_pair_from_posterior,
+        )
+
+        # Make a posterior where two models are very close
+        posterior = ModelPosterior(
+            log_probs=np.array([0.0, -0.01, -5.0]),
+            model_names=["GCM_Advocate", "SUSTAIN_Advocate", "RULEX_Advocate"],
+        )
+        pair = extract_focus_pair_from_posterior(posterior)
+        # The closest pair should be GCM and SUSTAIN
+        assert set(pair) == {"GCM_Advocate", "SUSTAIN_Advocate"}
+
+    def test_focus_pair_from_ledger(self):
+        """extract_focus_pair_from_ledger should identify contested model pairs
+        from recent falsified/disputed claims."""
+        from antagonistic_collab.bayesian_selection import (
+            extract_focus_pair_from_ledger,
+        )
+        from antagonistic_collab.epistemic_state import DebateClaim
+
+        state = EpistemicState(domain="test")
+        # Add some claims that reference specific models
+        state.add_claim(
+            DebateClaim(
+                agent="GCM_Advocate",
+                claim_type="critique",
+                content="SUSTAIN cannot predict Type_IV",
+                testable=True,
+                structure="Type_IV",
+                cycle_made=0,
+                status="falsified",
+            )
+        )
+        state.add_claim(
+            DebateClaim(
+                agent="SUSTAIN_Advocate",
+                claim_type="critique",
+                content="GCM attention weights are wrong",
+                testable=True,
+                cycle_made=0,
+                status="untested",
+            )
+        )
+        pair = extract_focus_pair_from_ledger(state)
+        # Should identify GCM and SUSTAIN as contested
+        assert pair is not None
+        assert "GCM_Advocate" in pair
+        assert "SUSTAIN_Advocate" in pair
+
+    def test_boost_magnitude(self):
+        """EIG * boost should be > unboosted EIG for high-divergence candidates."""
+        from antagonistic_collab.bayesian_selection import (
+            generate_full_candidate_pool,
+            select_from_pool,
+        )
+
+        protocol, posterior = self._make_protocol_and_posterior()
+        pool = generate_full_candidate_pool(protocol)[:5]  # Small pool for speed
+
+        agent_names = [a.name for a in protocol.agent_configs]
+        focus = (agent_names[0], agent_names[1])
+
+        _, scores_no_boost = select_from_pool(
+            protocol, posterior, pool, n_sim=50, seed=42
+        )
+        _, scores_boosted = select_from_pool(
+            protocol,
+            posterior,
+            pool,
+            n_sim=50,
+            seed=42,
+            focus_pair=focus,
+            pair_boost=2.0,
+        )
+
+        # At least some boosted scores should be higher
+        any_higher = any(b > nb for b, nb in zip(scores_boosted, scores_no_boost))
+        assert any_higher

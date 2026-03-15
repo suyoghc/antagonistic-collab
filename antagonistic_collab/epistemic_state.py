@@ -226,9 +226,7 @@ class EpistemicState:
         """Append a claim to the ledger."""
         self.claim_ledger.append(claim)
 
-    def update_claim_status(
-        self, idx: int, status: str, evidence: str, cycle: int
-    ):
+    def update_claim_status(self, idx: int, status: str, evidence: str, cycle: int):
         """Mark a claim as confirmed/falsified with evidence."""
         self.claim_ledger[idx].status = status
         self.claim_ledger[idx].evidence = evidence
@@ -244,7 +242,8 @@ class EpistemicState:
     def stale_claims(self, current_cycle: int, threshold: int = 2) -> list[DebateClaim]:
         """Return claims untested for more than threshold cycles."""
         return [
-            c for c in self.claim_ledger
+            c
+            for c in self.claim_ledger
             if c.status == "untested" and (current_cycle - c.cycle_made) > threshold
         ]
 
@@ -259,9 +258,7 @@ class EpistemicState:
             if c.evidence:
                 status_str += f" ({c.evidence})"
             testable_str = " [TESTABLE]" if c.testable else ""
-            lines.append(
-                f"  {i + 1}. [{status_str}]{testable_str} {c.content}"
-            )
+            lines.append(f"  {i + 1}. [{status_str}]{testable_str} {c.content}")
         return "\n".join(lines)
 
     # --- Theory management ---

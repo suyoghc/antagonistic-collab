@@ -220,6 +220,17 @@ def generate_full_candidate_pool(
     return pool
 
 
+def _pairwise_divergence(
+    model_predictions: dict[str, np.ndarray],
+    pair: tuple[str, str],
+) -> float:
+    """Mean absolute prediction divergence between two models."""
+    a, b = pair
+    if a not in model_predictions or b not in model_predictions:
+        return 0.0
+    return float(np.mean(np.abs(model_predictions[a] - model_predictions[b])))
+
+
 def select_from_pool(
     protocol,
     posterior: ModelPosterior,
@@ -227,6 +238,8 @@ def select_from_pool(
     n_subjects: int = 20,
     n_sim: int = 200,
     seed: Optional[int] = 42,
+    focus_pair: Optional[tuple[str, str]] = None,
+    pair_boost: float = 1.5,
 ) -> tuple[int, list[float]]:
     """Select the best (structure, condition) pair from the full pool by EIG.
 
@@ -237,6 +250,9 @@ def select_from_pool(
         n_subjects: subjects per item for likelihood computation.
         n_sim: Monte Carlo simulations per model per candidate.
         seed: random seed.
+        focus_pair: optional (model_name_a, model_name_b) to boost EIG
+            for candidates where these two models diverge.
+        pair_boost: multiplier for EIG when focus pair has high divergence.
 
     Returns:
         (best_index, eig_scores) — index into pool, and EIG for each candidate.
@@ -264,6 +280,13 @@ def select_from_pool(
             n_sim=n_sim,
             seed=seed + i if seed is not None else None,
         )
+
+        # Apply focus pair boost
+        if focus_pair is not None:
+            divergence = _pairwise_divergence(model_predictions, focus_pair)
+            if divergence > 0.05:  # Only boost if meaningfully divergent
+                eig *= pair_boost
+
         eig_scores.append(eig)
 
     best_idx = int(np.argmax(eig_scores))
@@ -432,3 +455,49 @@ def update_posterior_from_experiment(
     posterior.history.append(history_entry)
 
     return posterior
+
+
+# ---------------------------------------------------------------------------
+# Focus pair extraction
+# ---------------------------------------------------------------------------
+
+
+def extract_focus_pair_from_posterior(
+    posterior: ModelPosterior,
+) -> tuple[str, str]:
+    """Identify the two models with closest posterior probabilities.
+
+    These are the models the experiment should try to distinguish.
+    """
+    probs = posterior.probs
+    names = posterior.model_names
+    n = len(names)
+
+    min_gap = float("inf")
+    pair = (names[0], names[1]) if n >= 2 else (names[0], names[0])
+    for i in range(n):
+        for j in range(i + 1, n):
+            gap = abs(probs[i] - probs[j])
+            if gap < min_gap:
+                min_gap = gap
+                pair = (names[i], names[j])
+    return pair
+
+
+def extract_focus_pair_from_ledger(state) -> Optional[tuple[str, str]]:
+    """Extract contested model pair from recent claims in the ledger.
+
+    Looks for the two agents most frequently involved in falsified or
+    contested (untested) claims against each other.
+    """
+    from collections import Counter
+
+    agents_in_disputes = Counter()
+    for claim in state.claim_ledger:
+        if claim.status in ("falsified", "untested") and claim.claim_type == "critique":
+            agents_in_disputes[claim.agent] += 1
+
+    if len(agents_in_disputes) >= 2:
+        top_two = agents_in_disputes.most_common(2)
+        return (top_two[0][0], top_two[1][0])
+    return None
