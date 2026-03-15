@@ -197,6 +197,26 @@ class DebateClaim:
 
 
 @dataclass
+class Crux:
+    """A crux: a decisive question that, if answered, would change an agent's mind.
+
+    Cruxes focus debate on the questions that actually matter for discriminating
+    between theories, rather than letting agents argue about everything.
+    """
+
+    id: str  # e.g., "crux_001"
+    proposer: str  # agent who proposed it
+    description: str  # natural language description
+    discriminating_experiment: Optional[str] = None  # structure + condition
+    resolution_criterion: Optional[str] = None  # e.g., "RMSE < 0.15"
+    status: str = "proposed"  # proposed | accepted | resolved | rejected
+    resolution: Optional[str] = None  # what happened
+    cycle_proposed: int = 0
+    cycle_resolved: Optional[int] = None
+    supporters: list[str] = field(default_factory=list)  # agents who agree
+
+
+@dataclass
 class EpistemicState:
     """
     The full epistemic state of the adversarial collaboration.
@@ -219,6 +239,47 @@ class EpistemicState:
         default_factory=list
     )  # from interpretation debate
     claim_ledger: list[DebateClaim] = field(default_factory=list)
+    cruxes: list[Crux] = field(default_factory=list)
+
+    # --- Crux management ---
+
+    def add_crux(self, crux: Crux):
+        """Append a crux to the list."""
+        self.cruxes.append(crux)
+        self._log("crux_added", {"id": crux.id, "proposer": crux.proposer})
+
+    def get_active_cruxes(self) -> list[Crux]:
+        """Return proposed or accepted cruxes."""
+        return [c for c in self.cruxes if c.status in ("proposed", "accepted")]
+
+    def resolve_crux(self, crux_id: str, resolution: str, cycle: int):
+        """Mark a crux as resolved."""
+        for c in self.cruxes:
+            if c.id == crux_id:
+                c.status = "resolved"
+                c.resolution = resolution
+                c.cycle_resolved = cycle
+                self._log("crux_resolved", {"id": crux_id, "resolution": resolution})
+                return
+        raise ValueError(f"Crux '{crux_id}' not found.")
+
+    def crux_summary(self) -> str:
+        """Formatted string of active cruxes for prompt injection."""
+        active = self.get_active_cruxes()
+        if not active:
+            return ""
+        lines = [f"### Active Cruxes ({len(active)})"]
+        for c in active:
+            supporters_str = ", ".join(c.supporters) if c.supporters else "none"
+            lines.append(
+                f"  - [{c.status.upper()}] {c.id}: {c.description} "
+                f"(proposed by {c.proposer}, supporters: {supporters_str})"
+            )
+            if c.discriminating_experiment:
+                lines.append(f"    Experiment: {c.discriminating_experiment}")
+            if c.resolution_criterion:
+                lines.append(f"    Criterion: {c.resolution_criterion}")
+        return "\n".join(lines)
 
     # --- Claim ledger management ---
 

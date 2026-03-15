@@ -6871,3 +6871,96 @@ class TestMetaAgentConfig:
         total_revisions = sum(len(t.revision_log) for t in state.theories)
         # 3 theory agents each trigger one revision = 3
         assert total_revisions == 3
+
+
+# =========================================================================
+# M6b: Crux Negotiation
+# =========================================================================
+
+
+class TestCruxDataclass:
+    """Tests for the Crux dataclass and EpistemicState crux methods."""
+
+    def test_crux_creation(self):
+        """Crux dataclass has all expected fields with defaults."""
+        from antagonistic_collab.epistemic_state import Crux
+
+        crux = Crux(
+            id="crux_001",
+            proposer="Exemplar_Agent",
+            description="Does GCM predict Type VI accuracy > 60%?",
+        )
+        assert crux.id == "crux_001"
+        assert crux.proposer == "Exemplar_Agent"
+        assert crux.status == "proposed"
+        assert crux.discriminating_experiment is None
+        assert crux.resolution is None
+        assert crux.cycle_proposed == 0
+        assert crux.supporters == []
+
+    def test_crux_status_transitions(self):
+        """Crux status can be transitioned through the expected states."""
+        from antagonistic_collab.epistemic_state import Crux
+
+        crux = Crux(id="crux_002", proposer="Rule_Agent", description="test")
+        assert crux.status == "proposed"
+        crux.status = "accepted"
+        assert crux.status == "accepted"
+        crux.status = "resolved"
+        assert crux.status == "resolved"
+
+    def test_add_crux_to_state(self):
+        """EpistemicState.add_crux appends to the cruxes list."""
+        from antagonistic_collab.epistemic_state import Crux
+
+        state = EpistemicState(domain="test")
+        assert state.cruxes == []
+        crux = Crux(id="crux_001", proposer="Exemplar_Agent", description="test")
+        state.add_crux(crux)
+        assert len(state.cruxes) == 1
+        assert state.cruxes[0].id == "crux_001"
+
+    def test_get_active_cruxes(self):
+        """get_active_cruxes returns only proposed/accepted cruxes."""
+        from antagonistic_collab.epistemic_state import Crux
+
+        state = EpistemicState(domain="test")
+        state.add_crux(Crux(id="c1", proposer="A", description="d1", status="proposed"))
+        state.add_crux(Crux(id="c2", proposer="B", description="d2", status="accepted"))
+        state.add_crux(Crux(id="c3", proposer="C", description="d3", status="resolved"))
+        state.add_crux(Crux(id="c4", proposer="D", description="d4", status="rejected"))
+
+        active = state.get_active_cruxes()
+        assert len(active) == 2
+        assert {c.id for c in active} == {"c1", "c2"}
+
+    def test_resolve_crux(self):
+        """resolve_crux sets status, resolution, and cycle_resolved."""
+        from antagonistic_collab.epistemic_state import Crux
+
+        state = EpistemicState(domain="test")
+        state.add_crux(Crux(id="c1", proposer="A", description="d1"))
+        state.resolve_crux("c1", "GCM achieved 0.72 RMSE", cycle=3)
+        crux = state.cruxes[0]
+        assert crux.status == "resolved"
+        assert crux.resolution == "GCM achieved 0.72 RMSE"
+        assert crux.cycle_resolved == 3
+
+    def test_crux_summary(self):
+        """crux_summary returns formatted string for prompt injection."""
+        from antagonistic_collab.epistemic_state import Crux
+
+        state = EpistemicState(domain="test")
+        state.add_crux(
+            Crux(
+                id="c1",
+                proposer="Exemplar_Agent",
+                description="GCM vs RULEX on Type VI",
+                status="accepted",
+                supporters=["Exemplar_Agent", "Clustering_Agent"],
+            )
+        )
+        summary = state.crux_summary()
+        assert "c1" in summary
+        assert "GCM vs RULEX" in summary
+        assert "accepted" in summary.lower() or "ACCEPTED" in summary
