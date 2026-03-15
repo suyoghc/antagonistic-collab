@@ -176,6 +176,27 @@ class ModelClaim:
 
 
 @dataclass
+class DebateClaim:
+    """A structured claim made during debate, with optional testable prediction.
+
+    Tracks what agents claim, whether those claims are falsifiable, and
+    whether subsequent experiments confirmed or falsified them.
+    """
+
+    agent: str
+    claim_type: str  # "prediction", "explanation", "critique"
+    content: str  # natural language claim
+    testable: bool  # whether claim makes falsifiable prediction
+    structure: Optional[str] = None  # which structure it applies to
+    condition: Optional[str] = None
+    predicted_outcome: Optional[str] = None  # e.g., "RULEX RMSE < 0.2"
+    cycle_made: int = 0
+    status: str = "untested"  # untested | confirmed | falsified | stale
+    tested_at_cycle: Optional[int] = None
+    evidence: Optional[str] = None  # what confirmed/falsified it
+
+
+@dataclass
 class EpistemicState:
     """
     The full epistemic state of the adversarial collaboration.
@@ -197,6 +218,51 @@ class EpistemicState:
     agent_hypotheses: list[dict] = field(
         default_factory=list
     )  # from interpretation debate
+    claim_ledger: list[DebateClaim] = field(default_factory=list)
+
+    # --- Claim ledger management ---
+
+    def add_claim(self, claim: DebateClaim):
+        """Append a claim to the ledger."""
+        self.claim_ledger.append(claim)
+
+    def update_claim_status(
+        self, idx: int, status: str, evidence: str, cycle: int
+    ):
+        """Mark a claim as confirmed/falsified with evidence."""
+        self.claim_ledger[idx].status = status
+        self.claim_ledger[idx].evidence = evidence
+        self.claim_ledger[idx].tested_at_cycle = cycle
+
+    def get_active_claims(self, agent: Optional[str] = None) -> list[DebateClaim]:
+        """Return untested claims, optionally filtered by agent."""
+        claims = [c for c in self.claim_ledger if c.status == "untested"]
+        if agent:
+            claims = [c for c in claims if c.agent == agent]
+        return claims
+
+    def stale_claims(self, current_cycle: int, threshold: int = 2) -> list[DebateClaim]:
+        """Return claims untested for more than threshold cycles."""
+        return [
+            c for c in self.claim_ledger
+            if c.status == "untested" and (current_cycle - c.cycle_made) > threshold
+        ]
+
+    def claims_summary_for_agent(self, agent_name: str) -> str:
+        """Formatted string of an agent's claims for prompt injection."""
+        agent_claims = [c for c in self.claim_ledger if c.agent == agent_name]
+        if not agent_claims:
+            return ""
+        lines = [f"### Your Prior Claims ({len(agent_claims)} total)"]
+        for i, c in enumerate(agent_claims):
+            status_str = c.status.upper()
+            if c.evidence:
+                status_str += f" ({c.evidence})"
+            testable_str = " [TESTABLE]" if c.testable else ""
+            lines.append(
+                f"  {i + 1}. [{status_str}]{testable_str} {c.content}"
+            )
+        return "\n".join(lines)
 
     # --- Theory management ---
 

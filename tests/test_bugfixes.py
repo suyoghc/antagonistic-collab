@@ -6172,3 +6172,215 @@ class TestSyncParamsFromTheory:
         # With c=0.1 (very low sensitivity), predictions should differ
         assert preds_before["params_used"] != preds_after["params_used"]
         assert preds_after["params_used"]["c"] == 0.1
+
+
+# =========================================================================
+# Feature 7.4: Structured Claim Ledger (M5)
+# =========================================================================
+
+
+class TestClaimLedger:
+    """
+    Agents repeat the same talking points across cycles. agent_hypotheses
+    is stored but never read. No accountability for predictions made in
+    debate. The claim ledger tracks structured claims with testable
+    predictions and verifies them against actual results.
+    """
+
+    def test_add_claim_to_ledger(self):
+        """Basic add: a claim should appear in the ledger."""
+        from antagonistic_collab.epistemic_state import DebateClaim
+
+        state = EpistemicState(domain="test")
+        claim = DebateClaim(
+            agent="GCM_Advocate",
+            claim_type="prediction",
+            content="GCM will fit Type_I perfectly",
+            testable=True,
+            structure="Type_I",
+            predicted_outcome="GCM RMSE < 0.1",
+            cycle_made=0,
+        )
+        state.add_claim(claim)
+        assert len(state.claim_ledger) == 1
+        assert state.claim_ledger[0].agent == "GCM_Advocate"
+        assert state.claim_ledger[0].status == "untested"
+
+    def test_update_claim_status(self):
+        """update_claim_status should mark a claim confirmed/falsified."""
+        from antagonistic_collab.epistemic_state import DebateClaim
+
+        state = EpistemicState(domain="test")
+        claim = DebateClaim(
+            agent="GCM_Advocate",
+            claim_type="prediction",
+            content="GCM RMSE < 0.1 on Type_I",
+            testable=True,
+            cycle_made=0,
+        )
+        state.add_claim(claim)
+        state.update_claim_status(0, "confirmed", "RMSE was 0.05", cycle=1)
+
+        assert state.claim_ledger[0].status == "confirmed"
+        assert state.claim_ledger[0].evidence == "RMSE was 0.05"
+        assert state.claim_ledger[0].tested_at_cycle == 1
+
+    def test_stale_claims_detected(self):
+        """Claims untested for >threshold cycles should be flagged stale."""
+        from antagonistic_collab.epistemic_state import DebateClaim
+
+        state = EpistemicState(domain="test")
+        # Claim made at cycle 0, now at cycle 3
+        claim = DebateClaim(
+            agent="RULEX_Advocate",
+            claim_type="prediction",
+            content="RULEX will dominate",
+            testable=True,
+            cycle_made=0,
+        )
+        state.add_claim(claim)
+
+        stale = state.stale_claims(current_cycle=3, threshold=2)
+        assert len(stale) == 1
+
+        # Not stale if within threshold
+        not_stale = state.stale_claims(current_cycle=1, threshold=2)
+        assert len(not_stale) == 0
+
+    def test_claims_summary_formatting(self):
+        """claims_summary_for_agent should produce a readable string."""
+        from antagonistic_collab.epistemic_state import DebateClaim
+
+        state = EpistemicState(domain="test")
+        state.add_claim(
+            DebateClaim(
+                agent="GCM_Advocate",
+                claim_type="prediction",
+                content="GCM fits Type_I",
+                testable=True,
+                cycle_made=0,
+                status="confirmed",
+                evidence="RMSE=0.05",
+            )
+        )
+        state.add_claim(
+            DebateClaim(
+                agent="GCM_Advocate",
+                claim_type="explanation",
+                content="Attention weights explain difficulty ordering",
+                testable=False,
+                cycle_made=1,
+            )
+        )
+
+        summary = state.claims_summary_for_agent("GCM_Advocate")
+        assert "GCM fits Type_I" in summary
+        assert "CONFIRMED" in summary
+        assert "Attention weights" in summary
+
+    def test_get_active_claims(self):
+        """get_active_claims filters to untested claims for a given agent."""
+        from antagonistic_collab.epistemic_state import DebateClaim
+
+        state = EpistemicState(domain="test")
+        state.add_claim(
+            DebateClaim(
+                agent="GCM_Advocate", claim_type="prediction",
+                content="c1", testable=True, cycle_made=0, status="untested",
+            )
+        )
+        state.add_claim(
+            DebateClaim(
+                agent="GCM_Advocate", claim_type="prediction",
+                content="c2", testable=True, cycle_made=0, status="confirmed",
+            )
+        )
+        state.add_claim(
+            DebateClaim(
+                agent="RULEX_Advocate", claim_type="prediction",
+                content="c3", testable=True, cycle_made=0, status="untested",
+            )
+        )
+
+        active = state.get_active_claims(agent="GCM_Advocate")
+        assert len(active) == 1
+        assert active[0].content == "c1"
+
+        all_active = state.get_active_claims()
+        assert len(all_active) == 2
+
+    def test_ledger_serialization(self):
+        """Claim ledger should survive to_json / from_dict round-trip."""
+        import tempfile
+        from antagonistic_collab.epistemic_state import DebateClaim
+
+        state = EpistemicState(domain="test")
+        state.add_claim(
+            DebateClaim(
+                agent="GCM_Advocate",
+                claim_type="prediction",
+                content="GCM wins",
+                testable=True,
+                cycle_made=0,
+            )
+        )
+
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+            path = f.name
+        try:
+            state.to_json(path)
+            with open(path) as f:
+                data = json.load(f)
+            assert "claim_ledger" in data
+            assert len(data["claim_ledger"]) == 1
+            assert data["claim_ledger"][0]["agent"] == "GCM_Advocate"
+        finally:
+            os.unlink(path)
+
+    def test_claim_parsed_from_agent_json(self):
+        """When an agent includes claims in their interpretation JSON,
+        they should be parsed and added to the ledger."""
+        from antagonistic_collab.runner import parse_claims_from_json
+        from antagonistic_collab.epistemic_state import DebateClaim
+
+        json_block = {
+            "interpretation": "...",
+            "claims": [
+                {
+                    "claim": "GCM RMSE < 0.1 on Type_I",
+                    "testable": True,
+                    "structure": "Type_I",
+                    "predicted_outcome": "RMSE < 0.1",
+                },
+                {
+                    "claim": "Attention weights shift to dim 1",
+                    "testable": False,
+                },
+            ],
+        }
+        claims = parse_claims_from_json(json_block, "GCM_Advocate", cycle=0)
+        assert len(claims) == 2
+        assert claims[0].testable is True
+        assert claims[0].structure == "Type_I"
+        assert claims[1].testable is False
+
+    def test_claims_shown_in_interpretation_prompt(self):
+        """The interpretation prompt should include prior claims for the agent."""
+        from antagonistic_collab.epistemic_state import DebateClaim
+
+        state = EpistemicState(domain="test")
+        state.add_claim(
+            DebateClaim(
+                agent="GCM_Advocate",
+                claim_type="prediction",
+                content="GCM RMSE < 0.1 on Type_I",
+                testable=True,
+                cycle_made=0,
+                status="confirmed",
+                evidence="RMSE=0.05",
+            )
+        )
+        summary = state.claims_summary_for_agent("GCM_Advocate")
+        # Should be non-empty and include the claim
+        assert len(summary) > 0
+        assert "GCM RMSE < 0.1" in summary

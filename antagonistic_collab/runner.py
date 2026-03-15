@@ -45,7 +45,7 @@ try:
 except ImportError:
     openai = None  # type: ignore[assignment]
 
-from .epistemic_state import EpistemicState, TheoryCommitment
+from .epistemic_state import EpistemicState, TheoryCommitment, DebateClaim
 from .debate_protocol import (
     DebateProtocol,
     Phase,
@@ -1244,15 +1244,23 @@ def run_interpretation_debate(
     extended_context = results_context + "\n".join(extra_context_lines)
 
     for agent in protocol.agent_configs:
+        # Inject prior claims for accountability
+        claims_context = protocol.state.claims_summary_for_agent(agent.name)
+        claims_block = ""
+        if claims_context:
+            claims_block = f"\n{claims_context}\n"
+
         prompt = (
             f"PHASE: Interpretation Debate\n\n"
             f"You are interpreting experimental results. Analyze the data and "
             f"produce a structured response.\n\n"
-            f"RESULTS AND CONTEXT:\n{extended_context}\n\n"
+            f"RESULTS AND CONTEXT:\n{extended_context}\n"
+            f"{claims_block}\n"
             f"You MUST output a JSON block with:\n"
             f'{{"interpretation": "your analysis of what the results show", '
             f'"confounds_flagged": ["list any confounds or methodological issues"], '
             f'"hypothesis": "what experiment should come next and why", '
+            f'"claims": [{{"claim": "...", "testable": true/false, "structure": "...", "predicted_outcome": "..."}}], '
             f'"novel_structure": null or a structure dict (see example below), '
             f'"revision": null or {{"description": "...", "new_params": {{"c": 4.5}}, "new_predictions": [...]}} '
             f"if you want to revise your theory (new_params are optional model parameter overrides)}}\n\n"
@@ -1309,6 +1317,13 @@ def run_interpretation_debate(
         if confounds:
             for c in confounds:
                 all_confounds.append({"agent": agent.name, "confound": c})
+
+        # Parse and register claims from agent's response
+        new_claims = parse_claims_from_json(
+            json_block, agent.name, protocol.state.cycle
+        )
+        for claim in new_claims:
+            protocol.state.add_claim(claim)
 
         # Handle theory revision
         if json_block.get("revision") and isinstance(json_block["revision"], dict):
@@ -1484,6 +1499,35 @@ def sync_params_from_theory(protocol: DebateProtocol):
             filtered = {k: v for k, v in theory.model_params.items() if k in valid}
             if filtered:
                 agent.default_params = filtered
+
+
+# ---------------------------------------------------------------------------
+# Claim parsing: extract structured claims from agent JSON
+# ---------------------------------------------------------------------------
+
+
+def parse_claims_from_json(
+    json_block: dict, agent_name: str, cycle: int
+) -> list[DebateClaim]:
+    """Parse claims from an agent's interpretation JSON into DebateClaim objects."""
+    claims_raw = json_block.get("claims", [])
+    claims = []
+    for c in claims_raw:
+        if not isinstance(c, dict):
+            continue
+        claims.append(
+            DebateClaim(
+                agent=agent_name,
+                claim_type=c.get("claim_type", "prediction"),
+                content=c.get("claim", ""),
+                testable=bool(c.get("testable", False)),
+                structure=c.get("structure"),
+                condition=c.get("condition"),
+                predicted_outcome=c.get("predicted_outcome"),
+                cycle_made=cycle,
+            )
+        )
+    return claims
 
 
 # ---------------------------------------------------------------------------
