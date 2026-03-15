@@ -23,6 +23,7 @@ The runner walks through the 9-phase debate protocol. At each phase it:
 The full transcript is saved to debate_transcript.json after each phase.
 """
 
+import inspect
 import math
 import os
 import sys
@@ -1253,8 +1254,8 @@ def run_interpretation_debate(
             f'"confounds_flagged": ["list any confounds or methodological issues"], '
             f'"hypothesis": "what experiment should come next and why", '
             f'"novel_structure": null or a structure dict (see example below), '
-            f'"revision": null or {{"description": "...", "new_predictions": [...]}} '
-            f"if you want to revise your theory}}\n\n"
+            f'"revision": null or {{"description": "...", "new_params": {{"c": 4.5}}, "new_predictions": [...]}} '
+            f"if you want to revise your theory (new_params are optional model parameter overrides)}}\n\n"
             f"### Novel Structure Format\n"
             f"If none of the existing structures can distinguish the models, you can "
             f"propose a novel category structure. Constraints: 4-32 items, ≤8 dimensions, "
@@ -1315,6 +1316,7 @@ def run_interpretation_debate(
             protocol.state.revise_theory(
                 agent.theory_name,
                 description=rev.get("description", "Post-data revision"),
+                new_params=rev.get("new_params"),
                 triggered_by_experiment=exp.experiment_id,
                 new_predictions=rev.get("new_predictions", []),
             )
@@ -1461,6 +1463,30 @@ def run_audit(protocol: DebateProtocol, client, transcript: list) -> PhaseResult
 
 
 # ---------------------------------------------------------------------------
+# Parameter sync: close the theory→agent_config feedback loop
+# ---------------------------------------------------------------------------
+
+
+def sync_params_from_theory(protocol: DebateProtocol):
+    """Propagate revised theory params back to agent_config.default_params.
+
+    After run_interpretation_debate() calls revise_theory(), the updated
+    model_params live on the TheoryCommitment but are never read by
+    compute_model_predictions(), which uses agent_config.default_params.
+    This function closes that loop.
+    """
+    for agent in protocol.agent_configs:
+        theory = protocol.state.get_theory(agent.theory_name)
+        if theory and theory.model_params:
+            model = agent.model_class
+            valid = set(inspect.signature(model.predict).parameters.keys())
+            valid -= {"self", "stimulus", "training_items", "training_labels"}
+            filtered = {k: v for k, v in theory.model_params.items() if k in valid}
+            if filtered:
+                agent.default_params = filtered
+
+
+# ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
 
@@ -1552,6 +1578,7 @@ def run_cycle(
     if mode == "full_pool":
         # Interpretation debate + critique replaces simple interpretation
         result = run_interpretation_debate(protocol, client, transcript)
+        sync_params_from_theory(protocol)
         protocol.advance_phase(result)
 
         result = run_interpretation_critique(protocol, client, transcript)
@@ -1559,6 +1586,7 @@ def run_cycle(
     else:
         # Phase 8: Interpretation (legacy)
         result = run_interpretation(protocol, client, transcript)
+        sync_params_from_theory(protocol)
         protocol.advance_phase(result)
 
     # Phase 9: Audit

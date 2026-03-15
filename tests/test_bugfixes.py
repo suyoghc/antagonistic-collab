@@ -6021,3 +6021,154 @@ class TestSummaryForAgentNonStringPredictions:
         summary = state.summary_for_agent(agents[0].name)
         assert isinstance(summary, str)
         assert len(summary) > 0
+
+
+# =========================================================================
+# Feature 7.1: Parameter Revision Persistence (M5)
+# =========================================================================
+
+
+class TestSyncParamsFromTheory:
+    """
+    M4 analysis revealed that revise_theory() updates theory.model_params
+    (epistemic_state.py:87) but compute_model_predictions() reads from
+    agent_config.default_params (debate_protocol.py:714). These are never
+    synced, so debate-driven parameter revisions are lost.
+
+    sync_params_from_theory() closes this loop.
+    """
+
+    def _make_protocol_with_theory(self, params=None):
+        """Helper: create a DebateProtocol with theories registered."""
+        agents = default_agent_configs()
+        state = EpistemicState(domain="test")
+        for agent in agents:
+            state.register_theory(
+                TheoryCommitment(
+                    name=agent.theory_name,
+                    agent_name=agent.name,
+                    core_claims=agent.model_class.core_claims,
+                    model_name=agent.model_class.name,
+                    model_params=params or dict(agent.default_params),
+                )
+            )
+        protocol = DebateProtocol(state=state, agent_configs=agents)
+        return protocol
+
+    def test_sync_params_updates_agent_config(self):
+        """After revise_theory updates model_params, sync_params should
+        propagate changes to agent_config.default_params."""
+        from antagonistic_collab.runner import sync_params_from_theory
+
+        protocol = self._make_protocol_with_theory()
+        agent = protocol.agent_configs[0]  # GCM agent
+        original_c = agent.default_params.get("c")
+
+        # Revise theory to change parameter
+        protocol.state.revise_theory(
+            agent.theory_name,
+            description="Adjust sensitivity",
+            new_params={"c": 99.0},
+        )
+
+        sync_params_from_theory(protocol)
+
+        # default_params should now have the revised value
+        assert agent.default_params["c"] == 99.0
+        assert agent.default_params["c"] != original_c
+
+    def test_sync_params_filters_invalid_keys(self):
+        """Invented parameter names (not in model.predict signature) should
+        be rejected by sync_params."""
+        from antagonistic_collab.runner import sync_params_from_theory
+
+        protocol = self._make_protocol_with_theory()
+        agent = protocol.agent_configs[0]
+
+        # Revise with an invalid parameter key
+        protocol.state.revise_theory(
+            agent.theory_name,
+            description="Add bogus param",
+            new_params={"c": 5.0, "totally_fake_param": 999},
+        )
+
+        sync_params_from_theory(protocol)
+
+        assert agent.default_params["c"] == 5.0
+        assert "totally_fake_param" not in agent.default_params
+
+    def test_sync_params_no_theory_no_crash(self):
+        """If a theory is not found for an agent, sync should not crash."""
+        from antagonistic_collab.runner import sync_params_from_theory
+
+        agents = default_agent_configs()
+        state = EpistemicState(domain="test")  # No theories registered
+        protocol = DebateProtocol(state=state, agent_configs=agents)
+
+        # Should not raise
+        sync_params_from_theory(protocol)
+
+    def test_sync_params_empty_revision_no_change(self):
+        """When theory.model_params is empty, default_params should be unchanged."""
+        from antagonistic_collab.runner import sync_params_from_theory
+
+        protocol = self._make_protocol_with_theory()
+        agent = protocol.agent_configs[0]
+        original_params = dict(agent.default_params)
+
+        # Register a theory with empty model_params
+        theory = protocol.state.get_theory(agent.theory_name)
+        theory.model_params = {}
+
+        sync_params_from_theory(protocol)
+
+        assert agent.default_params == original_params
+
+    def test_revision_new_params_passed_to_theory(self):
+        """When an agent includes new_params in their revision JSON,
+        revise_theory should receive and apply them."""
+        protocol = self._make_protocol_with_theory()
+        agent = protocol.agent_configs[0]
+        theory = protocol.state.get_theory(agent.theory_name)
+
+        # Simulate what the interpretation debate should do
+        revision_json = {
+            "description": "Lower sensitivity after poor fit",
+            "new_params": {"c": 1.5},
+            "new_predictions": ["RULEX will fit Type_I better"],
+        }
+
+        protocol.state.revise_theory(
+            agent.theory_name,
+            description=revision_json["description"],
+            new_params=revision_json.get("new_params"),
+            new_predictions=revision_json.get("new_predictions", []),
+        )
+
+        assert theory.model_params["c"] == 1.5
+
+    def test_params_persist_across_cycles(self):
+        """After sync in cycle 0, the revised params should be used in
+        cycle 1's compute_model_predictions."""
+        from antagonistic_collab.runner import sync_params_from_theory
+
+        protocol = self._make_protocol_with_theory()
+        agent = protocol.agent_configs[0]  # GCM agent
+
+        # Get predictions with original params
+        preds_before = protocol.compute_model_predictions(agent, "Type_I", "baseline")
+
+        # Revise and sync
+        protocol.state.revise_theory(
+            agent.theory_name,
+            description="Change sensitivity",
+            new_params={"c": 0.1},  # Very low sensitivity
+        )
+        sync_params_from_theory(protocol)
+
+        # Predictions should now use new params
+        preds_after = protocol.compute_model_predictions(agent, "Type_I", "baseline")
+
+        # With c=0.1 (very low sensitivity), predictions should differ
+        assert preds_before["params_used"] != preds_after["params_used"]
+        assert preds_after["params_used"]["c"] == 0.1
