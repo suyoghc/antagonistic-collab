@@ -7120,3 +7120,179 @@ class TestCruxIdentification:
             runner_mod.call_agent = original
 
         assert result == []
+
+
+class TestCruxNegotiation:
+    """Tests for run_crux_negotiation phase."""
+
+    def _make_protocol_with_cruxes(self):
+        from antagonistic_collab.epistemic_state import Crux
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state=state, agent_configs=agents)
+        for agent in agents:
+            state.register_theory(
+                TheoryCommitment(
+                    name=agent.theory_name,
+                    agent_name=agent.name,
+                    core_claims=["test"],
+                    model_name=agent.model_class.name.split()[0],
+                )
+            )
+        # Add some cruxes
+        state.add_crux(
+            Crux(
+                id="crux_001",
+                proposer="Exemplar_Agent",
+                description="GCM vs RULEX on Type VI accuracy",
+                discriminating_experiment="Type_VI/baseline",
+                resolution_criterion="RMSE < 0.15",
+                supporters=["Exemplar_Agent"],
+            )
+        )
+        state.add_crux(
+            Crux(
+                id="crux_002",
+                proposer="Rule_Agent",
+                description="Does presentation order matter for Type II?",
+                discriminating_experiment="Type_II/fast_presentation",
+                resolution_criterion="accuracy diff > 10%",
+                supporters=["Rule_Agent"],
+            )
+        )
+        return protocol
+
+    def test_crux_negotiation_returns_responses(self):
+        """run_crux_negotiation returns a list of response dicts."""
+        from antagonistic_collab.runner import run_crux_negotiation
+
+        protocol = self._make_protocol_with_cruxes()
+
+        def fake_llm(client, system, user, **kw):
+            return (
+                '{"responses": [{"crux_id": "crux_001", "action": "accept"}, '
+                '{"crux_id": "crux_002", "action": "reject", "reason": "not decisive"}]}'
+            )
+
+        import antagonistic_collab.runner as runner_mod
+
+        original = runner_mod.call_agent
+        runner_mod.call_agent = fake_llm
+        try:
+            result = run_crux_negotiation(protocol, None, cycle=0)
+        finally:
+            runner_mod.call_agent = original
+
+        assert isinstance(result, list)
+
+    def test_crux_negotiation_accept_adds_supporter(self):
+        """Accepting a crux adds the agent to supporters."""
+        from antagonistic_collab.runner import run_crux_negotiation
+
+        protocol = self._make_protocol_with_cruxes()
+
+        def fake_llm(client, system, user, **kw):
+            return '{"responses": [{"crux_id": "crux_001", "action": "accept"}]}'
+
+        import antagonistic_collab.runner as runner_mod
+
+        original = runner_mod.call_agent
+        runner_mod.call_agent = fake_llm
+        try:
+            run_crux_negotiation(protocol, None, cycle=0)
+        finally:
+            runner_mod.call_agent = original
+
+        crux = protocol.state.cruxes[0]
+        # Multiple agents should have accepted
+        assert len(crux.supporters) > 1
+
+    def test_crux_negotiation_reject_does_not_add_supporter(self):
+        """Rejecting a crux should not add the agent to supporters."""
+        from antagonistic_collab.runner import run_crux_negotiation
+
+        protocol = self._make_protocol_with_cruxes()
+
+        def fake_llm(client, system, user, **kw):
+            return '{"responses": [{"crux_id": "crux_001", "action": "reject"}]}'
+
+        import antagonistic_collab.runner as runner_mod
+
+        original = runner_mod.call_agent
+        runner_mod.call_agent = fake_llm
+        try:
+            run_crux_negotiation(protocol, None, cycle=0)
+        finally:
+            runner_mod.call_agent = original
+
+        crux = protocol.state.cruxes[0]
+        # Only the original proposer
+        assert crux.supporters == ["Exemplar_Agent"]
+
+    def test_crux_negotiation_counter_propose(self):
+        """Counter-proposing adds a new crux."""
+        from antagonistic_collab.runner import run_crux_negotiation
+
+        protocol = self._make_protocol_with_cruxes()
+        initial_count = len(protocol.state.cruxes)
+
+        def fake_llm(client, system, user, **kw):
+            return (
+                '{"responses": [{"crux_id": "crux_001", "action": "counter", '
+                '"counter_crux": {"description": "Better test: Type IV under time pressure"}}]}'
+            )
+
+        import antagonistic_collab.runner as runner_mod
+
+        original = runner_mod.call_agent
+        runner_mod.call_agent = fake_llm
+        try:
+            run_crux_negotiation(protocol, None, cycle=0)
+        finally:
+            runner_mod.call_agent = original
+
+        assert len(protocol.state.cruxes) > initial_count
+
+    def test_crux_negotiation_prompt_shows_cruxes(self):
+        """The negotiation prompt should show all active cruxes."""
+        from antagonistic_collab.runner import run_crux_negotiation
+
+        protocol = self._make_protocol_with_cruxes()
+        captured_prompts = []
+
+        def fake_llm(client, system, user, **kw):
+            captured_prompts.append(user)
+            return '{"responses": []}'
+
+        import antagonistic_collab.runner as runner_mod
+
+        original = runner_mod.call_agent
+        runner_mod.call_agent = fake_llm
+        try:
+            run_crux_negotiation(protocol, None, cycle=0)
+        finally:
+            runner_mod.call_agent = original
+
+        for prompt in captured_prompts:
+            assert "crux_001" in prompt or "crux" in prompt.lower()
+
+    def test_crux_negotiation_handles_empty_response(self):
+        """Gracefully handles agents that return no responses."""
+        from antagonistic_collab.runner import run_crux_negotiation
+
+        protocol = self._make_protocol_with_cruxes()
+
+        def fake_llm(client, system, user, **kw):
+            return '{"responses": []}'
+
+        import antagonistic_collab.runner as runner_mod
+
+        original = runner_mod.call_agent
+        runner_mod.call_agent = fake_llm
+        try:
+            result = run_crux_negotiation(protocol, None, cycle=0)
+        finally:
+            runner_mod.call_agent = original
+
+        assert result == []

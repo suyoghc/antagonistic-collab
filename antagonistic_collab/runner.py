@@ -1682,6 +1682,94 @@ def run_crux_identification(
     return all_cruxes
 
 
+def run_crux_negotiation(
+    protocol: DebateProtocol,
+    client,
+    cycle: int,
+) -> list[dict]:
+    """Agents respond to each other's cruxes: accept, reject, or counter-propose.
+
+    Returns a list of response dicts from all agents.
+    Updates crux supporters and may add new counter-proposed cruxes.
+    """
+    from .epistemic_state import Crux
+
+    all_responses = []
+    crux_counter = len(protocol.state.cruxes)
+
+    print("\n" + "=" * 70)
+    print("PHASE: CRUX NEGOTIATION — Respond to proposed cruxes")
+    print("=" * 70)
+
+    active_cruxes = protocol.state.get_active_cruxes()
+    if not active_cruxes:
+        return []
+
+    crux_text = protocol.state.crux_summary()
+
+    for agent in protocol.agent_configs:
+        prompt = (
+            "PHASE: Crux Negotiation\n\n"
+            "Review the proposed cruxes below. For each, decide:\n"
+            "- 'accept': this is a genuine crux that would change your mind too\n"
+            "- 'reject': this is not decisive (explain why)\n"
+            "- 'counter': propose a better crux instead\n\n"
+            f"PROPOSED CRUXES:\n{crux_text}\n\n"
+            "Output a JSON block:\n"
+            '{"responses": [{"crux_id": "...", "action": "accept|reject|counter", '
+            '"reason": "...", '
+            '"counter_crux": {"description": "..."}}]}\n'
+        )
+
+        print(f"\n--- {agent.name} negotiates cruxes ---")
+        response = call_agent(client, agent.system_prompt, prompt)
+        print(response[:400] + "..." if len(response) > 400 else response)
+
+        json_block = extract_json(response) or {}
+        responses_raw = json_block.get("responses", [])
+        if not isinstance(responses_raw, list):
+            responses_raw = []
+
+        for r in responses_raw:
+            if not isinstance(r, dict):
+                continue
+            crux_id = r.get("crux_id", "")
+            action = r.get("action", "")
+
+            # Find matching crux
+            matching = [c for c in protocol.state.cruxes if c.id == crux_id]
+            if not matching:
+                continue
+
+            crux = matching[0]
+
+            if action == "accept":
+                if agent.name not in crux.supporters:
+                    crux.supporters.append(agent.name)
+            elif action == "counter":
+                counter = r.get("counter_crux", {})
+                if isinstance(counter, dict) and counter.get("description"):
+                    crux_counter += 1
+                    new_id = f"crux_{crux_counter:03d}"
+                    new_crux = Crux(
+                        id=new_id,
+                        proposer=agent.name,
+                        description=counter["description"],
+                        discriminating_experiment=counter.get(
+                            "discriminating_experiment"
+                        ),
+                        resolution_criterion=counter.get("resolution_criterion"),
+                        cycle_proposed=cycle,
+                        supporters=[agent.name],
+                    )
+                    protocol.state.add_crux(new_crux)
+            # "reject" action: do nothing to supporters
+
+            all_responses.append(r)
+
+    return all_responses
+
+
 def run_audit(protocol: DebateProtocol, client, transcript: list) -> PhaseResult:
     """Phase 9: Summarize what was learned."""
     print("\n" + "=" * 70)
