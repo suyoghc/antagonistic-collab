@@ -19,8 +19,9 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ### Remaining M4 tasks
 
-1. **Replication runs** — run each condition 3× (full_pool mode, 5 cycles) to get variance estimates on RMSE gaps. Requires API credits.
-2. **Write-up** — structured report (intro, methods, results, discussion). Can draft from existing single-run data; add replication CIs later.
+All M4 tasks complete:
+- [x] Replication runs — zero variance; pipeline fully deterministic (REPORT 3.5, LESSONS 9.7)
+- [x] Write-up — REPORT.md (sections 1-5, 7 references)
 
 ### 10 key findings (for write-up)
 

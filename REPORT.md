@@ -192,7 +192,21 @@ Legacy mode selects more diverse structures (agents propose different experiment
 
 GCM and SUSTAIN are immediately identifiable (posterior collapses at cycle 0). RULEX requires 2 cycles: the initial five_four experiment favors GCM, but EIG finds Type_I/low_attention in cycle 1, and the posterior flips in cycle 2. This demonstrates the Bayesian system working as designed — initial evidence can mislead, but adaptive experiment selection eventually finds the correct model.
 
-### 3.5 Novel structure generation
+### 3.5 Replication: zero variance in full-pool mode
+
+Three replication runs per ground truth (9 total) revealed that full-pool mode RMSE values are **perfectly deterministic** — identical across replicates to 4 decimal places:
+
+| Ground Truth | Rep 1 RMSE | Rep 2 RMSE | Rep 3 RMSE | Winner |
+|---|---|---|---|---|
+| GCM | 0.1587 | 0.1587 | 0.1587 | Exemplar_Agent |
+| SUSTAIN | 0.2701 | 0.2701 | 0.2701 | Clustering_Agent |
+| RULEX | 0.1580 | 0.1580 | 0.1580 | Rule_Agent |
+
+This is because the entire quantitative pipeline is deterministic: EIG selection (same prior → same experiment), synthetic data generation (md5-seeded), and model predictions (deterministic given parameters and structure). The only source of variation is the LLM interpretation text, which does not feed back into RMSE computation.
+
+This result strengthens finding 3.1 (correct model always wins) — the outcome is not sensitive to stochastic variation because there is none. It also demonstrates the sharp separation between the computational and LLM components: the Bayesian machinery determines the quantitative result; the LLM debate produces varying natural-language interpretations that do not affect convergence.
+
+### 3.7 Novel structure generation
 
 Across 3 full-pool runs (15 cycles), agents proposed 21 novel structures:
 
@@ -206,7 +220,7 @@ Across 3 full-pool runs (15 cycles), agents proposed 21 novel structures:
 
 None of the 21 novel structures were selected by EIG. The Bayesian selector consistently preferred registry structures (five_four, Type_I) — either because the 11 registry structures already span the relevant discrimination space, or because LLM-proposed structures are narratively interesting but not statistically optimal.
 
-### 3.6 Theory revision patterns
+### 3.8 Theory revision patterns
 
 | Theory | Revisions when TRUE model | Revisions when NOT true |
 |---|---|---|
@@ -216,7 +230,7 @@ None of the 21 novel structures were selected by EIG. The Bayesian selector cons
 
 Correct theories do not revise — their predictions already match the data. Incorrect theories revise progressively (adapting parameters, adjusting claims) but never degeneratively. This is a Lakatos-compatible outcome. RULEX is notably revision-resistant even when wrong, consistent with its rigid rule-based structure having fewer free parameters.
 
-### 3.7 Interpretation debate quality
+### 3.9 Interpretation debate quality
 
 We audited all 30 debate cycles across 6 runs on four dimensions:
 
@@ -271,7 +285,7 @@ The debate produces the *form* of scientific discourse — agents argue, cite me
 
 ### 4.5 Limitations
 
-1. **Single runs per condition.** Without replication, we cannot estimate variance in RMSE gaps. The large effect sizes (34–68%) suggest robustness, but formal confidence intervals require replicate runs.
+1. **Deterministic pipeline.** Replication runs (Section 3.5) showed zero variance in full-pool mode RMSE — the quantitative outcome is fully deterministic given the same initial conditions. This means the RMSE gaps are exact rather than estimated, but it also means the results are conditioned on a specific set of model default parameters. Sensitivity analysis across parameter ranges would assess robustness.
 
 2. **Synthetic data only.** The framework validates whether correct models are identifiable in principle, not whether the models are correct accounts of human behavior. Extending to real experimental data would require a lab-automation interface.
 

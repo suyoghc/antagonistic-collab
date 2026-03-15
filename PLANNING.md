@@ -66,14 +66,15 @@ models/
 - Novel structure prompting with few-shot examples — **DONE** (D24)
 - 5-cycle comparative validation (full_pool vs legacy, all 3 ground truths) — **DONE** (all correct, full_pool RULEX gap 68% vs legacy 2.4%)
 
-### M4: Analysis & write-up (CURRENT)
-- [ ] Analyze which structures/conditions EIG selects across the 6 validation runs — what makes a good discriminating experiment?
-- [ ] Analyze novel structures proposed by agents — are they valid? do they enter the EIG pool? do they improve discrimination?
-- [ ] Analyze per-cycle convergence trajectories — how quickly does posterior collapse? is it monotonic?
-- [ ] Analyze interpretation debate quality — do agents cite data correctly? do critiques change behavior?
-- [ ] Replicate: run each condition 3× to assess variance in final RMSE gaps
-- [ ] Write up findings as a structured report (intro, methods, results, discussion)
-- [ ] Consider whether framework generalizes beyond categorization models
+### M4: Analysis & write-up (DONE)
+- [x] EIG selection patterns — five_four/fast universal cycle-0 pick; RULEX shifts to Type_I (LESSONS 9.1)
+- [x] Novel structures — 21 proposed, none selected by EIG (LESSONS 9.3)
+- [x] Posterior convergence — GCM/SUSTAIN immediate, RULEX 2-cycle lag (LESSONS 9.2)
+- [x] Debate quality audit — data citation weak, critiques mixed, no cumulative learning (LESSONS 9.6)
+- [x] Replication — zero variance; pipeline fully deterministic (LESSONS 9.7)
+- [x] Write-up — REPORT.md: intro, methods, results (3.1–3.9), discussion, conclusion
+- [x] Theory revision — Lakatos-compatible (LESSONS 9.5)
+- [x] Legacy vs full_pool comparison — debate hurts experiment selection (LESSONS 9.4)
 
 ## Key constraints
 

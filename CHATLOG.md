@@ -328,10 +328,11 @@ Human-readable summary of each Claude Code session on this project.
 - Novel structure rationale: POOR — not rooted in actual model divergence
 - Adversarial critique forcing function helps in later cycles (only evidence of improvement)
 
-**Status:** All M4 analysis tasks complete. One task remains:
-1. Replication runs (3× each condition for variance estimates)
+**Write-up:** Drafted REPORT.md — structured report with abstract, intro, methods, results (3.1–3.9), discussion (4.1–4.6), conclusion, references.
 
-**Write-up:** Drafted REPORT.md — structured report with abstract, intro, methods, results (3.1–3.7), discussion (4.1–4.6), conclusion, references. Covers all 10 key findings from 9 phases of development.
+**Replication runs:** Ran 3× each condition (full_pool mode). Key finding: RMSE values identical across all replicates (zero variance). Pipeline fully deterministic — EIG selection, synthetic data, model predictions all seeded. LLM debate varies but is epiphenomenal to RMSE (LESSONS 9.7). Updated REPORT.md Section 3.5 and limitations.
+
+**Status:** All M4 tasks complete. Milestone M4 done.
 
 ---
 

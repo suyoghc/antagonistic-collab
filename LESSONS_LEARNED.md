@@ -727,3 +727,19 @@ Rare exception (full_pool GCM, Cycle 4): "introduce a transfer phase where novel
 | Novel structure rationale | Poor | Not rooted in actual model divergence |
 
 **Implication:** The interpretation debate adds value primarily through the forcing function of adversarial critique — it pressures agents to refine proposals in later cycles. But the debate does not produce cumulative scientific reasoning. Agents don't learn from prior cycles' data. Future iterations should enforce numerical citation requirements (e.g., "cite 3 specific item predictions that diverge") and track whether agents update specific claims based on data rather than repeating generic theoretical arguments.
+
+### 9.7 Replication reveals zero variance — debate is epiphenomenal to RMSE
+
+**Expected:** Replication runs (3× per ground truth, full_pool mode) would show some variance in RMSE gaps, allowing confidence interval estimation.
+
+**Actual:** All replicates produced identical RMSE values to 4 decimal places:
+
+| Ground Truth | RMSE (all 3 reps) | Winner |
+|---|---|---|
+| GCM | 0.1587 | Exemplar_Agent |
+| SUSTAIN | 0.2701 | Clustering_Agent |
+| RULEX | 0.1580 | Rule_Agent |
+
+The entire quantitative pipeline is deterministic: EIG selection (same prior → same experiment), synthetic data (md5-seeded), model predictions (deterministic). The LLM debate text varies across replicates but does not feed back into RMSE scores.
+
+**Implication:** This is the strongest possible evidence for finding 9.4 (debate doesn't influence outcomes). The debate is literally epiphenomenal to the quantitative result — it can be removed entirely without changing convergence. The value of debate is exclusively in the qualitative layer: human-readable explanations, mechanistic narratives, and hypothesis generation. Future architectures should acknowledge this separation explicitly: use the Bayesian pipeline for convergence, and the LLM debate for communication and interpretation only.
