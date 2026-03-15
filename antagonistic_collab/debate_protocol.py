@@ -257,6 +257,19 @@ class PhaseResult:
 
 
 @dataclass
+class MetaAgentConfig:
+    """Configuration for a role-specialized meta-agent (e.g., Integrator, Critic).
+
+    Meta-agents operate across theories rather than advocating for one.
+    They have no computational model — they synthesize, challenge, or moderate.
+    """
+
+    name: str  # e.g., "Integrator", "Critic"
+    role: str  # "integrator" | "critic" | "moderator"
+    system_prompt: str  # role-specific system prompt
+
+
+@dataclass
 class AgentConfig:
     """Configuration for a theory agent."""
 
@@ -441,6 +454,7 @@ class DebateProtocol:
         state: EpistemicState,
         agent_configs: list[AgentConfig],
         experiment_runner: Optional[Callable] = None,
+        meta_agents: Optional[list] = None,
     ):
         self.state = state
         self.agent_configs = agent_configs
@@ -448,6 +462,7 @@ class DebateProtocol:
         self.current_phase = Phase.COMMITMENT
         self.phase_history: list[PhaseResult] = []
         self.temporary_structures: dict = {}  # novel structures from agents
+        self.meta_agents: list[MetaAgentConfig] = meta_agents or []
 
     # --- Phase specifications ---
 

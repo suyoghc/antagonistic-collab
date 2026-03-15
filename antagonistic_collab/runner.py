@@ -48,6 +48,7 @@ except ImportError:
 from .epistemic_state import EpistemicState, TheoryCommitment, DebateClaim
 from .debate_protocol import (
     DebateProtocol,
+    MetaAgentConfig,
     Phase,
     PhaseResult,
     default_agent_configs,
@@ -57,6 +58,69 @@ from .debate_protocol import (
     extract_curve_features,
     validate_novel_structure,
 )
+
+
+# ---------------------------------------------------------------------------
+# Meta-agent factory
+# ---------------------------------------------------------------------------
+
+INTEGRATOR_PROMPT = """You are the Integrator — a meta-agent who synthesizes across all theories.
+
+YOUR ROLE:
+- Read all theory agents' interpretations and find common ground.
+- Identify where theories converge despite surface-level disagreement.
+- Propose unified explanations that account for evidence from multiple perspectives.
+- Highlight when two theories are making the same prediction for different reasons.
+
+YOU DO NOT:
+- Advocate for any single theory.
+- Have a computational model or make quantitative predictions.
+- Propose parameter revisions for any model.
+
+OUTPUT FORMAT:
+Respond with a JSON block:
+{"interpretation": "your synthesis across theories",
+ "confounds_flagged": ["cross-cutting issues all theories should address"],
+ "hypothesis": "what experiment would test the synthesized account",
+ "claims": []}
+"""
+
+CRITIC_PROMPT = """You are the Critic — a meta-agent who challenges the weakest argument from any agent.
+
+YOUR ROLE:
+- Read all theory agents' interpretations and identify the weakest argument.
+- Challenge unsupported claims, logical gaps, and confirmation bias.
+- Point out when an agent is ignoring disconfirming evidence.
+- Flag when agents are arguing past each other rather than engaging.
+
+YOU DO NOT:
+- Advocate for any single theory.
+- Have a computational model or make quantitative predictions.
+- Propose parameter revisions for any model.
+
+OUTPUT FORMAT:
+Respond with a JSON block:
+{"interpretation": "your critique of the weakest argument(s)",
+ "confounds_flagged": ["methodological issues you spotted"],
+ "hypothesis": "what experiment would expose the weakness you identified",
+ "claims": []}
+"""
+
+
+def create_default_meta_agents() -> list[MetaAgentConfig]:
+    """Create Integrator and Critic meta-agents with role-specific prompts."""
+    return [
+        MetaAgentConfig(
+            name="Integrator",
+            role="integrator",
+            system_prompt=INTEGRATOR_PROMPT,
+        ),
+        MetaAgentConfig(
+            name="Critic",
+            role="critic",
+            system_prompt=CRITIC_PROMPT,
+        ),
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -1364,6 +1428,56 @@ def run_interpretation_debate(
                 "phase": "INTERPRETATION_DEBATE",
                 "response": response,
                 "parsed_json": json_block,
+            }
+        )
+
+    # --- Meta-agent responses (Integrator, Critic) ---
+    for meta_agent in protocol.meta_agents:
+        # Build context from theory agents' interpretations
+        theory_interps = "\n".join(
+            f"  {m['agent']}: {m.get('response', '')[:500]}" for m in messages
+        )
+        meta_prompt = (
+            f"PHASE: Interpretation Debate (Meta-Agent)\n\n"
+            f"RESULTS AND CONTEXT:\n{extended_context}\n\n"
+            f"THEORY AGENT INTERPRETATIONS:\n{theory_interps}\n\n"
+            f"You MUST output a JSON block with:\n"
+            f'{{"interpretation": "your analysis", '
+            f'"confounds_flagged": ["list any issues"], '
+            f'"hypothesis": "what experiment should come next", '
+            f'"claims": []}}\n'
+        )
+
+        print(f"\n--- {meta_agent.name} ({meta_agent.role}) responds ---")
+        response = call_agent(client, meta_agent.system_prompt, meta_prompt)
+        print(response[:600] + "..." if len(response) > 600 else response)
+
+        protocol.state.add_interpretation(exp.experiment_id, meta_agent.name, response)
+
+        # Parse but do NOT trigger theory revisions or param updates
+        json_block = extract_json(response) or {}
+        hypothesis = json_block.get("hypothesis", "")
+        confounds = json_block.get("confounds_flagged", [])
+
+        if hypothesis:
+            agent_hypotheses.append(
+                {
+                    "agent": meta_agent.name,
+                    "hypothesis": hypothesis,
+                    "cycle": protocol.state.cycle,
+                }
+            )
+        if confounds:
+            for c in confounds:
+                all_confounds.append({"agent": meta_agent.name, "confound": c})
+
+        messages.append(
+            {
+                "agent": meta_agent.name,
+                "phase": "INTERPRETATION_DEBATE",
+                "response": response,
+                "parsed_json": json_block,
+                "meta_agent": True,
             }
         )
 

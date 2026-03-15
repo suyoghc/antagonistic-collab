@@ -6691,3 +6691,183 @@ class TestDebateInformedEIG:
         # At least some boosted scores should be higher
         any_higher = any(b > nb for b, nb in zip(scores_boosted, scores_no_boost))
         assert any_higher
+
+
+# =========================================================================
+# M6a: MetaAgentConfig — role-specialized meta-agents
+# =========================================================================
+
+
+class TestMetaAgentConfig:
+    """Tests for MetaAgentConfig dataclass and meta-agent integration."""
+
+    def test_meta_agent_config_creation(self):
+        """MetaAgentConfig dataclass has name, role, and system_prompt fields."""
+        from antagonistic_collab.debate_protocol import MetaAgentConfig
+
+        ma = MetaAgentConfig(
+            name="Integrator",
+            role="integrator",
+            system_prompt="You synthesize across all theories.",
+        )
+        assert ma.name == "Integrator"
+        assert ma.role == "integrator"
+        assert "synthesize" in ma.system_prompt
+
+    def test_meta_agent_has_no_model_class(self):
+        """MetaAgentConfig should NOT have a model_class attribute."""
+        from antagonistic_collab.debate_protocol import MetaAgentConfig
+
+        ma = MetaAgentConfig(
+            name="Critic",
+            role="critic",
+            system_prompt="You challenge weak arguments.",
+        )
+        assert not hasattr(ma, "model_class")
+
+    def test_create_default_meta_agents(self):
+        """Factory function returns Integrator + Critic."""
+        from antagonistic_collab.runner import create_default_meta_agents
+
+        agents = create_default_meta_agents()
+        assert len(agents) == 2
+        names = {a.name for a in agents}
+        assert "Integrator" in names
+        assert "Critic" in names
+
+    def test_integrator_prompt_contains_synthesis(self):
+        """Integrator's prompt should instruct synthesis across theories."""
+        from antagonistic_collab.runner import create_default_meta_agents
+
+        agents = create_default_meta_agents()
+        integrator = [a for a in agents if a.name == "Integrator"][0]
+        prompt_lower = integrator.system_prompt.lower()
+        assert "synthes" in prompt_lower  # synthesis/synthesize
+
+    def test_critic_prompt_contains_challenge(self):
+        """Critic's prompt should instruct challenging weak arguments."""
+        from antagonistic_collab.runner import create_default_meta_agents
+
+        agents = create_default_meta_agents()
+        critic = [a for a in agents if a.name == "Critic"][0]
+        prompt_lower = critic.system_prompt.lower()
+        assert "challeng" in prompt_lower or "weakest" in prompt_lower
+
+    def test_meta_agents_added_to_protocol(self):
+        """DebateProtocol.meta_agents should be populated."""
+        from antagonistic_collab.runner import create_default_meta_agents
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state=state, agent_configs=agents)
+        # Default should be empty
+        assert protocol.meta_agents == []
+        # Can assign
+        protocol.meta_agents = create_default_meta_agents()
+        assert len(protocol.meta_agents) == 2
+
+    def test_meta_agent_response_in_transcript(self):
+        """Meta-agent responses should appear in the interpretation transcript."""
+        from antagonistic_collab.runner import (
+            run_interpretation_debate,
+            create_default_meta_agents,
+        )
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state=state, agent_configs=agents)
+        protocol.meta_agents = create_default_meta_agents()
+
+        # Set up minimal experiment data so interpretation debate runs
+        exp = state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Test experiment",
+            design_spec={"structure_name": "Type_II", "condition": "baseline"},
+            rationale="test",
+        )
+        state.approve_experiment(exp.experiment_id)
+        state.record_data(exp.experiment_id, {"item_accuracies": {"item_0": 0.8}})
+
+        call_count = 0
+
+        def fake_llm(client, system, user, **kw):
+            nonlocal call_count
+            call_count += 1
+            return '{"interpretation": "test", "confounds_flagged": [], "hypothesis": "test", "claims": []}'
+
+        transcript = []
+        # Monkey-patch call_agent
+        import antagonistic_collab.runner as runner_mod
+
+        original = runner_mod.call_agent
+        runner_mod.call_agent = fake_llm
+        try:
+            run_interpretation_debate(protocol, None, transcript)
+        finally:
+            runner_mod.call_agent = original
+
+        # Should have calls for 3 theory agents + 2 meta-agents = 5
+        assert call_count == 5
+        # Meta-agent responses in transcript
+        meta_agents_in_transcript = [
+            m for m in transcript if m.get("agent") in ("Integrator", "Critic")
+        ]
+        assert len(meta_agents_in_transcript) == 2
+
+    def test_meta_agent_no_param_update(self):
+        """Meta-agent responses should NOT trigger revise_theory."""
+        from antagonistic_collab.runner import (
+            run_interpretation_debate,
+            create_default_meta_agents,
+        )
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state=state, agent_configs=agents)
+        protocol.meta_agents = create_default_meta_agents()
+
+        # Register theories so revise_theory has targets
+        for agent in agents:
+            state.register_theory(
+                TheoryCommitment(
+                    name=agent.theory_name,
+                    agent_name=agent.name,
+                    core_claims=["test"],
+                    model_name=agent.model_class.name.split()[0],
+                )
+            )
+
+        exp = state.propose_experiment(
+            proposed_by="Exemplar_Agent",
+            title="Test experiment",
+            design_spec={"structure_name": "Type_II", "condition": "baseline"},
+            rationale="test",
+        )
+        state.approve_experiment(exp.experiment_id)
+        state.record_data(exp.experiment_id, {"item_accuracies": {"item_0": 0.8}})
+
+        def fake_llm(client, system, user, **kw):
+            # Meta-agents return revision requests — these should be ignored
+            return (
+                '{"interpretation": "test", "confounds_flagged": [], '
+                '"hypothesis": "test", "claims": [], '
+                '"revision": {"description": "sneaky revision", "new_params": {"c": 99.0}}}'
+            )
+
+        transcript = []
+        import antagonistic_collab.runner as runner_mod
+
+        original = runner_mod.call_agent
+        runner_mod.call_agent = fake_llm
+        try:
+            run_interpretation_debate(protocol, None, transcript)
+        finally:
+            runner_mod.call_agent = original
+
+        # Theory agents may have triggered revisions, but meta-agents should not.
+        # Check that no theory has c=99.0 from a meta-agent
+        # (theory agents might set it, but there should be at most 3 revisions,
+        # not 5)
+        total_revisions = sum(len(t.revision_log) for t in state.theories)
+        # 3 theory agents each trigger one revision = 3
+        assert total_revisions == 3
