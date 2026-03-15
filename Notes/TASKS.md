@@ -13,6 +13,20 @@
   - 5 new tests (306 total passing)
 - [x] **Tempering Calibration** (D32) — tau=0.2 still caused collapse; recalibrated to tau=0.005 + prediction clip [0.05, 0.95]. Live validation: entropy=0.635 after cycle 0, EIG=0.233 on cycle 1, correct winner. 2 new tests (308 total).
 
+### M7 5-Cycle Validation Results (tau=0.005, GPT-4o, 2026-03-15)
+
+| Ground Truth | Winner | Correct? | RMSE (winner) | RMSE (2nd) | Gap% | Entropy trajectory |
+|---|---|---|---|---|---|---|
+| GCM | Exemplar_Agent | **YES** | 0.076 | 0.402 | 81.1% | 0.64→0.33→0.13→0.03→0.00 |
+| RULEX | Exemplar_Agent | **NO** | 0.370 | 0.403 | 8.2% | 0.65→0.69→0.70→0.48→0.16 |
+| SUSTAIN | Clustering_Agent | **YES** | 0.018 | 0.631 | 97.1% | 0.22→0.01→0.00→0.00→0.00 |
+
+Key findings:
+- 2/3 correct (GCM, SUSTAIN). RULEX misidentified as GCM.
+- Tempering enabled non-trivial dynamics: RULEX posterior oscillated (RULEX led cycles 0, 2; GCM led cycles 1, 3, 4).
+- SUSTAIN converges too fast — predictions so distinctive that tau=0.005 can't slow it.
+- RULEX misidentification reflects genuine GCM flexibility (Nosofsky 1991) — GCM approximates rule-like behavior through attention weights. RMSE gap only 8.2%.
+
 ### M7 Commits
 - `0c43faf` feat(M7): likelihood tempering, ARBITER toggle, and config file
 - `b79829c` fix: 5 Codex review bugs — ground-truth leakage, novel structures, LOO mismatch, RULEX curves, n_subjects threading

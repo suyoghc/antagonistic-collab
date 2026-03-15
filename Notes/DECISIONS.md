@@ -695,3 +695,41 @@ Pattern covered `debate_cycle_*.json` but not `.md` transcripts.
 **Tests:** 2 new tests in `TestPredictionClipping`: clip boundary verification, posterior non-collapse integration test. 308 total passing.
 
 **Status:** Done.
+
+---
+
+## D33: M7 5-cycle validation — 2/3 correct, RULEX misidentification — 2026-03-15
+
+**Setup:** 5-cycle runs with all 3 ground truths (GPT-4o via Princeton, tau=0.005, all M6+M7 features enabled).
+
+**Results:**
+
+| Ground Truth | Winner | Correct? | RMSE gap | Entropy trajectory |
+|---|---|---|---|---|
+| GCM | Exemplar_Agent | YES | 81.1% | 0.64→0.33→0.13→0.03→0.00 |
+| RULEX | Exemplar_Agent | NO | 8.2% | 0.65→0.69→0.70→0.48→0.16 |
+| SUSTAIN | Clustering_Agent | YES | 97.1% | 0.22→0.01→0.00→0.00→0.00 |
+
+**Key findings:**
+
+1. **Tempering works as intended.** GCM shows textbook gradual convergence: entropy drops monotonically from 0.64→0.00 over 5 cycles. EIG remains nonzero through cycle 4 (0.029). This is the first validation where later cycles are genuinely informative.
+
+2. **RULEX misidentification reveals genuine model overlap.** GCM and RULEX produce very similar predictions on the structures the system selects (linear_separable_4d, nonlinear_complex_5d). RMSE gap is only 8.2% (0.370 vs 0.403). The posterior oscillated — RULEX led on cycles 0 and 2, GCM on cycles 1, 3, 4. This mirrors the known theoretical result that GCM can approximate rule-like behavior through attention weights (Nosofsky 1991).
+
+3. **SUSTAIN is trivially identifiable.** Its predictions are so distinctive (RMSE=0.018 vs 0.631) that posterior collapses by cycle 2 even with tau=0.005. SUSTAIN's near-binary predictions create a unique signature.
+
+4. **Experiment selection lacks diversity.** GCM run selected linear_separable_4d 5/5 times. SUSTAIN run selected it 5/5 times. Only RULEX showed variation (alternating with nonlinear_complex_5d). EIG concentrates on a single structure.
+
+**Comparison to M6 validation (tau=1.0, no tempering):**
+
+| Metric | M6 (no tempering) | M7 (tau=0.005) |
+|---|---|---|
+| Correct winners | 3/3 | 2/3 |
+| Posterior collapse | Cycle 0 | Cycle 2-4 (gradual) |
+| EIG on cycle 1 | 0.000 | 0.233 (GCM) |
+| RULEX posterior dynamics | Locked cycle 0 | Oscillated 3 times |
+| RMSE gap (RULEX gt) | 67.6% | 8.2% |
+
+**Analysis:** The RULEX RMSE gap dropped from 67.6% (M6) to 8.2% (M7). In M6, posterior collapse locked the winner early and the high gap was an artifact of the structure selected on cycle 0. In M7, with tempering allowing exploration, the system discovers that GCM and RULEX are hard to discriminate — which is the scientifically correct conclusion. The 2/3 result is arguably more honest than 3/3.
+
+**Status:** Logged. RULEX misidentification under investigation.

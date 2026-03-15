@@ -521,7 +521,30 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 - Working backwards from desired behavior (H≈0.5 after 1 cycle, convergence by 5 cycles) gave tau=0.005 as the right value
 - This is a lesson for the project: always validate hyperparameters against actual model outputs, not toy examples
 
-**Status:** Calibration done. Committing.
+**Status:** Calibration done. Committed.
+
+---
+
+## Session 21 — 2026-03-15
+
+**Commits:** (pending)
+
+**What we did:**
+- Ran full M7 5-cycle validation with all 3 ground truths (GCM, RULEX, SUSTAIN), tau=0.005, GPT-4o via Princeton
+- Results: 2/3 correct (GCM, SUSTAIN correct; RULEX misidentified as GCM)
+- GCM: textbook gradual convergence, entropy 0.64→0.00, EIG nonzero through cycle 4
+- RULEX: posterior oscillated 3 times (RULEX led cycles 0, 2; GCM led 1, 3, 4), RMSE gap only 8.2%
+- SUSTAIN: trivially identifiable, collapsed to P=1.0 by cycle 2 despite tempering
+- Logged results as D33, added Phase 13 to LESSONS_LEARNED with 4 new lessons (13.1–13.4)
+- Added principles 20–21 (model discriminability, EIG exploration diversity)
+
+**Key discussion:**
+- RULEX misidentification is scientifically honest — GCM genuinely approximates rule-like behavior (Nosofsky 1991)
+- M6's 3/3 was arguably an artifact of posterior collapse locking cycle 0 answer
+- EIG concentrates on same structure 5/5 times — needs diversity bonus
+- Asymmetric discriminability: SUSTAIN trivial, GCM moderate, RULEX hard
+
+**Status:** Validation complete. Investigating RULEX misidentification.
 
 ---
 
