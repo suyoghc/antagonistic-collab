@@ -7422,3 +7422,107 @@ class TestFinalizeCruxes:
         )
         finalized = finalize_cruxes(protocol2, cycle=0, min_supporters=2)
         assert len(finalized) == 1
+
+
+class TestCruxBoostSpecs:
+    """Tests for crux_boost_specs parameter in select_from_pool."""
+
+    def _make_protocol_and_posterior(self):
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state=state, agent_configs=agents)
+        posterior = ModelPosterior.uniform([a.name for a in agents])
+        return protocol, posterior
+
+    def test_crux_boost_matching_candidates(self):
+        """Matching candidates should have EIG boosted."""
+        from antagonistic_collab.bayesian_selection import (
+            generate_full_candidate_pool,
+            select_from_pool,
+        )
+
+        protocol, posterior = self._make_protocol_and_posterior()
+        pool = generate_full_candidate_pool(protocol)[:5]
+
+        boost_specs = [{"structure": pool[0][0], "condition": pool[0][1], "boost": 3.0}]
+
+        _, scores_no_boost = select_from_pool(
+            protocol, posterior, pool, n_sim=50, seed=42
+        )
+        _, scores_boosted = select_from_pool(
+            protocol, posterior, pool, n_sim=50, seed=42, crux_boost_specs=boost_specs
+        )
+
+        # First candidate should be boosted
+        if scores_no_boost[0] > 0:
+            assert scores_boosted[0] > scores_no_boost[0]
+
+    def test_crux_boost_non_matching_unchanged(self):
+        """Non-matching candidates should not be boosted."""
+        from antagonistic_collab.bayesian_selection import (
+            generate_full_candidate_pool,
+            select_from_pool,
+        )
+
+        protocol, posterior = self._make_protocol_and_posterior()
+        pool = generate_full_candidate_pool(protocol)[:5]
+
+        # Boost only first candidate
+        boost_specs = [{"structure": pool[0][0], "condition": pool[0][1], "boost": 3.0}]
+
+        _, scores_no_boost = select_from_pool(
+            protocol, posterior, pool, n_sim=50, seed=42
+        )
+        _, scores_boosted = select_from_pool(
+            protocol, posterior, pool, n_sim=50, seed=42, crux_boost_specs=boost_specs
+        )
+
+        # Candidates 1-4 should be unchanged
+        for i in range(1, len(pool)):
+            assert abs(scores_boosted[i] - scores_no_boost[i]) < 1e-10
+
+    def test_crux_boost_backward_compat(self):
+        """Without crux_boost_specs, select_from_pool works as before."""
+        from antagonistic_collab.bayesian_selection import (
+            generate_full_candidate_pool,
+            select_from_pool,
+        )
+
+        protocol, posterior = self._make_protocol_and_posterior()
+        pool = generate_full_candidate_pool(protocol)[:3]
+
+        _, scores_a = select_from_pool(protocol, posterior, pool, n_sim=50, seed=42)
+        _, scores_b = select_from_pool(
+            protocol, posterior, pool, n_sim=50, seed=42, crux_boost_specs=None
+        )
+
+        for a, b in zip(scores_a, scores_b):
+            assert abs(a - b) < 1e-10
+
+    def test_crux_boost_coexists_with_focus_pair(self):
+        """crux_boost_specs and focus_pair should both apply."""
+        from antagonistic_collab.bayesian_selection import (
+            generate_full_candidate_pool,
+            select_from_pool,
+        )
+
+        protocol, posterior = self._make_protocol_and_posterior()
+        pool = generate_full_candidate_pool(protocol)[:5]
+        agent_names = [a.name for a in protocol.agent_configs]
+        focus = (agent_names[0], agent_names[1])
+
+        boost_specs = [{"structure": pool[0][0], "condition": pool[0][1], "boost": 2.0}]
+
+        _, scores_both = select_from_pool(
+            protocol,
+            posterior,
+            pool,
+            n_sim=50,
+            seed=42,
+            focus_pair=focus,
+            pair_boost=1.5,
+            crux_boost_specs=boost_specs,
+        )
+
+        # Should not crash; scores should be valid
+        assert all(s >= 0 for s in scores_both)

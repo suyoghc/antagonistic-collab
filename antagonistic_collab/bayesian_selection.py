@@ -240,6 +240,7 @@ def select_from_pool(
     seed: Optional[int] = 42,
     focus_pair: Optional[tuple[str, str]] = None,
     pair_boost: float = 1.5,
+    crux_boost_specs: Optional[list[dict]] = None,
 ) -> tuple[int, list[float]]:
     """Select the best (structure, condition) pair from the full pool by EIG.
 
@@ -253,6 +254,9 @@ def select_from_pool(
         focus_pair: optional (model_name_a, model_name_b) to boost EIG
             for candidates where these two models diverge.
         pair_boost: multiplier for EIG when focus pair has high divergence.
+        crux_boost_specs: optional list of dicts with keys "structure",
+            "condition", "boost". Matching candidates get EIG multiplied
+            by boost.
 
     Returns:
         (best_index, eig_scores) — index into pool, and EIG for each candidate.
@@ -286,6 +290,15 @@ def select_from_pool(
             divergence = _pairwise_divergence(model_predictions, focus_pair)
             if divergence > 0.05:  # Only boost if meaningfully divergent
                 eig *= pair_boost
+
+        # Apply crux boost
+        if crux_boost_specs:
+            for spec in crux_boost_specs:
+                if (
+                    spec.get("structure") == struct_name
+                    and spec.get("condition") == condition
+                ):
+                    eig *= spec.get("boost", 1.0)
 
         eig_scores.append(eig)
 
