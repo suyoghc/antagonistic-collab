@@ -336,4 +336,37 @@ Human-readable summary of each Claude Code session on this project.
 
 ---
 
+## Session 15 — 2026-03-15
+
+**Commits:** `1c31f37`, `e4d9484`, `07856d7`, `e2cc0e9`, `2736ac0`, `26fcb3c`, `d6cde99`, `6076c20`, `3fd2be2`
+
+**What we did:**
+- Completed interpretation debate quality audit (LESSONS 9.6)
+- Drafted REPORT.md (structured write-up with abstract, intro, methods, results 3.1–3.10, discussion, conclusion)
+- Ran replication runs: discovered zero variance (LESSONS 9.7)
+- Cross-LLM comparison: GPT-4o vs Claude Sonnet vs Claude Opus — 9 runs, all correct (D26, LESSONS 9.8)
+- Moved docs to Notes/, removed CLAUDE.md from repo, updated README.md
+- Analyzed debate feedback loops: 4 of 6 broken (parameter revisions, param_overrides, hypotheses, critique content)
+- Removed contributor names pending confirmation
+
+**Cross-LLM results (LESSONS 9.8):**
+
+| Ground Truth | GPT-4o | Sonnet | Opus |
+|---|---|---|---|
+| GCM | Exemplar (0.159) | Exemplar (0.159) | Exemplar (0.143) |
+| SUSTAIN | Clustering (0.270) | Clustering (0.270) | Clustering (0.270) |
+| RULEX | Rule (0.158) | Rule (0.148) | Rule (0.213) |
+
+Correct model wins in 9/9 runs. Framework is LLM-agnostic.
+
+**Key discussion:**
+- Debate is epiphenomenal to RMSE — convergence driven entirely by Bayesian machinery
+- 4 broken feedback loops identified (parameter persistence, param_overrides, hypotheses, critique content)
+- Agent isolation analysis: epistemic coupling without rhetorical coupling
+- param_overrides is the one surviving LLM→RMSE path, explaining small cross-LLM variation
+
+**Status:** M4 complete. Next: close debate feedback loops (parameter persistence as priority #1).
+
+---
+
 *This log is maintained manually. Update it at the end of each session.*

@@ -743,3 +743,27 @@ Rare exception (full_pool GCM, Cycle 4): "introduce a transfer phase where novel
 The entire quantitative pipeline is deterministic: EIG selection (same prior → same experiment), synthetic data (md5-seeded), model predictions (deterministic). The LLM debate text varies across replicates but does not feed back into RMSE scores.
 
 **Implication:** This is the strongest possible evidence for finding 9.4 (debate doesn't influence outcomes). The debate is literally epiphenomenal to the quantitative result — it can be removed entirely without changing convergence. The value of debate is exclusively in the qualitative layer: human-readable explanations, mechanistic narratives, and hypothesis generation. Future architectures should acknowledge this separation explicitly: use the Bayesian pipeline for convergence, and the LLM debate for communication and interpretation only.
+
+### 9.8 Cross-LLM comparison: GPT-4o vs Claude Sonnet vs Claude Opus
+
+**Expected:** Different LLM backbones might produce different convergence outcomes, since debate quality and parameter proposals vary.
+
+**Actual:** Correct model wins in all 9/9 runs (3 ground truths × 3 LLMs):
+
+| Ground Truth | GPT-4o Winner (RMSE) | Sonnet Winner (RMSE) | Opus Winner (RMSE) |
+|---|---|---|---|
+| GCM | Exemplar (0.159) | Exemplar (0.159) | Exemplar (0.143) |
+| SUSTAIN | Clustering (0.270) | Clustering (0.270) | Clustering (0.270) |
+| RULEX | Rule (0.158) | Rule (0.148) | Rule (0.213) |
+
+**Key observations:**
+
+1. **SUSTAIN perfectly deterministic** — identical RMSE (0.270) across all 3 LLMs. The param_overrides proposed by agents had no effect on SUSTAIN's predictions for this structure/condition sequence.
+
+2. **GCM nearly identical** — Opus slightly lower (0.143 vs 0.159). Opus proposed param_overrides that improved GCM's fit marginally.
+
+3. **RULEX shows most variation** — Opus higher RMSE (0.213) vs Sonnet (0.148) and GPT-4o (0.158). Opus's param_overrides for RULEX were less effective, but the correct agent still won with a 42% gap.
+
+4. **The variation source is `param_overrides`** — the only code path where LLM output affects RMSE. During execution, agents propose parameter tweaks that are applied to one prediction. Different LLMs propose different overrides, creating small RMSE differences.
+
+**Implication:** The framework is LLM-agnostic for convergence — the correct model wins regardless of backbone. RMSE varies slightly through param_overrides (the one surviving feedback path from LLM to quantitative pipeline), but not enough to change outcomes. This confirms the architecture thesis: convergence is driven by computation, not by which LLM generates the debate text.

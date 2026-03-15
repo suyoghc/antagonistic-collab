@@ -10,6 +10,7 @@
 - [x] **Interpretation debate quality audit** — data citation weak (posteriors as proxy), critiques mixed (mechanism-aware but numerically ungrounded), behavioral adaptation limited (same talking points repeat), novel structure rationale poor (not rooted in divergence). Forcing function of adversarial critique helps in later cycles. (LESSONS 9.6)
 - [x] **Replication runs** — 3× each condition (full_pool): RMSE values identical across replicates (zero variance). Pipeline is fully deterministic — EIG selection, synthetic data, and model predictions are all seeded. LLM debate text varies but doesn't affect RMSE. (REPORT 3.5)
 - [x] **Write-up** — REPORT.md: intro (antagonistic collaboration + 3 models), methods (EIG, learning curves, 55 candidates, 2 modes), results (6 runs, all correct, 10 findings), discussion (architecture thesis, specification gap, debate limitations). 2026-03-14
+- [x] **Cross-LLM comparison** — GPT-4o vs Sonnet vs Opus (9 runs). Correct model wins in all 9/9. RMSE varies slightly via param_overrides but outcomes identical. Framework is LLM-agnostic. (D26, LESSONS 9.8, REPORT 3.6)
 
 ---
 

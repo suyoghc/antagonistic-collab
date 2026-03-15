@@ -521,3 +521,19 @@ Pattern covered `debate_cycle_*.json` but not `.md` transcripts.
 **Tests:** 1 regression test, 207 total passing, ruff clean.
 
 **Status:** Done.
+
+---
+
+## D26: Cross-LLM validation — GPT-4o vs Claude Sonnet vs Claude Opus — 2026-03-15
+
+**Question:** Does the framework's convergence depend on which LLM serves as the agent backbone?
+
+**Method:** 9 runs total — 3 ground truths × 3 LLMs (GPT-4o via Princeton/Portkey, Claude Sonnet 4, Claude Opus 4). All full_pool mode, 5 cycles, Bayesian EIG selection.
+
+**Results:** Correct model wins in all 9/9 runs. SUSTAIN RMSE identical across all 3 LLMs (0.270). GCM and RULEX show small variation from LLM-proposed param_overrides (GCM: 0.143–0.159, RULEX: 0.148–0.213).
+
+**Key finding:** The one surviving LLM→RMSE feedback path is `param_overrides` during execution. Different LLMs propose different parameter tweaks, creating minor RMSE variation, but never enough to change the winner. Framework is LLM-agnostic for convergence.
+
+**Cost:** ~$1/run (Sonnet), ~$5/run (Opus), ~$1/run (GPT-4o). 68 LLM calls per 5-cycle run.
+
+**Status:** Done.

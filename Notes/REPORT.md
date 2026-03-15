@@ -206,7 +206,21 @@ This is because the entire quantitative pipeline is deterministic: EIG selection
 
 This result strengthens finding 3.1 (correct model always wins) — the outcome is not sensitive to stochastic variation because there is none. It also demonstrates the sharp separation between the computational and LLM components: the Bayesian machinery determines the quantitative result; the LLM debate produces varying natural-language interpretations that do not affect convergence.
 
-### 3.7 Novel structure generation
+### 3.6 Cross-LLM comparison: GPT-4o vs Claude Sonnet vs Claude Opus
+
+To test whether convergence depends on the LLM backbone, we ran full-pool mode with three different models (5 cycles each, all 3 ground truths = 9 runs):
+
+| Ground Truth | GPT-4o Winner (RMSE) | Sonnet Winner (RMSE) | Opus Winner (RMSE) |
+|---|---|---|---|
+| GCM | Exemplar (0.159) | Exemplar (0.159) | Exemplar (0.143) |
+| SUSTAIN | Clustering (0.270) | Clustering (0.270) | Clustering (0.270) |
+| RULEX | Rule (0.158) | Rule (0.148) | Rule (0.213) |
+
+The correct model wins in all 9/9 runs. SUSTAIN RMSE is identical across all 3 LLMs (0.270). GCM and RULEX show small variation (0.143–0.159 and 0.148–0.213 respectively) due to LLM-proposed `param_overrides` during execution — the one surviving code path where LLM output affects RMSE.
+
+The framework is LLM-agnostic for convergence. The choice of backbone affects interpretation quality and parameter proposals, but not which model wins.
+
+### 3.8 Novel structure generation
 
 Across 3 full-pool runs (15 cycles), agents proposed 21 novel structures:
 
@@ -220,7 +234,7 @@ Across 3 full-pool runs (15 cycles), agents proposed 21 novel structures:
 
 None of the 21 novel structures were selected by EIG. The Bayesian selector consistently preferred registry structures (five_four, Type_I) — either because the 11 registry structures already span the relevant discrimination space, or because LLM-proposed structures are narratively interesting but not statistically optimal.
 
-### 3.8 Theory revision patterns
+### 3.9 Theory revision patterns
 
 | Theory | Revisions when TRUE model | Revisions when NOT true |
 |---|---|---|
@@ -230,7 +244,7 @@ None of the 21 novel structures were selected by EIG. The Bayesian selector cons
 
 Correct theories do not revise — their predictions already match the data. Incorrect theories revise progressively (adapting parameters, adjusting claims) but never degeneratively. This is a Lakatos-compatible outcome. RULEX is notably revision-resistant even when wrong, consistent with its rigid rule-based structure having fewer free parameters.
 
-### 3.9 Interpretation debate quality
+### 3.10 Interpretation debate quality
 
 We audited all 30 debate cycles across 6 runs on four dimensions:
 

@@ -16,12 +16,12 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 | Legacy vs full_pool comparison | DONE | LESSONS 9.4 |
 | Theory revision patterns | DONE | LESSONS 9.5 |
 | Interpretation debate quality audit | DONE | LESSONS 9.6 |
+| Replication (zero variance) | DONE | LESSONS 9.7 |
+| Cross-LLM comparison | DONE | LESSONS 9.8, D26 |
 
-### Remaining M4 tasks
+### M4 status: COMPLETE
 
-All M4 tasks complete:
-- [x] Replication runs — zero variance; pipeline fully deterministic (REPORT 3.5, LESSONS 9.7)
-- [x] Write-up — REPORT.md (sections 1-5, 7 references)
+All tasks done. Next steps are M5 (close debate feedback loops) or new domain extensions.
 
 ### 10 key findings (for write-up)
 
