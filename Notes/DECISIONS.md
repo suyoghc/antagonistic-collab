@@ -615,4 +615,31 @@ Pattern covered `debate_cycle_*.json` but not `.md` transcripts.
 - **Multi-hypothesis tracking** — maintain a particle set of posteriors to preserve uncertainty
 - **Crux-driven override** — when accepted cruxes exist but EIG=0, run the crux's discriminating experiment regardless
 
-**Status:** Open. Logged for M7 planning.
+**Status:** Resolved — see D30.
+
+---
+
+## D30: Likelihood tempering to fix posterior collapse — 2026-03-15
+
+**Problem:** D29 identified posterior collapse as the primary architectural bottleneck. Binomial log-likelihood with n_subjects=20 across ~10 items generates ~10 nats of evidence per experiment. After 2 experiments, log-odds reach ~50 nats (ratio ~5×10²¹). EIG=0 for all remaining candidates, making later cycles uninformative.
+
+**Decision:** Likelihood tempering (power posteriors): multiply log-likelihoods by a `learning_rate` (tau) in (0, 1] before adding to the prior. This is well-established in Bayesian statistics (Grünwald 2012 "Safe Bayesian", Bissiri et al. 2016, Miller & Dunson 2019).
+
+**Implementation:**
+1. `ModelPosterior.update()` — new `learning_rate` param, validates 0 < lr ≤ 1, applies `self.log_probs += learning_rate * log_likelihoods`
+2. `compute_eig()` — new `learning_rate` param, applied in simulated posterior updates
+3. `select_from_pool()`, `select_experiment()` — thread `learning_rate` to `compute_eig()`
+4. `update_posterior_from_experiment()` — thread to `posterior.update()`, record in history
+5. `runner.py` — `_LEARNING_RATE = 1.0` global, `--learning-rate` CLI flag, wired through 3 call sites
+6. `__main__.py` — `--learning-rate` in `_build_argparser()`
+
+**Alternatives considered:**
+- (A) Entropy-based re-exploration — when H(posterior) < threshold, force untested structures. Addresses symptom not cause.
+- (B) Multi-hypothesis tracking (particle posteriors) — preserves more uncertainty but much more complex. Over-engineering for current needs.
+- (C) Crux-driven override — run crux experiments when EIG=0. Useful but doesn't fix the posterior itself.
+
+**Tests:** 9 new tests in `TestLikelihoodTempering`: tempered slower than untempered, ordering preserved, backward compatibility at tau=1.0, EIG changes with learning_rate, EIG nonzero after tempered updates, history records learning_rate, select_from_pool threads parameter, CLI parsed, input validation. 296 total passing.
+
+**Default:** tau=1.0 preserves all existing behavior. Recommended tau=0.1–0.3 for synthetic data.
+
+**Status:** Done. Pending live validation with --learning-rate 0.2.

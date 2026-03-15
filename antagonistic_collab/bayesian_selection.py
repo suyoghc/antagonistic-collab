@@ -43,14 +43,23 @@ class ModelPosterior:
         p = self.probs
         return -float(np.sum(p * np.log(p + 1e-30)))
 
-    def update(self, log_likelihoods: np.ndarray):
-        """Bayesian update: posterior ∝ prior × likelihood.
+    def update(self, log_likelihoods: np.ndarray, learning_rate: float = 1.0):
+        """Bayesian update: posterior ∝ prior × likelihood^tau.
+
+        Likelihood tempering (power posterior): multiply log-likelihoods by
+        learning_rate (tau) before adding to prior. tau < 1 slows posterior
+        convergence, preventing collapse when evidence is very strong
+        (e.g., synthetic data with known generative model).
 
         Args:
             log_likelihoods: shape (n_models,) — log P(data | model_i)
+            learning_rate: tempering parameter in (0, 1]. Default 1.0
+                preserves standard Bayesian update.
         """
+        if not (0 < learning_rate <= 1):
+            raise ValueError(f"learning_rate must be in (0, 1], got {learning_rate}")
         log_likelihoods = np.asarray(log_likelihoods, dtype=np.float64)
-        self.log_probs = self.log_probs + log_likelihoods
+        self.log_probs = self.log_probs + learning_rate * log_likelihoods
         # Re-center for numerical stability
         self.log_probs = self.log_probs - np.max(self.log_probs)
 
@@ -121,6 +130,7 @@ def compute_eig(
     n_subjects: int = 20,
     n_sim: int = 200,
     seed: Optional[int] = 42,
+    learning_rate: float = 1.0,
 ) -> float:
     """Monte Carlo expected information gain for a candidate experiment.
 
@@ -137,6 +147,8 @@ def compute_eig(
         n_subjects: number of simulated subjects per item
         n_sim: number of Monte Carlo simulations per model
         seed: random seed for reproducibility
+        learning_rate: likelihood tempering parameter in (0, 1].
+            Applied to log-likelihoods in simulated updates.
 
     Returns:
         EIG in nats (non-negative float).
@@ -180,8 +192,8 @@ def compute_eig(
             for m_idx in range(n_models):
                 lls[m_idx] = compute_log_likelihood(obs, pred_arrays[m_idx], n_subjects)
 
-            # Posterior update (on a copy)
-            new_lp = posterior.log_probs + lls
+            # Posterior update (on a copy), with likelihood tempering
+            new_lp = posterior.log_probs + learning_rate * lls
             new_lp = new_lp - np.max(new_lp)
             new_p = np.exp(new_lp)
             new_p = new_p / new_p.sum()
@@ -241,6 +253,7 @@ def select_from_pool(
     focus_pair: Optional[tuple[str, str]] = None,
     pair_boost: float = 1.5,
     crux_boost_specs: Optional[list[dict]] = None,
+    learning_rate: float = 1.0,
 ) -> tuple[int, list[float]]:
     """Select the best (structure, condition) pair from the full pool by EIG.
 
@@ -283,6 +296,7 @@ def select_from_pool(
             n_subjects=n_subjects,
             n_sim=n_sim,
             seed=seed + i if seed is not None else None,
+            learning_rate=learning_rate,
         )
 
         # Apply focus pair boost
@@ -313,6 +327,7 @@ def select_experiment(
     n_subjects: int = 20,
     n_sim: int = 200,
     seed: Optional[int] = 42,
+    learning_rate: float = 1.0,
 ) -> tuple[int, list[float]]:
     """Select the experiment that maximizes expected information gain.
 
@@ -354,6 +369,7 @@ def select_experiment(
             n_subjects=n_subjects,
             n_sim=n_sim,
             seed=seed + i if seed is not None else None,
+            learning_rate=learning_rate,
         )
         eig_scores.append(eig)
 
@@ -371,6 +387,7 @@ def update_posterior_from_experiment(
     n_subjects: int = 20,
     learning_curves: Optional[dict] = None,
     curve_weight: float = 0.5,
+    learning_rate: float = 1.0,
 ) -> ModelPosterior:
     """Update the posterior after observing experimental results.
 
@@ -459,9 +476,10 @@ def update_posterior_from_experiment(
         "log_likelihoods": log_likelihoods.tolist(),
         "prior_probs": posterior.probs.tolist(),
         "has_curve_evidence": learning_curves is not None,
+        "learning_rate": learning_rate,
     }
 
-    posterior.update(log_likelihoods)
+    posterior.update(log_likelihoods, learning_rate=learning_rate)
 
     history_entry["posterior_probs"] = posterior.probs.tolist()
     history_entry["entropy"] = posterior.entropy

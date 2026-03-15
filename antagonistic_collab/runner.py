@@ -714,6 +714,7 @@ def run_human_arbitration(protocol: DebateProtocol, transcript: list) -> PhaseRe
                 n_subjects=20,
                 n_sim=200,
                 seed=42,
+                learning_rate=_LEARNING_RATE,
             )
             best_struct = ""
             if isinstance(current_proposals[best].design_spec, dict):
@@ -1033,6 +1034,7 @@ def run_execution(
             condition,
             protocol.state.cycle,
             learning_curves=learning_curves,
+            learning_rate=_LEARNING_RATE,
         )
         protocol.state.model_posterior = posterior.to_dict()
 
@@ -1191,10 +1193,12 @@ def run_full_pool_selection(
         if focus_pair:
             print(f"  Focus pair: {focus_pair[0]} vs {focus_pair[1]}")
 
-    # Convert active cruxes to boost specs for EIG
-    boost_specs = cruxes_to_boost_specs(protocol.state)
-    if boost_specs:
-        print(f"  Crux boost: {len(boost_specs)} active cruxes boosting EIG")
+    # Convert active cruxes to boost specs for EIG (ARBITER)
+    boost_specs = []
+    if _ARBITER:
+        boost_specs = cruxes_to_boost_specs(protocol.state)
+        if boost_specs:
+            print(f"  Crux boost: {len(boost_specs)} active cruxes boosting EIG")
 
     best_idx, eig_scores = select_from_pool(
         protocol,
@@ -1206,6 +1210,7 @@ def run_full_pool_selection(
         focus_pair=focus_pair,
         pair_boost=1.5,
         crux_boost_specs=boost_specs or None,
+        learning_rate=_LEARNING_RATE,
     )
 
     best_struct, best_cond = pool[best_idx]
@@ -1335,9 +1340,11 @@ def run_interpretation_debate(
 
     extended_context = results_context + "\n".join(extra_context_lines)
 
-    # Build conflict map once for all agents
-    conflict_map = protocol.state.conflict_map_summary()
-    conflict_block = f"\n{conflict_map}\n" if conflict_map else ""
+    # Build conflict map once for all agents (ARBITER)
+    conflict_block = ""
+    if _ARBITER:
+        conflict_map = protocol.state.conflict_map_summary()
+        conflict_block = f"\n{conflict_map}\n" if conflict_map else ""
 
     for agent in protocol.agent_configs:
         # Inject prior claims for accountability
@@ -1442,8 +1449,8 @@ def run_interpretation_debate(
             }
         )
 
-    # --- Meta-agent responses (Integrator, Critic) ---
-    for meta_agent in protocol.meta_agents:
+    # --- Meta-agent responses (Integrator, Critic) — ARBITER ---
+    for meta_agent in protocol.meta_agents if _ARBITER else []:
         # Build context from theory agents' interpretations
         theory_interps = "\n".join(
             f"  {m['agent']}: {m.get('response', '')[:500]}" for m in messages
@@ -2064,10 +2071,11 @@ def run_cycle(
     protocol.advance_phase(result)
 
     if mode == "full_pool":
-        # Crux negotiation: identify, negotiate, finalize decisive questions
-        run_crux_identification(protocol, client, cycle=protocol.state.cycle)
-        run_crux_negotiation(protocol, client, cycle=protocol.state.cycle)
-        finalize_cruxes(protocol, cycle=protocol.state.cycle)
+        # Crux negotiation (ARBITER): identify, negotiate, finalize decisive questions
+        if _ARBITER:
+            run_crux_identification(protocol, client, cycle=protocol.state.cycle)
+            run_crux_negotiation(protocol, client, cycle=protocol.state.cycle)
+            finalize_cruxes(protocol, cycle=protocol.state.cycle)
 
         # Full-pool mode: EIG selection replaces phases 3-6.
         # Skip the state machine forward to HUMAN_ARBITRATION so that
@@ -2499,8 +2507,15 @@ _DEFAULT_MODELS = {
 def main():
     import argparse
 
+    from .config import apply_config_defaults, load_config
+
     parser = argparse.ArgumentParser(
         description="Run antagonistic collaboration debate"
+    )
+    parser.add_argument(
+        "--config",
+        default=None,
+        help="Path to YAML config file. Defaults are loaded from default_config.yaml.",
     )
     parser.add_argument("--cycles", type=int, default=1, help="Number of debate cycles")
     parser.add_argument(
@@ -2546,6 +2561,30 @@ def main():
         default=False,
         help="Enable human-in-the-loop checkpoints (default: off)",
     )
+    parser.add_argument(
+        "--learning-rate",
+        type=float,
+        default=0.2,
+        help="Likelihood tempering rate (0, 1]. Lower values slow posterior convergence. Default 0.2.",
+    )
+    parser.add_argument(
+        "--no-tempering",
+        action="store_true",
+        default=False,
+        help="Disable likelihood tempering (sets learning-rate to 1.0).",
+    )
+    parser.add_argument(
+        "--no-arbiter",
+        action="store_true",
+        default=False,
+        help="Disable ARBITER features (crux negotiation, meta-agents, conflict map).",
+    )
+    # Two-pass parsing: peek at --config first, then apply config defaults
+    # before the real parse so CLI flags override config values.
+    pre_args, _ = parser.parse_known_args()
+    config = load_config(pre_args.config)
+    apply_config_defaults(parser, config)
+
     args = parser.parse_args()
 
     # Resolve model default based on backend
@@ -2584,6 +2623,12 @@ def main():
 
     global _SELECTION_METHOD
     _SELECTION_METHOD = args.selection
+
+    global _LEARNING_RATE
+    _LEARNING_RATE = 1.0 if args.no_tempering else args.learning_rate
+
+    global _ARBITER
+    _ARBITER = not args.no_arbiter
 
     # Auto-generate output directory if not explicitly set
     if args.output_dir == ".":
@@ -2675,6 +2720,8 @@ def main():
 _BATCH_MODE = False
 _LLM_MODEL = "claude-sonnet-4-20250514"
 _SELECTION_METHOD = "bayesian"  # "bayesian" or "heuristic"
+_LEARNING_RATE = 0.2  # Likelihood tempering: tau in (0, 1]; default on
+_ARBITER = True  # ARBITER features: cruxes, meta-agents, conflict map
 
 
 if __name__ == "__main__":

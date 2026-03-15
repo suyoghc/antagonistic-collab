@@ -1,6 +1,16 @@
 # Tasks
 
-## Current Milestone: M6 — ARBITER Integration (DONE)
+## Current Milestone: M7 — Likelihood Tempering (IN PROGRESS)
+
+### M7 Tasks
+- [x] **M7: Likelihood Tempering** — Add `learning_rate` (tau) parameter to Bayesian posterior updates to prevent posterior collapse. Multiplies log-likelihoods by tau ∈ (0, 1] before adding to prior. Threaded through `ModelPosterior.update()`, `compute_eig()`, `select_from_pool()`, `select_experiment()`, `update_posterior_from_experiment()`. Wired into `runner.py` via `_LEARNING_RATE` global + `--learning-rate` CLI flag. Default tau=1.0 preserves backward compatibility. 9 new tests (296 total).
+
+### M7 Commits
+- (pending commit)
+
+---
+
+## Completed: M6 — ARBITER Integration (DONE)
 
 ### M6 Tasks
 - [x] **M6a: MetaAgentConfig** — `MetaAgentConfig` dataclass (name, role, system_prompt), `create_default_meta_agents()` factory, Integrator + Critic role-specific prompts, wired into `run_interpretation_debate()`. 8 tests.

@@ -14,6 +14,11 @@ def _build_argparser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run antagonistic collaboration debate"
     )
+    parser.add_argument(
+        "--config",
+        default=None,
+        help="Path to YAML config file. Defaults are loaded from default_config.yaml.",
+    )
     parser.add_argument("--cycles", type=int, default=1, help="Number of debate cycles")
     parser.add_argument(
         "--true-model",
@@ -57,6 +62,24 @@ def _build_argparser() -> argparse.ArgumentParser:
         action="store_true",
         default=False,
         help="Enable human-in-the-loop checkpoints (default: off)",
+    )
+    parser.add_argument(
+        "--learning-rate",
+        type=float,
+        default=0.2,
+        help="Likelihood tempering rate (0, 1]. Lower values slow posterior convergence. Default 0.2.",
+    )
+    parser.add_argument(
+        "--no-tempering",
+        action="store_true",
+        default=False,
+        help="Disable likelihood tempering (sets learning-rate to 1.0).",
+    )
+    parser.add_argument(
+        "--no-arbiter",
+        action="store_true",
+        default=False,
+        help="Disable ARBITER features (crux negotiation, meta-agents, conflict map).",
     )
     return parser
 

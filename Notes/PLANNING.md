@@ -76,6 +76,13 @@ models/
 - [x] Theory revision — Lakatos-compatible (LESSONS 9.5)
 - [x] Legacy vs full_pool comparison — debate hurts experiment selection (LESSONS 9.4)
 
+### M7: Likelihood tempering (DONE)
+- [x] Add `learning_rate` (tau) param to `ModelPosterior.update()`, `compute_eig()`, `select_from_pool()`, `select_experiment()`, `update_posterior_from_experiment()`
+- [x] Wire `_LEARNING_RATE` global through `runner.py` call sites
+- [x] Add `--learning-rate` CLI flag to `__main__.py` and `runner.py`
+- [x] 9 tests, 296 total passing
+- [ ] Live validation with `--learning-rate 0.2`
+
 ## Key constraints
 
 - Synthetic data only (no real experiments) — but must be model-sensitive

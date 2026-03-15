@@ -2804,11 +2804,14 @@ class TestDivergenceDrivenSelection:
         import antagonistic_collab.runner as runner
 
         old_batch = getattr(runner, "_BATCH_MODE", False)
+        old_lr = getattr(runner, "_LEARNING_RATE", 0.2)
         runner._BATCH_MODE = True
+        runner._LEARNING_RATE = 1.0  # Untampered EIG so both proposals tie
         try:
             run_human_arbitration(protocol, [])
         finally:
             runner._BATCH_MODE = old_batch
+            runner._LEARNING_RATE = old_lr
 
         approved = [e for e in protocol.state.experiments if e.status == "approved"]
         assert len(approved) == 1

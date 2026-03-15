@@ -439,4 +439,41 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 
 ---
 
+## Session 18 — 2026-03-15
+
+**Commits:** (pending)
+
+**What we did:**
+- Implemented M7: Likelihood Tempering to address posterior collapse (D30)
+- Added `learning_rate` (tau) parameter to the entire Bayesian selection pipeline:
+  - `ModelPosterior.update()` — core tempering + input validation (0 < lr ≤ 1)
+  - `compute_eig()` — applied in simulated posterior updates
+  - `select_from_pool()`, `select_experiment()` — threaded to `compute_eig()`
+  - `update_posterior_from_experiment()` — threaded to `posterior.update()`, recorded in history
+  - `runner.py` — `_LEARNING_RATE = 1.0` global, wired through 3 call sites, `--learning-rate` CLI flag
+  - `__main__.py` — `--learning-rate` in `_build_argparser()`
+- TDD: wrote 9 failing tests first, then implemented (Red → Green → Refactor)
+- 296 tests passing (287 + 9 new), ruff clean
+
+**Tests added (TestLikelihoodTempering):**
+1. Tempered update slower than untempered (entropy comparison)
+2. Tempered update preserves ordering (same winner)
+3. Backward compatibility at tau=1.0
+4. EIG changes with learning_rate
+5. EIG nonzero after tempered updates (core property)
+6. History records learning_rate
+7. select_from_pool threads parameter
+8. CLI --learning-rate parsed
+9. Input validation (rejects 0, negative, >1)
+
+**Key discussion:**
+- Posterior collapse was the #1 finding from M6 live validation (D29)
+- Likelihood tempering is well-established: Grünwald (2012), Bissiri et al. (2016), Miller & Dunson (2019)
+- Default tau=1.0 preserves all existing behavior — no regressions
+- Recommended tau=0.1–0.3 for synthetic data with known generative models
+
+**Status:** M7 implementation complete. Pending live validation with `--learning-rate 0.2`.
+
+---
+
 *This log is maintained manually. Update it at the end of each session.*

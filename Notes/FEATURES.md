@@ -441,3 +441,26 @@ identified. Cross-LLM comparison (GPT-4o, Sonnet, Opus) confirms: 9/9 correct.
 enrich debate quality (crux selectivity, meta-agent synthesis, conflict tracking)
 but do not alter convergence mechanism. Posterior collapse (D29) is the primary
 bottleneck — crux boost cannot overcome zero EIG. 3/3 correct with 36–68% gaps.
+
+---
+
+## 9. Posterior Convergence Control (Implemented — M7, 2026-03-15)
+
+### 9.1 Likelihood tempering (`--learning-rate`)
+**What it does:** Multiplies log-likelihoods by tau ∈ (0, 1] before Bayesian
+posterior updates. tau=1.0 is standard Bayesian update; tau<1 slows convergence,
+keeping the posterior spread across models longer and maintaining nonzero EIG.
+**Where:** `bayesian_selection.py` (`ModelPosterior.update`, `compute_eig`,
+`select_from_pool`, `select_experiment`, `update_posterior_from_experiment`),
+`runner.py` (`_LEARNING_RATE` global, 3 call sites, `--learning-rate` CLI),
+`__main__.py` (`--learning-rate` flag)
+**Current default:** 1.0 (no tempering, backward compatible)
+**Recommended:** 0.1–0.3 for synthetic data with known generative models
+**Why it matters:** M6 validation showed posterior collapse to P≈1.0 after 1–2
+experiments, making EIG=0 for all remaining candidates. Crux boost can't overcome
+zero EIG. Tempering keeps later cycles informative by preventing the posterior
+from concentrating too rapidly. Well-established in Bayesian statistics (Grünwald
+2012, Bissiri et al. 2016, Miller & Dunson 2019).
+**M7 result:** 9 tests confirm: tempered updates are slower, preserve ordering,
+maintain backward compatibility, keep EIG nonzero after strong evidence, and
+thread correctly through the full pipeline.

@@ -1,0 +1,118 @@
+# =============================================================================
+# Antagonistic Collaboration — Default Configuration
+# =============================================================================
+#
+# Copy this file to `config.yaml` in your working directory and edit as needed.
+# CLI flags override values set here.
+#
+# Usage:
+#   python -m antagonistic_collab --config config.yaml --cycles 5
+#
+# If no --config is specified, these built-in defaults are used.
+# =============================================================================
+
+
+# ---------------------------------------------------------------------------
+# Experiment Setup
+# ---------------------------------------------------------------------------
+
+# Number of debate cycles to run.
+cycles: 1
+
+# Ground truth model that generates synthetic data.
+# Options: GCM, SUSTAIN, RULEX
+true_model: GCM
+
+# Phase flow mode.
+#   full_pool — Bayesian EIG selection over all 55+ structure×condition
+#               candidates, followed by interpretation debate. Recommended.
+#   legacy   — Original 9-phase flow: proposal → critique → revision →
+#               arbitration. More LLM calls, less efficient selection.
+mode: full_pool
+
+# Experiment selection method (only matters in legacy mode; full_pool
+# always uses Bayesian EIG).
+#   bayesian  — Expected Information Gain (principled, recommended)
+#   heuristic — Divergence + diversity penalty (D17, deprecated)
+selection: bayesian
+
+
+# ---------------------------------------------------------------------------
+# Likelihood Tempering (M7)
+# ---------------------------------------------------------------------------
+# Addresses posterior collapse: without tempering, the Bayesian posterior
+# concentrates to P≈1.0 after 1–2 experiments, making EIG=0 for all
+# remaining candidates. Tempering multiplies log-likelihoods by tau before
+# adding to the prior, slowing convergence.
+#
+# Technical background: this is the "power posterior" / "Safe Bayesian"
+# approach (Grünwald 2012, Bissiri et al. 2016, Miller & Dunson 2019).
+#
+#   tau = 1.0 — standard Bayesian update (no tempering)
+#   tau = 0.2 — recommended for synthetic data with known generative model
+#   tau = 0.1 — aggressive tempering; very slow convergence
+#
+# Set learning_rate to 1.0 or set no_tempering: true to disable.
+
+learning_rate: 0.2
+no_tempering: false
+
+
+# ---------------------------------------------------------------------------
+# ARBITER Features (M6)
+# ---------------------------------------------------------------------------
+# ARBITER (Kachergis et al.) adds structured debate features:
+#
+#   - Crux negotiation: agents propose, negotiate, and finalize decisive
+#     questions. Accepted cruxes boost EIG for matching experiments.
+#   - Meta-agents: Integrator (synthesizes across theories) and Critic
+#     (challenges weakest argument) respond after theory agents.
+#   - Conflict map: groups claims by structure/condition, showing where
+#     models agree and disagree. Injected into interpretation prompts.
+#
+# These features add ~6 LLM calls per cycle but improve debate quality
+# and focus. Set no_arbiter: true to disable all three.
+
+no_arbiter: false
+
+
+# ---------------------------------------------------------------------------
+# LLM Backend
+# ---------------------------------------------------------------------------
+
+# Which API to use for LLM calls.
+#   anthropic — Anthropic API (Claude models)
+#   princeton — Princeton AI Sandbox via Portkey gateway (GPT-4o)
+backend: anthropic
+
+# LLM model override. If null, uses the backend default:
+#   anthropic → claude-sonnet-4-20250514
+#   princeton → gpt-4o
+model: null
+
+
+# ---------------------------------------------------------------------------
+# Debate Parameters
+# ---------------------------------------------------------------------------
+
+# Number of adversarial critique rounds per cycle (legacy mode).
+# More rounds = deeper scrutiny, but diminishing returns after 2–3.
+critique_rounds: 2
+
+# Enable human-in-the-loop checkpoints at key decision points
+# (crux finalization, EIG selection, pre-registration).
+# In batch mode these auto-continue; in interactive mode they prompt.
+hitl_checkpoints: false
+
+# Non-interactive mode: auto-approve proposals, no human input.
+# Required for Della/SLURM and unattended runs.
+batch: false
+
+
+# ---------------------------------------------------------------------------
+# Output
+# ---------------------------------------------------------------------------
+
+# Directory for output files (transcripts, reports, epistemic state).
+# "." means auto-generate a descriptive directory under runs/.
+output_dir: "."

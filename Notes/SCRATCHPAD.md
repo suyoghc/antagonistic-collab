@@ -4,48 +4,26 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ---
 
-## Current focus — M6: ARBITER Integration — COMPLETE
+## Current focus — M7: Likelihood Tempering — DONE
 
-### M6 implementation (all 5 features + 1 bugfix)
+### Implementation
 
-| Feature | Status | Commit | Tests |
-|---|---|---|---|
-| M6a: MetaAgentConfig | DONE | `3109d14` | 8 |
-| M6b: Crux Negotiation (6 sub-commits) | DONE | `dfc6ed2`–`f49818c` | 32 |
-| M6e: Conflict Map | DONE | `7fb5de3` | 6 |
-| M6d: Pre-registration Output | DONE | `d7b8ca6` | 4 |
-| M6c: HITL Checkpoints | DONE | `be91b7b` | 4 |
-| Bugfix: dict new_predictions | DONE | `2a57937` | 2 |
-
-Total: 56 new tests (231 → 287), 11 commits.
-
-### M6 live validation (2026-03-15, GPT-4o via Princeton, all M6 features enabled)
-
-| Ground Truth | Winner | RMSE | Gap% | Posterior | Cruxes | Claims | Time |
-|---|---|---|---|---|---|---|---|
-| GCM | Exemplar_Agent | 0.1512 | 36.4% | 1.0000 | 4/34 | 14F/1C/26U | 431s |
-| SUSTAIN | Clustering_Agent | 0.2700 | 45.6% | 1.0000 | 7/32 | 15F/0C/24U | 439s |
-| RULEX | Rule_Agent | 0.1187 | 67.6% | 1.0000 | 4/35 | 15F/0C/26U | 467s |
-
-3/3 correct. F=falsified, C=confirmed, U=untested.
-
-### What the M6 validation reveals
-
-**The system is a falsification engine.** 44 claims falsified, 1 confirmed, 76 untested. Convergence occurs by ruling out wrong theories, not by confirming the right one. Popper-compatible.
-
-**Crux negotiation is genuinely selective with real LLMs.** 15% acceptance rate (vs 100% in mock). Accepted cruxes cluster around real theoretical fault lines: exemplars vs rules, presentation order effects, attention allocation.
-
-**Posterior collapse is the main bottleneck.** GCM and SUSTAIN lock to correct model on cycle 0. RULEX takes until cycle 2. After that, EIG≈0 and remaining cycles are uninformative. Crux boost can't overcome zero EIG.
-
-**Winning theories need fewer revisions.** Rule_Agent made 0 revisions and won RULEX by 67.6%. Clustering_Agent made 3 futile revisions in the same run. Lakatos-compatible: robust cores resist falsification.
-
-**RULEX is the most scientifically interesting case.** Non-monotonic posterior trajectory — system initially backs Exemplar_Agent, self-corrects by cycle 2 when Type_I structures disambiguate. GCM and SUSTAIN converge immediately.
+| Component | Change | Status |
+|---|---|---|
+| `ModelPosterior.update()` | `learning_rate` param, validates (0,1], applies `lr * log_likelihoods` | DONE |
+| `compute_eig()` | `learning_rate` param, applied in simulated updates | DONE |
+| `select_from_pool()` | Threads `learning_rate` to `compute_eig()` | DONE |
+| `select_experiment()` | Threads `learning_rate` to `compute_eig()` | DONE |
+| `update_posterior_from_experiment()` | Threads to `posterior.update()`, records in history | DONE |
+| `runner.py` | `_LEARNING_RATE` global, 3 call sites, `--learning-rate` CLI flag | DONE |
+| `__main__.py` | `--learning-rate` in `_build_argparser()` | DONE |
+| Tests | 9 new in `TestLikelihoodTempering` | DONE (296 total) |
 
 ### Next steps
-- Address posterior collapse: tempering, entropy-based re-exploration, or multi-hypothesis tracking
+- Live validation with `--learning-rate 0.2` to confirm posterior entropy stays above 0 after cycle 0
 - New cognitive domains (memory retrieval, decision making)
 - AutoRA integration for real data
-- Longer runs (10+ cycles) to test cumulative reasoning
+- Longer runs (10+ cycles) to test cumulative reasoning with tempering
 - Claim-responsive debate: agents should address prior falsified claims
 
 ---
