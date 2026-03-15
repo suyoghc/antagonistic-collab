@@ -36,6 +36,14 @@ mode: full_pool
 #   heuristic — Divergence + diversity penalty (D17, deprecated)
 selection: bayesian
 
+# Experiment selection strategy — how to pick from EIG scores.
+#   thompson — Sample proportional to EIG scores (Russo & Van Roy 2018;
+#              Kandasamy et al. 2019). Naturally balances exploration and
+#              exploitation; avoids greedy repetition of the same experiment.
+#   greedy   — Always pick the highest-EIG candidate (argmax). Locally
+#              optimal but can select the same experiment every cycle.
+selection_strategy: thompson
+
 
 # ---------------------------------------------------------------------------
 # Likelihood Tempering (M7)

@@ -449,12 +449,13 @@ Potential solutions: posterior tempering (prevent collapse by raising log-probs 
 
 ### 4.7 Future directions
 
-1. **Address posterior collapse** — posterior tempering, entropy-based re-exploration, or multi-hypothesis tracking to keep later cycles informative
-2. **Claim-responsive debate** — agents should explicitly address their prior claims ("I previously predicted X, which was falsified; I now revise to Y") rather than repeating generic talking points
-3. **Longer runs (10+ cycles)** — assess whether novel structures eventually outperform registry structures as the registry space is exhausted, and whether the claim ledger produces cumulative reasoning at longer horizons
-4. **Cross-domain generalization** — apply the framework to other multi-model disputes in cognitive science (memory models, decision-making theories)
-5. **Real data integration** — AutoRA + Prolific for closing the loop with human participants
-6. **Crux-driven experiment override** — when accepted cruxes exist but EIG=0, bypass Bayesian selection and run the crux's discriminating experiment directly
+1. **Thompson sampling for experiment selection** — Replace greedy `argmax(EIG)` with sampling proportional to EIG scores, following Kandasamy, Schneider & Póczos (2019). This addresses the greedy repetition problem (same structure 5/5 cycles) via a principled exploration mechanism grounded in the Thompson sampling literature (Russo & Van Roy, 2018). MPS naturally explores underexplored design regions without ad-hoc diversity bonuses. Kim et al. (2017) demonstrate non-myopic benefits specifically for cognitive model discrimination with partially overlapping models (our GCM-RULEX case).
+2. **Posterior collapse** — M7 likelihood tempering (tau=0.005, clip [0.05, 0.95]) addresses the immediate problem; deeper solutions include sequential BOED framed as POMDP (Huan & Marzouk, 2016) or deep adaptive design (Foster et al., 2021).
+3. **Claim-responsive debate** — agents should explicitly address their prior claims ("I previously predicted X, which was falsified; I now revise to Y") rather than repeating generic talking points
+4. **Longer runs (10+ cycles)** — assess whether novel structures eventually outperform registry structures as the registry space is exhausted, and whether the claim ledger produces cumulative reasoning at longer horizons
+5. **Cross-domain generalization** — apply the framework to other multi-model disputes in cognitive science (memory models, decision-making theories)
+6. **Real data integration** — AutoRA + Prolific for closing the loop with human participants
+7. **Crux-driven experiment override** — when accepted cruxes exist but EIG=0, bypass Bayesian selection and run the crux's discriminating experiment directly
 
 ---
 
@@ -466,10 +467,19 @@ Antagonistic collaboration via LLM debate can successfully identify the correct 
 
 ## References
 
+- Cavagnaro, D. R., Myung, J. I., Pitt, M. A., & Kujala, J. V. (2010). Adaptive design optimization: A mutual information-based approach to model discrimination in cognitive science. *Neural Computation, 22*(4), 887–905.
+- Chapelle, O., & Li, L. (2011). An empirical evaluation of Thompson sampling. *Advances in Neural Information Processing Systems, 24*.
+- Foster, A., Ivanova, D. R., Malik, I., & Rainforth, T. (2021). Deep adaptive design: Amortizing sequential Bayesian experimental design. *Proceedings of the 38th ICML*, 3384–3395.
+- Huan, X., & Marzouk, Y. M. (2016). Sequential Bayesian optimal experimental design via variational inference. *arXiv:1604.08320*.
+- Kandasamy, K., Schneider, J., & Póczos, B. (2019). Myopic posterior sampling for adaptive goal oriented design of experiments. *Proceedings of the 36th ICML*, 3222–3232.
+- Kim, W., Pitt, M. A., Lu, Z.-L., Steyvers, M., & Myung, J. I. (2017). A hierarchical adaptive approach to optimal experimental design. *Neural Computation, 26*(11), 2465–2492.
 - Love, B. C., Medin, D. L., & Gureckis, T. M. (2004). SUSTAIN: A network model of category learning. *Psychological Review, 111*(2), 309–332.
 - Medin, D. L., & Schaffer, M. M. (1978). Context theory of classification learning. *Psychological Review, 85*(3), 207–238.
 - Mellers, B., Hertwig, R., & Kahneman, D. (2001). Do frequency representations eliminate conjunction effects? An exercise in adversarial collaboration. *Psychological Science, 12*(4), 269–275.
 - Nosofsky, R. M. (1986). Attention, similarity, and the identification–categorization relationship. *Journal of Experimental Psychology: General, 115*(1), 39–57.
 - Nosofsky, R. M. (1991). Tests of an exemplar model for relating perceptual classification and recognition memory. *Journal of Experimental Psychology: Human Perception and Performance, 17*(1), 3–27.
 - Nosofsky, R. M., Palmeri, T. J., & McKinley, S. C. (1994). Rule-plus-exception model of classification learning. *Psychological Review, 101*(1), 53–79.
+- Rainforth, T., Foster, A., Ivanova, D. R., & Smith, F. B. (2024). Modern Bayesian experimental design. *Statistical Science, 39*(1), 100–114.
+- Russo, D. J., & Van Roy, B. (2018). Learning to optimize via information-directed sampling. *Operations Research, 66*(1), 230–252.
 - Shepard, R. N., Hovland, C. I., & Jenkins, H. M. (1961). Learning and memorization of classifications. *Psychological Monographs: General and Applied, 75*(13), 1–42.
+- Thompson, W. R. (1933). On the likelihood that one unknown probability exceeds another in view of the evidence of two samples. *Biometrika, 25*(3/4), 285–294.

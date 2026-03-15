@@ -58,6 +58,12 @@ def _build_argparser() -> argparse.ArgumentParser:
         help="Phase flow: full_pool (EIG + interpretation debate) or legacy (9-phase)",
     )
     parser.add_argument(
+        "--selection-strategy",
+        choices=["thompson", "greedy"],
+        default="thompson",
+        help="EIG selection strategy: thompson (sample proportional, default) or greedy (argmax)",
+    )
+    parser.add_argument(
         "--hitl-checkpoints",
         action="store_true",
         default=False,

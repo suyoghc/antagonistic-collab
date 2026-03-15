@@ -4209,7 +4209,8 @@ class TestFullPoolSelection:
         pool = generate_full_candidate_pool(protocol)
 
         best_idx, eig_scores = select_from_pool(
-            protocol, posterior, pool, n_subjects=20, n_sim=50, seed=42
+            protocol, posterior, pool, n_subjects=20, n_sim=50, seed=42,
+            selection_strategy="greedy",
         )
         assert 0 <= best_idx < len(pool)
         assert len(eig_scores) == len(pool)

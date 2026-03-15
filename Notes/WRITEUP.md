@@ -217,6 +217,22 @@ Du et al. (2023) showed that multiple LLM instances debating their responses imp
 
 Adaptive Design Optimization (Myung & Pitt, 2009; Cavagnaro et al., 2010, 2011) is the gold standard for automated experiment design in cognitive psychology. ADO uses Bayesian decision theory to identify maximally informative designs for discriminating between models. It has been successfully applied to retention, categorization, risky choice, and other domains. Our system can be understood as an expansive, M-open generalization of ADO: rather than optimizing a utility function over a fixed model set, adversarial agents search the design space through argumentation, with the formal layer providing the quantitative grounding that ADO's utility function provides. The adversarial structure also naturally addresses the model mimicry problem (Wagenmakers et al., 2004; Pitt et al., 2006): agents critique each other by demonstrating that flexible models can accommodate the proposed data pattern under alternative parameterizations — a concern that ADO handles through complexity penalties but not through the kind of targeted, theory-specific critique that adversarial debate enables.
 
+### 4.5 Sequential experiment design and the exploration–exploitation tradeoff
+
+Our system selects experiments by maximizing one-step (myopic) expected information gain (EIG) — the standard approach in ADO (Cavagnaro et al., 2010). This greedy strategy is locally optimal but can fail in sequential settings: it selects the same high-EIG experiment repeatedly when one candidate dominates, leaving informative regions of the design space unexplored. In our validation, greedy EIG selected the identical structure in 5/5 cycles for two of three ground truths (Section 3.3 of the technical report). This is a known limitation of myopic BOED.
+
+The sequential experiment design problem is formally a partially observable Markov decision process (POMDP): the hidden state is the true model, actions are experiment choices, observations are experimental outcomes, and the reward is cumulative information gain over all remaining cycles (Huan & Marzouk, 2016). Exact solutions are intractable because they require planning over an exponentially growing tree of future observations. Three lines of work address this.
+
+**Non-myopic Bayesian optimal experimental design.** Huan & Marzouk (2016) formulate sequential BOED as a POMDP and solve it via dynamic programming for low-dimensional problems, demonstrating that non-myopic designs substantially outperform greedy selection when early experiments have downstream consequences. Foster, Ivanova, Malik & Rainforth (2021) extend this with deep adaptive design (DAD), using amortized variational inference to learn design policies that implicitly plan ahead. Rainforth, Foster, Ivanova & Smith (2024) provide a comprehensive review of modern BOED, noting that the gap between myopic and non-myopic strategies grows with the number of remaining experiments — precisely the setting where our multi-cycle framework operates.
+
+**Thompson sampling as approximate non-myopic design.** Thompson sampling (Thompson, 1933) — selecting actions by sampling from the posterior rather than maximizing expected utility — provides a computationally cheap approximation to non-myopic planning. Originally developed for multi-armed bandits, it has been shown to achieve near-optimal regret bounds while naturally balancing exploration and exploitation (Russo & Van Roy, 2018; Chapelle & Li, 2011). The key insight is that sampling proportional to posterior model probabilities automatically explores: uncertain models get sampled sometimes, not always, leading to experiment choices that probe underexplored regions of design space.
+
+Kandasamy, Schneider & Póczos (2019) make this connection explicit for experimental design: their Myopic Posterior Sampling (MPS) algorithm samples the "true" model from the posterior, then selects the experiment with highest information gain *assuming that sample is correct*. Because different samples lead to different optimal experiments, MPS explores diverse designs without any ad-hoc diversity bonus. They prove that MPS achieves the same asymptotic convergence as greedy EIG while exploring more broadly in finite samples — exactly the property our system lacks.
+
+**Application to cognitive model discrimination.** Kim, Pitt, Lu, Steyvers & Myung (2017) demonstrate non-myopic experimental planning specifically for cognitive model comparison, showing that look-ahead designs recover the true model faster than greedy EIG when models are partially overlapping — the situation we encounter with GCM and RULEX, where exemplar-based and rule-based representations make similar endpoint predictions but differ in learning dynamics. Cavagnaro, Myung, Pitt & Kujala (2010) established EIG as the standard criterion for model discrimination in cognitive science; the Thompson sampling extension preserves EIG as the local objective while addressing the exploration problem that greedy optimization cannot.
+
+For our system, Thompson sampling offers a principled upgrade path: rather than selecting `argmax(EIG)`, sample experiments proportional to EIG scores (or sample the ground-truth model from the posterior and select the best experiment for that model). This requires no architectural changes — only replacing the `argmax` in `select_from_pool()` with a softmax sample — but addresses the greedy repetition problem identified in validation. The approach is grounded in established theory (Russo & Van Roy, 2018; Kandasamy et al., 2019) rather than an ad-hoc diversity bonus.
+
 ---
 
 ## 5. Results
@@ -253,13 +269,23 @@ Cavagnaro, D. R., Myung, J. I., Pitt, M. A., & Kujala, J. V. (2010). Adaptive de
 
 Cavagnaro, D. R., Pitt, M. A., & Myung, J. I. (2011). Model discrimination through adaptive experimentation. *Psychonomic Bulletin & Review*, 18(1), 204–210.
 
+Chapelle, O., & Li, L. (2011). An empirical evaluation of Thompson sampling. *Advances in Neural Information Processing Systems*, 24.
+
 Clark, C. J., & Tetlock, P. E. (2022). Adversarial collaboration: The next science reform. In C. L. Frisby, R. E. Redding, W. T. O'Donohue, & S. O. Lilienfeld (Eds.), *Political Bias in Psychology* (pp. 905–927). Springer.
 
 Cowan, N., Belletier, C., Doherty, J. M., Jaroslawska, A. J., Rhodes, S., Forsberg, A., Naveh-Benjamin, M., Barrouillet, P., Camos, V., & Logie, R. H. (2020). How do scientific views change? Notes from an extended adversarial collaboration. *Perspectives on Psychological Science*, 15(4), 1011–1025.
 
 Du, Y., Li, S., Torralba, A., Tenenbaum, J. B., & Mordatch, I. (2023). Improving factuality and reasoning in language models through multiagent debate. *ICML 2024*.
 
+Foster, A., Ivanova, D. R., Malik, I., & Rainforth, T. (2021). Deep adaptive design: Amortizing sequential Bayesian experimental design. *Proceedings of the 38th International Conference on Machine Learning*, 3384–3395.
+
+Huan, X., & Marzouk, Y. M. (2016). Sequential Bayesian optimal experimental design via variational inference. *arXiv:1604.08320*.
+
 Kahneman, D. (2003). Experiences of collaborative research. *American Psychologist*, 58(9), 723–730.
+
+Kandasamy, K., Schneider, J., & Póczos, B. (2019). Myopic posterior sampling for adaptive goal oriented design of experiments. *Proceedings of the 36th International Conference on Machine Learning*, 3222–3232.
+
+Kim, W., Pitt, M. A., Lu, Z.-L., Steyvers, M., & Myung, J. I. (2017). A hierarchical adaptive approach to optimal experimental design. *Neural Computation*, 26(11), 2465–2492.
 
 Liang, T., He, Z., Jiao, W., Wang, X., Wang, Y., Wang, R., Yang, Y., Tu, Z., & Shi, S. (2023). Encouraging divergent thinking in large language models through multi-agent debate. *arXiv:2305.19118*.
 
@@ -283,8 +309,14 @@ Peters, B., Blohm, G., Haefner, R., Isik, L., Kriegeskorte, N., Lieberman, J. S.
 
 Pitt, M. A., Kim, W., Navarro, D. J., & Myung, J. I. (2006). Global model analysis by parameter space partitioning. *Psychological Review*, 113(1), 57–83.
 
+Rainforth, T., Foster, A., Ivanova, D. R., & Smith, F. B. (2024). Modern Bayesian experimental design. *Statistical Science*, 39(1), 100–114.
+
+Russo, D. J., & Van Roy, B. (2018). Learning to optimize via information-directed sampling. *Operations Research*, 66(1), 230–252.
+
 Pitt, M. A., Myung, I. J., & Zhang, S. (2002). Toward a method of selecting among computational models of cognition. *Psychological Review*, 109(3), 472–491.
 
 Shepard, R. N., Hovland, C. I., & Jenkins, H. M. (1961). Learning and memorization of classifications. *Psychological Monographs*, 75(13), 1–42.
+
+Thompson, W. R. (1933). On the likelihood that one unknown probability exceeds another in view of the evidence of two samples. *Biometrika*, 25(3/4), 285–294.
 
 Wagenmakers, E.-J., Ratcliff, R., Gomez, P., & Iverson, G. J. (2004). Assessing model mimicry using the parametric bootstrap. *Journal of Mathematical Psychology*, 48(1), 28–50.

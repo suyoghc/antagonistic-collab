@@ -246,6 +246,45 @@ def _pairwise_divergence(
     return float(np.mean(np.abs(model_predictions[a] - model_predictions[b])))
 
 
+def _select_index(
+    scores: list[float],
+    strategy: str,
+    seed: Optional[int] = None,
+) -> int:
+    """Pick an index from EIG scores using the given strategy.
+
+    Args:
+        scores: EIG scores (non-negative).
+        strategy: "greedy" (argmax) or "thompson" (sample proportional to scores).
+        seed: random seed for Thompson sampling reproducibility.
+
+    Returns:
+        Selected index.
+
+    Raises:
+        ValueError: if strategy is unknown.
+    """
+    if strategy not in ("greedy", "thompson"):
+        raise ValueError(
+            f"selection_strategy must be 'greedy' or 'thompson', got '{strategy}'"
+        )
+
+    if strategy == "greedy":
+        return int(np.argmax(scores))
+
+    # Thompson: sample proportional to EIG scores
+    arr = np.array(scores, dtype=np.float64)
+    total = arr.sum()
+    if total <= 0:
+        # All EIG zero → uniform random
+        rng = np.random.default_rng(seed)
+        return int(rng.integers(len(arr)))
+
+    weights = arr / total
+    rng = np.random.default_rng(seed)
+    return int(rng.choice(len(arr), p=weights))
+
+
 def select_from_pool(
     protocol,
     posterior: ModelPosterior,
@@ -257,8 +296,9 @@ def select_from_pool(
     pair_boost: float = 1.5,
     crux_boost_specs: Optional[list[dict]] = None,
     learning_rate: float = 1.0,
+    selection_strategy: str = "thompson",
 ) -> tuple[int, list[float]]:
-    """Select the best (structure, condition) pair from the full pool by EIG.
+    """Select a (structure, condition) pair from the full pool by EIG.
 
     Args:
         protocol: DebateProtocol instance (for compute_model_predictions).
@@ -273,9 +313,12 @@ def select_from_pool(
         crux_boost_specs: optional list of dicts with keys "structure",
             "condition", "boost". Matching candidates get EIG multiplied
             by boost.
+        learning_rate: likelihood tempering parameter in (0, 1].
+        selection_strategy: "greedy" (argmax) or "thompson" (sample
+            proportional to EIG; Russo & Van Roy 2018, Kandasamy et al. 2019).
 
     Returns:
-        (best_index, eig_scores) — index into pool, and EIG for each candidate.
+        (best_index, eig_scores) — selected index and EIG for each candidate.
     """
     eig_scores = []
 
@@ -319,7 +362,7 @@ def select_from_pool(
 
         eig_scores.append(eig)
 
-    best_idx = int(np.argmax(eig_scores))
+    best_idx = _select_index(eig_scores, selection_strategy, seed=seed)
     return best_idx, eig_scores
 
 
@@ -331,8 +374,9 @@ def select_experiment(
     n_sim: int = 200,
     seed: Optional[int] = 42,
     learning_rate: float = 1.0,
+    selection_strategy: str = "thompson",
 ) -> tuple[int, list[float]]:
-    """Select the experiment that maximizes expected information gain.
+    """Select an experiment by EIG using the given strategy.
 
     Args:
         protocol: DebateProtocol instance (for compute_model_predictions)
@@ -341,9 +385,12 @@ def select_experiment(
         n_subjects: subjects per item for likelihood computation
         n_sim: Monte Carlo simulations per model per candidate
         seed: random seed
+        learning_rate: likelihood tempering parameter in (0, 1].
+        selection_strategy: "greedy" (argmax) or "thompson" (sample
+            proportional to EIG; Russo & Van Roy 2018).
 
     Returns:
-        (best_index, eig_scores) — index into candidates, and EIG for each.
+        (best_index, eig_scores) — selected index and EIG for each candidate.
     """
     eig_scores = []
 
@@ -376,7 +423,7 @@ def select_experiment(
         )
         eig_scores.append(eig)
 
-    best_idx = int(np.argmax(eig_scores))
+    best_idx = _select_index(eig_scores, selection_strategy, seed=seed)
     return best_idx, eig_scores
 
 

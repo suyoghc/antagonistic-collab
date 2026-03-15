@@ -715,6 +715,7 @@ def run_human_arbitration(protocol: DebateProtocol, transcript: list) -> PhaseRe
                 n_sim=200,
                 seed=42,
                 learning_rate=_LEARNING_RATE,
+                selection_strategy=_SELECTION_STRATEGY,
             )
             best_struct = ""
             if isinstance(current_proposals[best].design_spec, dict):
@@ -1211,9 +1212,16 @@ def run_full_pool_selection(
         pair_boost=1.5,
         crux_boost_specs=boost_specs or None,
         learning_rate=_LEARNING_RATE,
+        selection_strategy=_SELECTION_STRATEGY,
     )
 
     best_struct, best_cond = pool[best_idx]
+    greedy_idx = int(np.argmax(eig_scores))
+    if _SELECTION_STRATEGY == "thompson" and best_idx != greedy_idx:
+        g_s, g_c = pool[greedy_idx]
+        print(f"  Strategy: thompson (greedy would pick {g_s}/{g_c})")
+    else:
+        print(f"  Strategy: {_SELECTION_STRATEGY}")
 
     # Build top-5 EIG landscape
     ranked = sorted(range(len(pool)), key=lambda i: -eig_scores[i])
@@ -2624,6 +2632,9 @@ def main():
     global _SELECTION_METHOD
     _SELECTION_METHOD = args.selection
 
+    global _SELECTION_STRATEGY
+    _SELECTION_STRATEGY = args.selection_strategy
+
     global _LEARNING_RATE
     _LEARNING_RATE = 1.0 if args.no_tempering else args.learning_rate
 
@@ -2720,6 +2731,7 @@ def main():
 _BATCH_MODE = False
 _LLM_MODEL = "claude-sonnet-4-20250514"
 _SELECTION_METHOD = "bayesian"  # "bayesian" or "heuristic"
+_SELECTION_STRATEGY = "thompson"  # "thompson" or "greedy"
 _LEARNING_RATE = 0.005  # Likelihood tempering: tau in (0, 1]; calibrated for synthetic data
 _ARBITER = True  # ARBITER features: cruxes, meta-agents, conflict map
 

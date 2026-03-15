@@ -12,6 +12,7 @@ from antagonistic_collab.bayesian_selection import (
     compute_eig,
     update_posterior_from_experiment,
     select_from_pool,
+    select_experiment,
 )
 
 
@@ -397,3 +398,231 @@ class TestPredictionClipping:
             f"Posterior entropy {posterior.entropy:.4f} collapsed after 1 experiment "
             f"with tau=0.005. Probs: {posterior.probs}"
         )
+
+
+class TestSelectionStrategy:
+    """Tests for configurable experiment selection strategy (greedy vs thompson)."""
+
+    @pytest.fixture
+    def protocol_and_pool(self):
+        """Protocol with 3 candidates where EIG scores differ meaningfully."""
+
+        class Cfg:
+            def __init__(self, name):
+                self.name = name
+
+        class Proto:
+            agent_configs = [Cfg("A"), Cfg("B")]
+
+            def compute_model_predictions(self, agent_config, struct, cond):
+                # Different structures produce different model divergence
+                if struct == "high_div":
+                    return {"item_0": 0.9, "item_1": 0.1} if agent_config.name == "A" else {"item_0": 0.1, "item_1": 0.9}
+                elif struct == "med_div":
+                    return {"item_0": 0.7, "item_1": 0.3} if agent_config.name == "A" else {"item_0": 0.3, "item_1": 0.7}
+                else:
+                    return {"item_0": 0.5, "item_1": 0.5} if agent_config.name == "A" else {"item_0": 0.5, "item_1": 0.5}
+
+        pool = [("high_div", "base"), ("med_div", "base"), ("low_div", "base")]
+        posterior = ModelPosterior.uniform(["A", "B"])
+        return Proto(), posterior, pool
+
+    # ------------------------------------------------------------------
+    # Test 1: greedy always picks argmax
+    # ------------------------------------------------------------------
+
+    def test_greedy_picks_argmax(self, protocol_and_pool):
+        """strategy='greedy' always selects the highest-EIG candidate."""
+        proto, posterior, pool = protocol_and_pool
+        idx, scores = select_from_pool(
+            proto, posterior, pool,
+            n_subjects=20, n_sim=50, seed=42,
+            selection_strategy="greedy",
+        )
+        assert idx == int(np.argmax(scores))
+
+    # ------------------------------------------------------------------
+    # Test 2: thompson produces valid index
+    # ------------------------------------------------------------------
+
+    def test_thompson_returns_valid_index(self, protocol_and_pool):
+        """strategy='thompson' returns a valid index into the pool."""
+        proto, posterior, pool = protocol_and_pool
+        idx, scores = select_from_pool(
+            proto, posterior, pool,
+            n_subjects=20, n_sim=50, seed=42,
+            selection_strategy="thompson",
+        )
+        assert 0 <= idx < len(pool)
+
+    # ------------------------------------------------------------------
+    # Test 3: thompson explores — not always argmax over many seeds
+    # ------------------------------------------------------------------
+
+    def test_thompson_explores_over_seeds(self, protocol_and_pool):
+        """Thompson sampling selects different candidates across seeds.
+
+        Over 50 runs with different seeds, Thompson should select at least
+        2 distinct candidates (not always the greedy choice).
+        """
+        proto, posterior, pool = protocol_and_pool
+        selected = set()
+        for s in range(50):
+            idx, _ = select_from_pool(
+                proto, posterior, pool,
+                n_subjects=20, n_sim=50, seed=1000 + s,
+                selection_strategy="thompson",
+            )
+            selected.add(idx)
+        assert len(selected) >= 2, (
+            f"Thompson sampling selected only {selected} across 50 seeds — no exploration"
+        )
+
+    # ------------------------------------------------------------------
+    # Test 4: thompson favors high-EIG candidates
+    # ------------------------------------------------------------------
+
+    def test_thompson_favors_high_eig(self, protocol_and_pool):
+        """Thompson sampling should select high-EIG candidates more often."""
+        proto, posterior, pool = protocol_and_pool
+        counts = {0: 0, 1: 0, 2: 0}
+        for s in range(200):
+            idx, _ = select_from_pool(
+                proto, posterior, pool,
+                n_subjects=20, n_sim=50, seed=2000 + s,
+                selection_strategy="thompson",
+            )
+            counts[idx] += 1
+        # high_div (idx 0) should be selected more often than low_div (idx 2)
+        assert counts[0] > counts[2], (
+            f"High-EIG candidate not favored: {counts}"
+        )
+
+    # ------------------------------------------------------------------
+    # Test 5: greedy is deterministic across seeds
+    # ------------------------------------------------------------------
+
+    def test_greedy_deterministic(self, protocol_and_pool):
+        """Greedy selection returns the same result regardless of seed."""
+        proto, posterior, pool = protocol_and_pool
+        results = set()
+        for s in range(10):
+            idx, _ = select_from_pool(
+                proto, posterior, pool,
+                n_subjects=20, n_sim=50, seed=42,
+                selection_strategy="greedy",
+            )
+            results.add(idx)
+        assert len(results) == 1
+
+    # ------------------------------------------------------------------
+    # Test 6: select_experiment also supports strategy
+    # ------------------------------------------------------------------
+
+    def test_select_experiment_supports_strategy(self):
+        """select_experiment() accepts and uses selection_strategy."""
+        from dataclasses import dataclass
+
+        @dataclass
+        class FakeProposal:
+            design_spec: dict
+
+        class Cfg:
+            def __init__(self, name):
+                self.name = name
+
+        class Proto:
+            agent_configs = [Cfg("A"), Cfg("B")]
+
+            def compute_model_predictions(self, agent_config, struct, cond):
+                if agent_config.name == "A":
+                    return {"item_0": 0.9, "item_1": 0.1}
+                return {"item_0": 0.1, "item_1": 0.9}
+
+        candidates = [
+            FakeProposal({"structure_name": "Type_I", "condition": "baseline"}),
+            FakeProposal({"structure_name": "Type_II", "condition": "baseline"}),
+        ]
+        posterior = ModelPosterior.uniform(["A", "B"])
+
+        # Should not raise
+        idx, scores = select_experiment(
+            Proto(), posterior, candidates,
+            n_subjects=20, n_sim=50, seed=42,
+            selection_strategy="thompson",
+        )
+        assert 0 <= idx < len(candidates)
+
+    # ------------------------------------------------------------------
+    # Test 7: invalid strategy raises ValueError
+    # ------------------------------------------------------------------
+
+    def test_invalid_strategy_raises(self, protocol_and_pool):
+        """Unknown selection_strategy raises ValueError."""
+        proto, posterior, pool = protocol_and_pool
+        with pytest.raises(ValueError, match="selection_strategy"):
+            select_from_pool(
+                proto, posterior, pool,
+                n_subjects=20, n_sim=50, seed=42,
+                selection_strategy="unknown",
+            )
+
+    # ------------------------------------------------------------------
+    # Test 8: thompson with all-zero EIG falls back to uniform
+    # ------------------------------------------------------------------
+
+    def test_thompson_uniform_when_all_eig_zero(self):
+        """When all EIG scores are zero, Thompson samples uniformly."""
+
+        class Cfg:
+            def __init__(self, name):
+                self.name = name
+
+        class Proto:
+            agent_configs = [Cfg("A"), Cfg("B")]
+
+            def compute_model_predictions(self, agent_config, struct, cond):
+                # Identical predictions → zero EIG
+                return {"item_0": 0.5, "item_1": 0.5}
+
+        pool = [("s1", "c1"), ("s2", "c2"), ("s3", "c3")]
+        posterior = ModelPosterior.uniform(["A", "B"])
+
+        selected = set()
+        for s in range(100):
+            idx, _ = select_from_pool(
+                Proto(), posterior, pool,
+                n_subjects=20, n_sim=50, seed=3000 + s,
+                selection_strategy="thompson",
+            )
+            selected.add(idx)
+        # With uniform fallback, should see multiple candidates
+        assert len(selected) >= 2, (
+            f"Zero-EIG Thompson didn't explore: selected only {selected}"
+        )
+
+    # ------------------------------------------------------------------
+    # Test 9: config and CLI support selection_strategy
+    # ------------------------------------------------------------------
+
+    def test_config_selection_strategy(self):
+        """default_config.yaml includes selection_strategy."""
+        from antagonistic_collab.config import load_config
+
+        config = load_config()
+        assert "selection_strategy" in config
+        assert config["selection_strategy"] in ("greedy", "thompson")
+
+    def test_cli_selection_strategy_parsed(self):
+        """--selection-strategy CLI flag is parsed correctly."""
+        from antagonistic_collab.__main__ import _build_argparser
+
+        parser = _build_argparser()
+
+        # Default should be thompson
+        args = parser.parse_args([])
+        assert args.selection_strategy == "thompson"
+
+        # Override to greedy
+        args = parser.parse_args(["--selection-strategy", "greedy"])
+        assert args.selection_strategy == "greedy"

@@ -120,7 +120,8 @@ def apply_config_defaults(parser, config: dict[str, Any]):
             defaults[dest] = config[config_key]
 
     # Direct mappings (config key matches argparse dest)
-    for key in ("cycles", "backend", "model", "selection", "mode", "batch"):
+    for key in ("cycles", "backend", "model", "selection", "mode", "batch",
+                "selection_strategy"):
         if key in config and config[key] is not None:
             defaults[key] = config[key]
 
