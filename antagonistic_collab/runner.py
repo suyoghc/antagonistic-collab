@@ -2564,8 +2564,8 @@ def main():
     parser.add_argument(
         "--learning-rate",
         type=float,
-        default=0.2,
-        help="Likelihood tempering rate (0, 1]. Lower values slow posterior convergence. Default 0.2.",
+        default=0.005,
+        help="Likelihood tempering rate (0, 1]. Lower values slow posterior convergence. Default 0.005.",
     )
     parser.add_argument(
         "--no-tempering",
@@ -2720,7 +2720,7 @@ def main():
 _BATCH_MODE = False
 _LLM_MODEL = "claude-sonnet-4-20250514"
 _SELECTION_METHOD = "bayesian"  # "bayesian" or "heuristic"
-_LEARNING_RATE = 0.2  # Likelihood tempering: tau in (0, 1]; default on
+_LEARNING_RATE = 0.005  # Likelihood tempering: tau in (0, 1]; calibrated for synthetic data
 _ARBITER = True  # ARBITER features: cruxes, meta-agents, conflict map
 
 

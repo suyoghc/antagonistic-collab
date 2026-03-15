@@ -98,7 +98,7 @@ def compute_log_likelihood(
     """Item-level binomial log-likelihood.
 
     For each item, recover n_correct from observed proportion,
-    clip predicted P(correct) to [0.01, 0.99], and sum
+    clip predicted P(correct) to [0.05, 0.95], and sum
     binom.logpmf across items.
 
     Args:
@@ -112,8 +112,11 @@ def compute_log_likelihood(
     observed = np.asarray(observed, dtype=np.float64)
     predicted = np.asarray(predicted, dtype=np.float64)
 
-    # Clip predictions to avoid log(0)
-    predicted = np.clip(predicted, 0.01, 0.99)
+    # Clip predictions to avoid log(0) and prevent catastrophic
+    # log-likelihoods from near-binary model predictions (e.g., SUSTAIN
+    # producing 0.001/0.999). No cognitive model should predict with
+    # >95% or <5% confidence on individual items.
+    predicted = np.clip(predicted, 0.05, 0.95)
 
     # Recover integer counts from proportions
     n_correct = np.round(observed * n_subjects).astype(int)
@@ -164,7 +167,7 @@ def compute_eig(
     pred_arrays = []
     for name in model_names:
         p = np.asarray(model_predictions[name], dtype=np.float64)
-        p = np.clip(p, 0.01, 0.99)
+        p = np.clip(p, 0.05, 0.95)
         pred_arrays.append(p)
 
     n_items = len(pred_arrays[0])

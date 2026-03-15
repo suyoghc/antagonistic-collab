@@ -672,3 +672,26 @@ Pattern covered `debate_cycle_*.json` but not `.md` transcripts.
 **Alternatives considered:** None — all were clear bugs with clear fixes.
 
 **Status:** Done.
+
+---
+
+## D32: Tempering calibration — tau=0.005, clip [0.05, 0.95] — 2026-03-15
+
+**Problem:** M7 live validation with tau=0.2 showed posterior still collapsing to entropy=0.0000 on cycle 0. All EIG=0.0000 on cycle 1. Tempering was implemented but not calibrated.
+
+**Root cause:** Two compounding issues:
+1. **Near-binary model predictions**: SUSTAIN produces predictions like 0.0005/0.999, which — even clipped to [0.01, 0.99] — generate per-item LL gaps of ~53 nats. Across 20 items × n=30 subjects = ~1000 nats total range.
+2. **tau=0.2 insufficient**: 0.2 × 1000 = 200 nats. Probability ratio e^200 ≈ 10^87 — still effectively infinite.
+
+**Decision:** Two-pronged fix:
+1. Widen prediction clip from [0.01, 0.99] to [0.05, 0.95] in `compute_log_likelihood` and `compute_eig`. No cognitive model should predict with >95% confidence on individual items.
+2. Lower default tau from 0.2 to 0.005. Calibrated so that after 1 experiment: H≈0.6 (meaningful uncertainty), after 5 experiments: H≈0.02 (strong convergence). Updated in runner.py, __main__.py, and default_config.yaml.
+
+**Validation:** 2-cycle run with GCM ground truth:
+- Cycle 0: P(GCM)=0.73, entropy=0.635 (was 0.000 before fix)
+- Cycle 1: P(GCM)=0.90, entropy=0.325 (was 0.000), EIG=0.233 (was 0.000)
+- Correct winner with gradual convergence across cycles
+
+**Tests:** 2 new tests in `TestPredictionClipping`: clip boundary verification, posterior non-collapse integration test. 308 total passing.
+
+**Status:** Done.

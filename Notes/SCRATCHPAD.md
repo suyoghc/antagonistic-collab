@@ -4,9 +4,11 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ---
 
-## Current focus — M7: Likelihood Tempering + Codex Fixes — DONE
+## Current focus — M7: Likelihood Tempering + Calibration — DONE
 
-All M7 work complete: likelihood tempering, ARBITER toggle, config file, and 5 Codex review bug fixes. 306 tests passing.
+All M7 work complete: likelihood tempering, ARBITER toggle, config file, 5 Codex review bug fixes, and tempering calibration. 308 tests passing.
+
+Live validation confirmed: tau=0.005 + clip [0.05, 0.95] produces gradual convergence (H=0.64 → 0.32 over 2 cycles) with non-zero EIG throughout.
 
 ### Next steps
 - Live validation with `--learning-rate 0.2` to confirm posterior entropy stays above 0 after cycle 0

@@ -66,8 +66,8 @@ def _build_argparser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--learning-rate",
         type=float,
-        default=0.2,
-        help="Likelihood tempering rate (0, 1]. Lower values slow posterior convergence. Default 0.2.",
+        default=0.005,
+        help="Likelihood tempering rate (0, 1]. Lower values slow posterior convergence. Default 0.005.",
     )
     parser.add_argument(
         "--no-tempering",

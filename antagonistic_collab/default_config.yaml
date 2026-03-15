@@ -48,13 +48,15 @@ selection: bayesian
 # Technical background: this is the "power posterior" / "Safe Bayesian"
 # approach (Grünwald 2012, Bissiri et al. 2016, Miller & Dunson 2019).
 #
-#   tau = 1.0 — standard Bayesian update (no tempering)
-#   tau = 0.2 — recommended for synthetic data with known generative model
-#   tau = 0.1 — aggressive tempering; very slow convergence
+#   tau = 1.0   — standard Bayesian update (no tempering)
+#   tau = 0.005 — calibrated default for synthetic data (gradual convergence
+#                 over 5+ cycles; prevents posterior collapse on cycle 0)
+#   tau = 0.05  — moderate tempering
+#   tau = 0.2   — mild tempering (may still collapse with extreme predictions)
 #
 # Set learning_rate to 1.0 or set no_tempering: true to disable.
 
-learning_rate: 0.2
+learning_rate: 0.005
 no_tempering: false
 
 

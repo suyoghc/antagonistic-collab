@@ -498,7 +498,30 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 - LOO mismatch between synthetic data and scoring path created systematic bias — synthetic data was "too easy"
 - Decision logged as D31
 
-**Status:** All fixes implemented and tested. Committing and pushing.
+**Status:** All fixes implemented and tested. Committed and pushed.
+
+---
+
+## Session 20 — 2026-03-15
+
+**Commits:** (pending)
+
+**What we did:**
+- Ran M7 live validation with tau=0.2 — posterior still collapsed (entropy=0.000, all EIG=0.000 on cycle 1)
+- Diagnosed root cause: SUSTAIN predictions near-binary (0.0005/0.999) create ~1000 nat LL range; tau=0.2 × 1000 = 200 nats still overwhelms
+- Calibrated tempering: tested clip widths ([0.01,0.99] through [0.15,0.85]) × tau values (0.2 through 0.005) × n_eff (1-30)
+- Implemented fix: prediction clip widened [0.01, 0.99] → [0.05, 0.95], default tau lowered 0.2 → 0.005 (D32)
+- Re-ran live validation: entropy=0.635 after cycle 0 (was 0.000), EIG=0.233 on cycle 1 (was 0.000)
+- Correct winner (GCM) identified with gradual convergence across cycles
+- 2 new tests, 308 total passing
+
+**Key discussion:**
+- The original tau=0.2 was set without empirical calibration — worked in unit tests but not with real model predictions
+- SUSTAIN's near-binary predictions were the main driver: its softmax over 1-2 clusters produces extreme probabilities
+- Working backwards from desired behavior (H≈0.5 after 1 cycle, convergence by 5 cycles) gave tau=0.005 as the right value
+- This is a lesson for the project: always validate hyperparameters against actual model outputs, not toy examples
+
+**Status:** Calibration done. Committing.
 
 ---
 

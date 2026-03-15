@@ -225,9 +225,9 @@ class TestLikelihoodTempering:
 
         parser = _build_argparser()
 
-        # Default: tempering on at 0.2
+        # Default: tempering on at 0.005
         args = parser.parse_args([])
-        assert args.learning_rate == 0.2
+        assert args.learning_rate == 0.005
         assert args.no_tempering is False
 
         # Custom value
@@ -282,7 +282,7 @@ class TestConfig:
         from antagonistic_collab.config import load_config
 
         config = load_config()
-        assert config["learning_rate"] == 0.2
+        assert config["learning_rate"] == 0.005
         assert config["no_tempering"] is False
         assert config["no_arbiter"] is False
         assert config["mode"] == "full_pool"
@@ -327,3 +327,73 @@ class TestConfig:
 
         with pytest.raises(FileNotFoundError):
             load_config("/nonexistent/config.yaml")
+
+
+class TestPredictionClipping:
+    """Tests for wider prediction clipping in compute_log_likelihood."""
+
+    def test_predictions_clipped_to_0_05_0_95(self):
+        """Extreme predictions (near 0 or 1) should be clipped to [0.05, 0.95].
+
+        Previously clipped to [0.01, 0.99], which let near-binary model
+        predictions (e.g., SUSTAIN at 0.001/0.999) generate catastrophic
+        log-likelihoods that overwhelmed tempering.
+        """
+        from antagonistic_collab.bayesian_selection import compute_log_likelihood
+
+        observed = np.array([0.5, 0.5])
+
+        # With extreme predictions, the LL should be the same as clip boundary
+        ll_extreme = compute_log_likelihood(observed, np.array([0.001, 0.999]), n_subjects=20)
+        ll_at_clip = compute_log_likelihood(observed, np.array([0.05, 0.95]), n_subjects=20)
+
+        # If clipping works, these should be equal
+        np.testing.assert_almost_equal(
+            ll_extreme, ll_at_clip,
+            err_msg="Predictions outside [0.05, 0.95] should be clipped",
+        )
+
+    def test_posterior_noncollapse_with_default_tau(self):
+        """With the calibrated default tau, posterior should not collapse
+        after a single experiment on typical synthetic data.
+
+        This is the core integration test for the tempering calibration.
+        """
+        from antagonistic_collab.debate_protocol import (
+            DebateProtocol,
+            default_agent_configs,
+        )
+        from antagonistic_collab.bayesian_selection import (
+            ModelPosterior,
+            update_posterior_from_experiment,
+        )
+        from antagonistic_collab.epistemic_state import EpistemicState
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state=state, agent_configs=agents)
+
+        # Generate synthetic data from GCM
+        data = protocol._synthetic_runner(
+            design_spec={"structure_name": "Type_II", "condition": "baseline"},
+            true_model="GCM",
+            cycle=0,
+        )
+
+        posterior = ModelPosterior.uniform([a.name for a in agents])
+        update_posterior_from_experiment(
+            posterior,
+            protocol,
+            data,
+            "Type_II",
+            "baseline",
+            cycle=0,
+            learning_rate=0.005,
+        )
+
+        # After 1 experiment with tau=0.005, entropy should remain meaningful
+        # (not collapse to 0)
+        assert posterior.entropy > 0.1, (
+            f"Posterior entropy {posterior.entropy:.4f} collapsed after 1 experiment "
+            f"with tau=0.005. Probs: {posterior.probs}"
+        )
