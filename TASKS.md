@@ -9,7 +9,7 @@
 - [x] **Theory revision patterns** — correct theories stable, incorrect revise progressively (Lakatos-compatible). RULEX most rigid (LESSONS 9.5)
 - [x] **Interpretation debate quality audit** — data citation weak (posteriors as proxy), critiques mixed (mechanism-aware but numerically ungrounded), behavioral adaptation limited (same talking points repeat), novel structure rationale poor (not rooted in divergence). Forcing function of adversarial critique helps in later cycles. (LESSONS 9.6)
 - [ ] **Replication runs** — run each condition 3× to assess variance in final RMSE gaps
-- [ ] **Write-up** — structured report: intro, methods, results, discussion
+- [x] **Write-up** — REPORT.md: intro (antagonistic collaboration + 3 models), methods (EIG, learning curves, 55 candidates, 2 modes), results (6 runs, all correct, 10 findings), discussion (architecture thesis, specification gap, debate limitations). 2026-03-14
 
 ---
 

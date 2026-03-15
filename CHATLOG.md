@@ -328,9 +328,10 @@ Human-readable summary of each Claude Code session on this project.
 - Novel structure rationale: POOR — not rooted in actual model divergence
 - Adversarial critique forcing function helps in later cycles (only evidence of improvement)
 
-**Status:** All M4 analysis tasks complete. Two tasks remain:
+**Status:** All M4 analysis tasks complete. One task remains:
 1. Replication runs (3× each condition for variance estimates)
-2. Write-up (structured report)
+
+**Write-up:** Drafted REPORT.md — structured report with abstract, intro, methods, results (3.1–3.7), discussion (4.1–4.6), conclusion, references. Covers all 10 key findings from 9 phases of development.
 
 ---
 
