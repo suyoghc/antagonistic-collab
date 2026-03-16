@@ -882,6 +882,16 @@ class DebateProtocol:
         valid_params -= {"self", "stimulus", "training_items", "training_labels"}
         params = {k: v for k, v in params.items() if k in valid_params}
 
+        # Fix attention_weights dimension mismatch: if explicit weights don't
+        # match stimulus dimensionality, drop them so models auto-generate
+        # uniform weights. This prevents crashes on high-dimensional sampled
+        # structures when default_params assume 3D Shepard types.
+        n_dims = stimuli.shape[1] if stimuli.ndim > 1 else 1
+        for p in (params,):
+            aw = p.get("attention_weights")
+            if aw is not None and hasattr(aw, "__len__") and len(aw) != n_dims:
+                p["attention_weights"] = None
+
         # Get per-item P(correct label) using leave-one-out:
         # When predicting item i, exclude it from the training set.
         # This prevents self-prediction bias (e.g., GCM always matching
@@ -899,6 +909,10 @@ class DebateProtocol:
         fallback_params = {
             k: v for k, v in condition_params.items() if k in valid_params
         }
+        # Apply same attention_weights dimension guard to fallback
+        aw = fallback_params.get("attention_weights")
+        if aw is not None and hasattr(aw, "__len__") and len(aw) != n_dims:
+            fallback_params["attention_weights"] = None
         item_accuracies = {}
         for i, (stim, label) in enumerate(zip(stimuli, labels)):
             loo_stimuli = np.delete(stimuli, i, axis=0)
