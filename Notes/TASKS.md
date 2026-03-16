@@ -1,5 +1,23 @@
 # Tasks
 
+## Current Milestone: M9 — Crux-Directed Thompson Sampling
+
+### M9 Tasks
+- [x] **Crux-directed mixture distribution** — `_select_index()` accepts `crux_indices` + `crux_weight`. With probability crux_weight, samples uniformly from crux-matching candidates; otherwise standard EIG-weighted Thompson. Replaces ineffective multiplicative EIG boost (D37).
+- [x] **Fix crux identification prompt** — Show structure/condition menu with format example so agents produce parseable `"Type_VI/baseline"` format instead of free text.
+- [x] **Fix crux parsing** — `cruxes_to_boost_specs()` validates against known structures/conditions, strips whitespace, returns `crux_id`.
+- [x] **Config + CLI** — `crux_weight: 0.3` in default_config.yaml, `--crux-weight` CLI flag, wired through runner.
+- [x] **Crux-directed logging** — Transcript messages include `crux_directed` and `crux_id` fields.
+- [x] **Codex review round 7** — 3 bugs: hardcoded credential, mock crux matching, batch mode leak.
+- [x] **11 new tests** (TestCruxDirectedThompson), 336 total passing.
+- [ ] **Live validation** — Verify crux-directed selections appear in real runs with GPT-4o.
+
+### M9 Commits
+- `7e26048` fix: 3 Codex review bugs — hardcoded credential, mock crux matching, batch mode leak
+- `466d1c0` feat(M9): crux-directed Thompson sampling — debate now affects experiment selection
+
+---
+
 ## Completed: M8 — Thompson Sampling + Codex Fixes Round 6 (DONE)
 
 ### M8 Tasks

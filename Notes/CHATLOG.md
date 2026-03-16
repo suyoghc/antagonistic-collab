@@ -598,4 +598,28 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 
 ---
 
+## Session 24 — 2026-03-15
+
+**Commits:** `7e26048`, `466d1c0`
+
+**What we did:**
+- Fixed 3 Codex review round 7 bugs: hardcoded API key (P1), mock crux matching (P2), batch mode leak (P3)
+- Implemented crux-directed Thompson sampling (D37):
+  - Mixture distribution in `_select_index`: with probability crux_weight, sample from crux candidates
+  - Fixed crux identification prompt to show structure/condition menu
+  - Fixed `cruxes_to_boost_specs` to validate and strip whitespace
+  - Config + CLI: `crux_weight: 0.3`, `--crux-weight` flag
+  - Crux-directed logging in transcript
+- Replaced multiplicative EIG boost (never worked) with mixture distribution
+- 336 tests passing (325 + 3 Codex + 11 crux-directed - 3 updated crux boost)
+
+**Key findings:**
+- The crux-to-experiment pipeline was completely broken: 100+ cruxes proposed across all runs, 0 parsed into boost specs. Agents wrote free-text descriptions; parser expected structure/condition format.
+- Even if parsing worked, multiplicative boost was ineffective when EIG scores cluster narrowly.
+- Mixture distribution with crux_weight=0.3 guarantees 30% of experiments are crux-directed when active cruxes exist.
+
+**Status:** Implementation done. Live validation pending.
+
+---
+
 *This log is maintained manually. Update it at the end of each session.*

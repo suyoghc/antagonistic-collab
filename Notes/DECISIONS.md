@@ -809,3 +809,30 @@ Pattern covered `debate_cycle_*.json` but not `.md` transcripts.
 **Decision:** Thompson is the default strategy. Greedy preserved via `--selection-strategy greedy` for users who prioritize convergence speed.
 
 **Status:** Done.
+
+---
+
+## D37: Crux-directed Thompson sampling — debate affects experiment selection — 2026-03-15
+
+**Problem:** The crux-to-experiment pipeline had two structural failures:
+1. **Parsing failure**: `cruxes_to_boost_specs()` expected `structure/condition` format, but LLM agents wrote free-text descriptions. Zero boost specs were produced across all M6/M7/M8 runs (100+ cruxes proposed, 0 parsed).
+2. **Ineffective mechanism**: Even if parsing worked, the multiplicative EIG boost (2×) barely shifted Thompson's sampling distribution when EIG scores were narrowly clustered (e.g., 0.18–0.23).
+
+**Decision:** Replace multiplicative boost with a **mixture distribution**: with probability `crux_weight` (default 0.3), sample uniformly from crux-matching candidates; otherwise sample from standard EIG-weighted Thompson.
+
+**Implementation:**
+1. `_select_index()` — new `crux_indices` and `crux_weight` params. Mixture coin flip → uniform crux selection or standard EIG sampling.
+2. `select_from_pool()` — new `crux_weight` param. Computes `crux_indices` from `crux_boost_specs`. Removed multiplicative boost.
+3. Crux prompt — now shows available structures and conditions with format example.
+4. `cruxes_to_boost_specs()` — validates against known structures/conditions, strips whitespace, adds `crux_id`.
+5. Runner logging — `crux_directed: bool` and `crux_id` in transcript messages.
+6. Config — `crux_weight: 0.3` in default_config.yaml, `--crux-weight` CLI flag.
+
+**Alternatives considered:**
+- Fix multiplicative boost only — doesn't solve distribution problem when scores cluster
+- Additive bonus — requires tuning relative to absolute EIG values
+- Higher multiplicative factor (10×, 100×) — brute force, not principled
+
+**Tests:** 11 new tests in `TestCruxDirectedThompson`, 336 total passing.
+
+**Status:** Implemented. Pending live validation.

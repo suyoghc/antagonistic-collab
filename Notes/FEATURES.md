@@ -495,3 +495,25 @@ agent-proposed) across 3 ground truths vs 3 unique (0 novel) for greedy.
 entropy longer (later cycles informative). Greedy gets lower winner RMSE by
 hammering the single best structure. Thompson is more robust — was correct even
 with pre-bugfix curve bonus that caused greedy RULEX misidentification in M7.
+
+### 9.3 Crux-directed selection (`--crux-weight`)
+**What it does:** Controls the probability of crux-directed experiment selection in
+Thompson sampling. With probability `crux_weight`, the system samples uniformly from
+candidates matching active cruxes; with probability `1 - crux_weight`, it uses
+standard EIG-weighted Thompson. This makes debate causally relevant to experiment
+selection: accepted cruxes (from ARBITER negotiation) directly influence which
+experiment is run.
+**Where:** `bayesian_selection.py` (`_select_index` crux mixture, `select_from_pool`
+crux_indices computation), `runner.py` (`_CRUX_WEIGHT` global, crux-directed
+logging), `__main__.py` (`--crux-weight` flag), `default_config.yaml`
+**Current default:** 0.3 (30% crux-directed, 70% EIG-weighted)
+**Why it matters:** Before M9, cruxes existed but never affected experiment selection.
+The old multiplicative EIG boost was doubly broken: (1) agents wrote free-text
+descriptions instead of `structure/condition` format, so parsing always failed;
+(2) even when fixed, a 2× multiplier barely shifts Thompson's sampling distribution.
+The mixture distribution guarantees debate has causal influence: when cruxes are
+active, ~30% of experiments will test the specific questions agents negotiated.
+**Pre-M9 crux pipeline failure:** Zero boost specs produced across all M6/M7/M8
+validation runs. 100+ cruxes proposed, 0 parsed into actionable boost specs.
+**M9 fixes:** Prompt now shows structure/condition menu; parsing validates against
+known structures and strips whitespace; mixture replaces multiplicative boost.

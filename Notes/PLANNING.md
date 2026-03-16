@@ -103,6 +103,16 @@ models/
 - [x] Results: both 3/3 correct post-bugfix; Thompson 12 unique structures (6 novel) vs greedy 3 unique (0 novel)
 - [x] 322 tests passing
 
+### M9: Crux-directed Thompson sampling (IN PROGRESS)
+- [x] Mixture distribution in `_select_index` — crux_weight probability of crux-directed selection
+- [x] Fix crux identification prompt — show structure/condition menu with format example
+- [x] Fix `cruxes_to_boost_specs` — validate against known structures, strip whitespace
+- [x] Config + CLI: `crux_weight: 0.3`, `--crux-weight` flag
+- [x] Crux-directed logging in transcript (crux_directed, crux_id fields)
+- [x] 3 Codex fixes (D37b): hardcoded credential, mock crux matching, batch mode leak
+- [x] 336 tests passing
+- [ ] Live validation: verify crux-directed selections appear in real runs
+
 ## Key constraints
 
 - Synthetic data only (no real experiments) — but must be model-sensitive
