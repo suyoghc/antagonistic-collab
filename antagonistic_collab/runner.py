@@ -1245,7 +1245,9 @@ def run_full_pool_selection(
     # Claim-directed selection: boost experiments matching testable claims
     claim_specs = claims_to_boost_specs(protocol.state)
     if claim_specs:
-        print(f"  Claim-directed: {len(claim_specs)} testable claims targeting pool candidates")
+        print(
+            f"  Claim-directed: {len(claim_specs)} testable claims targeting pool candidates"
+        )
     boost_specs = boost_specs + claim_specs
 
     best_idx, eig_scores = select_from_pool(
@@ -1975,7 +1977,9 @@ def claims_to_boost_specs(state: EpistemicState) -> list[dict]:
         PARAMETRIC_CONDITIONS,
     )
 
-    valid_structures = set(STRUCTURE_REGISTRY.keys()) | set(PARAMETRIC_STRUCTURES.keys())
+    valid_structures = set(STRUCTURE_REGISTRY.keys()) | set(
+        PARAMETRIC_STRUCTURES.keys()
+    )
     valid_conditions = set(CONDITION_EFFECTS.keys()) | set(PARAMETRIC_CONDITIONS.keys())
 
     seen = set()
@@ -2170,7 +2174,9 @@ def validate_param_revision(
     If no executed experiment exists, accepts unconditionally (fail-open).
     """
     # Find the most recent executed experiment
-    executed = [e for e in protocol.state.experiments if e.status == "executed" and e.data]
+    executed = [
+        e for e in protocol.state.experiments if e.status == "executed" and e.data
+    ]
     if not executed:
         return (True, 0.0, 0.0)
 
@@ -2274,7 +2280,9 @@ def resolve_claims_from_data(
             continue
 
         # Fallback: RMSE comparison across agents
-        status, evidence = _rmse_fallback_resolution(claim, structure, condition, data, protocol)
+        status, evidence = _rmse_fallback_resolution(
+            claim, structure, condition, data, protocol
+        )
         state.update_claim_status(idx, status, evidence, cycle)
         print(f"  Claim resolved (RMSE): [{status}] {claim.content} — {evidence}")
 
@@ -2296,9 +2304,15 @@ def _try_parse_resolution(claim: DebateClaim, data: dict):
         if actual_val is not None:
             diff = abs(predicted_val - actual_val)
             if diff <= 0.15:
-                return ("confirmed", f"predicted={predicted_val:.3f}, actual={actual_val:.3f}, diff={diff:.3f}")
+                return (
+                    "confirmed",
+                    f"predicted={predicted_val:.3f}, actual={actual_val:.3f}, diff={diff:.3f}",
+                )
             else:
-                return ("falsified", f"predicted={predicted_val:.3f}, actual={actual_val:.3f}, diff={diff:.3f}")
+                return (
+                    "falsified",
+                    f"predicted={predicted_val:.3f}, actual={actual_val:.3f}, diff={diff:.3f}",
+                )
 
     # Pattern: "RMSE < X.XX" or "RMSE > X.XX"
     match = re.match(r"RMSE\s*([<>])\s*([0-9.]+)", pred)
@@ -2358,8 +2372,6 @@ def _rmse_fallback_resolution(
 
     # Best agent = lowest RMSE
     best_agent = min(agent_rmses, key=agent_rmses.get)
-    claim_rmse = agent_rmses.get(claim.agent, float("inf"))
-    best_rmse = agent_rmses[best_agent]
 
     rmse_summary = ", ".join(f"{k}={v:.3f}" for k, v in sorted(agent_rmses.items()))
 
@@ -2525,7 +2537,8 @@ def run_cycle(
 
     # Resolve claims against the just-collected data
     executed_exps = [
-        e for e in protocol.state.experiments
+        e
+        for e in protocol.state.experiments
         if e.cycle == protocol.state.cycle and e.status == "executed"
     ]
     if executed_exps:
@@ -2534,8 +2547,12 @@ def run_cycle(
         condition = exp.design_spec.get("condition", "baseline")
         if exp.data:
             resolve_claims_from_data(
-                protocol.state, struct_name, condition, exp.data,
-                protocol, protocol.state.cycle,
+                protocol.state,
+                struct_name,
+                condition,
+                exp.data,
+                protocol,
+                protocol.state.cycle,
             )
 
     if mode == "full_pool":
