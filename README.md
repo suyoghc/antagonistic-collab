@@ -146,7 +146,7 @@ Validated across 61 runs (3 ground truths × multiple milestones/modes/ablation 
 - **Winning theories need fewer revisions**: Rule_Agent made 0 revisions and won RULEX by 67.6%. Losing agents revise futilely (Lakatos-compatible).
 - **Debate is epiphenomenal on synthetic benchmarks** (M13): 3×2 ablation (18/18 correct). No-debate achieves best RMSE (0.055) and gap (87.6%) while running 3-4× faster. The computational pipeline is causally sufficient; debate provides interpretive value but doesn't improve identification.
 
-See [Notes/REPORT.md](Notes/REPORT.md) for the full write-up and [Notes/LESSONS_LEARNED.md](Notes/LESSONS_LEARNED.md) for 40 theses on LLM-mediated scientific debate.
+See [Notes/WRITEUP.md](Notes/WRITEUP.md) for the academic paper, [Notes/REPORT.md](Notes/REPORT.md) for the technical report, and [Notes/LESSONS_LEARNED.md](Notes/LESSONS_LEARNED.md) for 40 theses on LLM-mediated scientific debate.
 
 ## Current version: arbiter-v0.1
 
