@@ -1,5 +1,60 @@
 # Tasks
 
+## Current: M13 — Debate Ablation Study
+
+### M13 Tasks
+- [x] **Experiment framework** — `antagonistic_collab/experiment.py`: `ExperimentCondition` dataclass, `load_experiment()` YAML parser, `run_condition()` global-setter + runner, `run_experiment()` grid runner + comparison table. Rejects unknown YAML keys to prevent silent misconfig.
+- [x] **No-debate mode** — `_NO_DEBATE` global in runner.py. `run_cycle()` skips all LLM phases (commitment, divergence, cruxes, interpretation, critique, audit). `run_execution()` computes predictions with default params, no LLM calls. `client=None` works.
+- [x] **CLI integration** — `--no-debate`, `--experiment`, `--merge` flags in `__main__.py` and `runner.py`
+- [x] **3×2 ablation config** — `experiments/debate_ablation.yaml`: No-Debate / Debate-No-Arbiter / Debate+Arbiter × Thompson / Greedy × 3 ground truths = 18 conditions
+- [x] **Merge utility** — `merge_summaries()` combines multiple summary.json files, prints unified comparison table
+- [x] **15 new tests** (TestExperimentFramework, TestNoDebateMode, TestDebateAblationConfig), 388 total passing
+- [x] **Ablation run** — 17/18 completed (1 connection error), all 17 correct winners
+- [ ] Re-run failed `greedy_debate_RULEX` (connection error)
+
+### M13 Ablation Results (3×2, GPT-4o, 2026-03-16)
+
+| Condition | GCM→Exemplar | RULEX→Rule | SUSTAIN→Clustering |
+|---|---|---|---|
+| thompson_no_debate | 0.088, 76.8% | 0.053, 86.1% | 0.057, 87.7% |
+| thompson_debate_no_arbiter | 0.080, 76.7% | 0.078, 81.4% | 0.056, 87.5% |
+| thompson_debate+arbiter | 0.081, 79.9% | 0.051, 86.9% | 0.077, 83.8% |
+| greedy_no_debate | 0.065, 87.6% | 0.053, 90.0% | 0.016, 97.4% |
+| greedy_debate_no_arbiter | 0.068, 84.7% | 0.172, 66.7% | 0.016, 97.4% |
+| greedy_debate+arbiter | 0.071, 85.3% | ERROR | 0.021, 96.7% |
+
+Summary by debate level:
+- **none**: 6/6 correct, avg RMSE=0.055, avg gap=87.6%, avg time=368s
+- **debate (no arbiter)**: 6/6 correct, avg RMSE=0.078, avg gap=82.4%, avg time=1315s
+- **debate+arbiter**: 5/5 correct, avg RMSE=0.060, avg gap=86.5%, avg time=1107s
+
+Key findings:
+- **Debate is epiphenomenal on synthetic benchmarks.** No-debate has the best RMSE and gap while running 3-4× faster.
+- **Debate without arbiter actively hurts** — LLM param_overrides introduce noise; debate output is disconnected from scoring pipeline.
+- **Arbiter partially recovers** — crux-directed selection compensates for noise, but still doesn't beat no-debate.
+- **Greedy > Thompson** when signal is strong (gap 88.2% vs 83.0%), but Thompson retains healthy uncertainty (entropy 0.001–0.032 vs 0.000).
+
+### M13 Commits
+- `938bb43` feat: experiment framework + no-debate ablation mode
+
+---
+
+## Future Tasks
+
+### Close the debate→computation feedback loop
+The current debate architecture is disconnected from the scoring pipeline — debate output doesn't feed back into EIG or predictions. For debate to causally improve identification, the loop needs to be closed. Options:
+- Use interpretation to update model parameters (LLM-proposed param revisions feed into next cycle's `compute_model_predictions`)
+- Use critique to reweight the posterior (e.g., falsified claims penalize a model's posterior weight)
+- Use crux resolution to prune the design space (resolved cruxes remove dominated experiments)
+
+### Conditions where debate may causally matter
+- **Model misspecification** — models need parameter adaptation from LLM reasoning
+- **Non-pre-enumerated design space** — LLM agents propose genuinely novel structures
+- **Ambiguous data** — interpretation changes what you test next (real human data)
+- **Explanation for humans** — the goal is understanding, not just winner identification
+
+---
+
 ## Completed: M12 — Continuous Design Space Parameterization (DONE)
 
 ### M12 Tasks

@@ -155,6 +155,21 @@ def _entry():
         from .experiment import run_experiment
 
         run_experiment(yaml_path)
+    elif "--merge" in sys.argv:
+        # Merge summary JSONs: --merge path1 path2 ... [--output merged.json]
+        idx = sys.argv.index("--merge")
+        remaining = sys.argv[idx + 1 :]
+        output = None
+        if "--output" in remaining:
+            oi = remaining.index("--output")
+            output = remaining[oi + 1]
+            remaining = remaining[:oi] + remaining[oi + 2 :]
+        if not remaining:
+            print("ERROR: --merge requires at least one summary.json path or directory")
+            sys.exit(1)
+        from .experiment import merge_summaries
+
+        merge_summaries(*remaining, output=output)
     else:
         from .runner import main
 

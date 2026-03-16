@@ -1,0 +1,26 @@
+name: debate_no_arbiter
+description: "Debate without ARBITER — supplement to main ablation"
+
+defaults:
+  cycles: 5
+  mode: full_pool
+  design_space: continuous
+  n_continuous_samples: 50
+  backend: princeton
+  model: gpt-4o
+  learning_rate: 0.005
+  arbiter: false
+  crux_weight: 0.3
+  claim_responsive: true
+  no_debate: false
+
+ground_truths:
+  - GCM
+  - SUSTAIN
+  - RULEX
+
+conditions:
+  thompson_debate_no_arbiter:
+    selection_strategy: thompson
+  greedy_debate_no_arbiter:
+    selection_strategy: greedy

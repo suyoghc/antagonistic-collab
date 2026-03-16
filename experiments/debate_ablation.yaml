@@ -1,5 +1,5 @@
 name: debate_ablation
-description: "2x2: Thompson/Greedy x Debate/No-Debate across 3 ground truths"
+description: "3x2: No-Debate/Debate-No-Arbiter/Debate-Arbiter x Thompson/Greedy across 3 ground truths"
 
 defaults:
   cycles: 5
@@ -21,15 +21,30 @@ ground_truths:
   - RULEX
 
 conditions:
-  thompson_debate:
-    selection_strategy: thompson
-    no_debate: false
+  # --- Thompson sampling ---
   thompson_no_debate:
     selection_strategy: thompson
     no_debate: true
-  greedy_debate:
-    selection_strategy: greedy
+    arbiter: false
+  thompson_debate_no_arbiter:
+    selection_strategy: thompson
     no_debate: false
+    arbiter: false
+  thompson_debate_arbiter:
+    selection_strategy: thompson
+    no_debate: false
+    arbiter: true
+
+  # --- Greedy (argmax EIG) ---
   greedy_no_debate:
     selection_strategy: greedy
     no_debate: true
+    arbiter: false
+  greedy_debate_no_arbiter:
+    selection_strategy: greedy
+    no_debate: false
+    arbiter: false
+  greedy_debate_arbiter:
+    selection_strategy: greedy
+    no_debate: false
+    arbiter: true

@@ -9020,8 +9020,8 @@ class TestExperimentFramework:
         from antagonistic_collab.experiment import load_experiment
 
         conditions = load_experiment("experiments/debate_ablation.yaml")
-        # 3 ground truths x 4 conditions = 12
-        assert len(conditions) == 12
+        # 3 ground truths x 6 conditions = 18
+        assert len(conditions) == 18
 
     def test_load_experiment_inherits_defaults(self):
         """Condition params come from defaults when not overridden."""
@@ -9088,8 +9088,9 @@ conditions:
         # All unique
         assert len(names) == len(set(names))
         # Names contain condition + ground truth
-        assert "thompson_debate_GCM" in names
+        assert "thompson_debate_arbiter_GCM" in names
         assert "greedy_no_debate_RULEX" in names
+        assert "thompson_debate_no_arbiter_SUSTAIN" in names
 
     def test_load_experiment_with_tmpfile(self):
         """load_experiment works with a minimal custom YAML."""
@@ -9345,12 +9346,20 @@ class TestDebateAblationConfig:
         conditions = load_experiment("experiments/debate_ablation.yaml")
         assert len(conditions) > 0
 
-    def test_debate_ablation_yaml_12_conditions(self):
-        """4 conditions x 3 ground truths = 12."""
+    def test_debate_ablation_yaml_18_conditions(self):
+        """6 conditions x 3 ground truths = 18."""
         from antagonistic_collab.experiment import load_experiment
 
         conditions = load_experiment("experiments/debate_ablation.yaml")
-        assert len(conditions) == 12
+        assert len(conditions) == 18
         # Verify ground truths covered
         gts = {c.true_model for c in conditions}
         assert gts == {"GCM", "SUSTAIN", "RULEX"}
+        # Verify 3 debate levels x 2 strategies
+        cond_groups = {c.name.rsplit("_", 1)[0] for c in conditions}
+        assert "thompson_no_debate" in cond_groups
+        assert "thompson_debate_no_arbiter" in cond_groups
+        assert "thompson_debate_arbiter" in cond_groups
+        assert "greedy_no_debate" in cond_groups
+        assert "greedy_debate_no_arbiter" in cond_groups
+        assert "greedy_debate_arbiter" in cond_groups

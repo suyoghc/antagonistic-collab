@@ -300,27 +300,49 @@ def run_experiment(yaml_path: str) -> dict:
                 "true_model": cond.true_model,
             }
 
-    # --- Comparison table ---
-    ground_truths = sorted({c.true_model for c in conditions})
-    cond_groups = sorted({c.name.rsplit("_", 1)[0] for c in conditions})
+    _print_comparison_table(results, title=exp_name.upper())
+
+    # Save combined results
+    summary_path = os.path.join(base_dir, "summary.json")
+    with open(summary_path, "w") as f:
+        json.dump(results, f, indent=2, default=str)
+    print(f"\nFull results saved to: {summary_path}")
+
+    return results
+
+
+def _print_comparison_table(results: dict, title: str = "SUMMARY") -> None:
+    """Print a condition × ground_truth comparison table from results dict."""
+    # Infer ground truths and condition groups from result keys
+    ground_truths = sorted(
+        {r.get("true_model", k.rsplit("_", 1)[-1]) for k, r in results.items()}
+        & {"GCM", "SUSTAIN", "RULEX"}
+    )
+    cond_groups = sorted(
+        {
+            k.rsplit("_", 1)[0]
+            for k in results.keys()
+            if k.rsplit("_", 1)[-1] in ground_truths
+        }
+    )
 
     print(f"\n\n{'=' * 70}")
-    print(f"{exp_name.upper()} SUMMARY")
+    print(title)
     print(f"{'=' * 70}")
 
     # Header
-    header = f"{'Condition':<22}"
+    header = f"{'Condition':<28}"
     for gt in ground_truths:
         header += f"  {'Winner':<16} {'RMSE':<7} {'Gap%':<6}"
     print(header)
     print("-" * len(header))
 
     for cg in cond_groups:
-        row = f"{cg:<22}"
+        row = f"{cg:<28}"
         for gt in ground_truths:
             key = f"{cg}_{gt}"
             r = results.get(key, {})
-            if "error" in r:
+            if not r or "error" in r:
                 row += f"  {'ERROR':<16} {'?':<7} {'?':<6}"
             else:
                 w = r.get("winner", "?")
@@ -332,10 +354,48 @@ def run_experiment(yaml_path: str) -> dict:
                 row += f"  {w:<16} {rmse_str:<7} {gap:<6.1f}"
         print(row)
 
-    # Save combined results
-    summary_path = os.path.join(base_dir, "summary.json")
-    with open(summary_path, "w") as f:
-        json.dump(results, f, indent=2, default=str)
-    print(f"\nFull results saved to: {summary_path}")
 
-    return results
+def merge_summaries(*paths: str, output: str | None = None) -> dict:
+    """Merge multiple summary.json files and print a unified comparison table.
+
+    Args:
+        *paths: Paths to summary.json files (or directories containing one).
+        output: Optional path to write merged summary.json. If None, writes
+                to the parent directory of the first path.
+
+    Returns:
+        Merged results dict.
+    """
+    merged = {}
+    for path in paths:
+        # Accept either a file or a directory containing summary.json
+        if os.path.isdir(path):
+            path = os.path.join(path, "summary.json")
+        if not os.path.exists(path):
+            print(f"  WARNING: {path} not found, skipping")
+            continue
+        with open(path) as f:
+            data = json.load(f)
+        n_before = len(merged)
+        merged.update(data)
+        print(
+            f"  Loaded {len(data)} conditions from {path} ({len(merged) - n_before} new)"
+        )
+
+    if not merged:
+        print("No results to merge.")
+        return {}
+
+    _print_comparison_table(merged, title="MERGED ABLATION SUMMARY")
+
+    # Save merged output
+    if output is None:
+        first_dir = (
+            os.path.dirname(paths[0]) if not os.path.isdir(paths[0]) else paths[0]
+        )
+        output = os.path.join(first_dir, "summary_merged.json")
+    with open(output, "w") as f:
+        json.dump(merged, f, indent=2, default=str)
+    print(f"\nMerged results saved to: {output}")
+
+    return merged

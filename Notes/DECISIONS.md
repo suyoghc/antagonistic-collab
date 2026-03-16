@@ -963,3 +963,46 @@ Key findings:
 5. **Debate layer is interpretive, not directive** — 0/15 experiments from agent proposals; debate provides mechanistic narratives (80% FR rate) but doesn't influence experiment selection
 
 **Status:** Done.
+
+---
+
+## D41: Debate ablation study — experiment framework + 3×2 ablation — 2026-03-16
+
+**Problem:** After 9 milestones of progressive improvements, debate's causal contribution remained unclear. The computational pipeline (EIG + Bayesian posterior + model predictions) drove all identification outcomes, while debate output was disconnected from the scoring pipeline. Is debate epiphenomenal, or does it contribute in ways not captured by RMSE?
+
+**Decision:** Build a reusable experiment framework and run a 3×2 ablation: No-Debate / Debate-No-Arbiter / Debate+Arbiter × Thompson / Greedy × 3 ground truths = 18 conditions. The "no debate" mode runs only the computational pipeline with zero LLM calls, providing a clean computational-only baseline.
+
+**Alternatives considered:**
+1. **2×2 ablation (debate/no-debate only)** — Original plan, but conflates base debate with ARBITER features. User pointed out we need to separate debate-without-arbiter from debate-with-arbiter to estimate each contribution independently.
+2. **Ablate individual features** — Too many combinations (claim-responsive, crux-directed, meta-agents, etc.). The 3-level debate factor captures the main architectural distinction.
+3. **Compare across milestones** — Confounded by other changes between milestones (tempering, continuous design, etc.). Same-config ablation is cleaner.
+
+**Implementation:**
+- `antagonistic_collab/experiment.py` (NEW): `ExperimentCondition` dataclass, `load_experiment()` YAML parser (rejects unknown keys), `run_condition()` (saves/restores globals), `run_experiment()` (grid runner + comparison table), `merge_summaries()` (combine multiple runs)
+- `antagonistic_collab/runner.py`: `_NO_DEBATE` global, `run_cycle()` skips all LLM phases when set, `run_execution()` computes predictions with default params
+- `experiments/debate_ablation.yaml`: 3×2 config
+- `experiments/debate_no_arbiter.yaml`: supplemental 2-condition config for separate runs
+- CLI: `--no-debate`, `--experiment`, `--merge` flags
+- 15 new tests (TestExperimentFramework, TestNoDebateMode, TestDebateAblationConfig)
+
+**Ablation results (17/18 completed, 1 connection error):**
+
+| Debate Level | Correct | Avg RMSE | Avg Gap | Avg Time |
+|---|---|---|---|---|
+| None | 6/6 | 0.055 | 87.6% | 368s |
+| Debate (no arbiter) | 6/6 | 0.078 | 82.4% | 1315s |
+| Debate + Arbiter | 5/5 | 0.060 | 86.5% | 1107s |
+
+**Key findings:**
+1. **Debate is epiphenomenal on synthetic benchmarks.** All 17/17 conditions identify the correct winner regardless of debate level. No-debate has the best RMSE and gap while running 3-4× faster.
+2. **Debate without arbiter actively hurts.** LLM param_overrides introduce noise into model predictions. Without crux-directed selection to compensate, this noise degrades discrimination.
+3. **Arbiter partially recovers.** Crux-directed Thompson sampling and meta-agent oversight compensate for param_override noise, but still don't beat the computational-only baseline.
+4. **The structural gap is architectural.** Debate output doesn't feed back into EIG or predictions. For debate to help, the loop must be closed.
+
+**Future directions (logged in TASKS.md):**
+- Model misspecification (models need LLM-proposed param adaptation)
+- Non-pre-enumerated design space (LLM agents propose novel structures EIG can't discover)
+- Ambiguous data (real human data with noise, individual differences)
+- Explanation for humans (goal is understanding, not just identification)
+
+**Status:** Done. 1 condition (greedy_debate_RULEX) needs re-run.

@@ -756,4 +756,44 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 
 ---
 
+### Session 29 — 2026-03-16 (M13: Debate Ablation Study)
+
+**Commits:** `938bb43` (initial), pending (3×2 expansion + merge utility + docs)
+
+**What we did:**
+- Built reusable experiment framework (`experiment.py`): YAML-driven multi-condition ablation with `ExperimentCondition` dataclass, `load_experiment()`, `run_condition()`, `run_experiment()`
+- Implemented no-debate mode: `_NO_DEBATE` global skips all LLM phases, runs computational pipeline only (EIG + predictions + posterior)
+- Ran full 3×2 ablation: No-Debate / Debate-No-Arbiter / Debate+Arbiter × Thompson / Greedy × 3 ground truths
+- Expanded from original 2×2 after user pointed out conflation of base debate with ARBITER features
+- Created `experiments/debate_no_arbiter.yaml` for supplemental runs + `merge_summaries()` utility
+- Fixed Codex review finding: unknown YAML keys now rejected (prevents silent misconfig)
+- Fixed missing CLI args in runner.py's parser (`--no-claim-responsive`, `--design-space`, etc.)
+- 15 new tests (TestExperimentFramework, TestNoDebateMode, TestDebateAblationConfig)
+- Updated Notes/TASKS.md with M13 results table and future tasks
+- Updated Notes/LESSONS_LEARNED.md with lessons 36-40
+- Saved future task directions to memory
+
+**M13 ablation results (17/18 completed):**
+
+| Debate Level | Correct | Avg RMSE | Avg Gap | Avg Time |
+|---|---|---|---|---|
+| None | 6/6 | 0.055 | 87.6% | 368s |
+| Debate (no arbiter) | 6/6 | 0.078 | 82.4% | 1315s |
+| Debate + Arbiter | 5/5 | 0.060 | 86.5% | 1107s |
+
+**Key findings:**
+- Debate is epiphenomenal on synthetic benchmarks — no-debate has best RMSE/gap while running 3-4× faster
+- Debate without arbiter actively hurts (LLM param_overrides introduce noise)
+- Arbiter partially recovers via crux-directed selection but still doesn't beat no-debate
+- The structural gap is architectural: debate output disconnected from scoring pipeline
+
+**Key discussion:**
+- User identified the need to separate debate-without-arbiter from debate+arbiter (3 debate levels instead of 2)
+- Identified 4 future conditions where debate may causally matter: model misspecification, non-enumerated design space, ambiguous data, explanation for humans
+- Identified the feedback loop closure as the key architectural task
+
+**Status:** M13 complete (1 condition pending re-run). D41 logged.
+
+---
+
 *This log is maintained manually. Update it at the end of each session.*
