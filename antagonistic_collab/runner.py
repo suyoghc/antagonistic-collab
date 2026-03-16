@@ -2157,6 +2157,51 @@ def run_audit(protocol: DebateProtocol, client, transcript: list) -> PhaseResult
 # ---------------------------------------------------------------------------
 
 
+def validate_param_revision(
+    protocol: DebateProtocol,
+    agent,
+    proposed_params: dict,
+) -> tuple:
+    """Verify proposed params don't degrade model fit on the most recent experiment.
+
+    Computes RMSE with current default_params vs proposed_params on the last
+    executed experiment. Accepts if proposed_rmse <= baseline_rmse + 0.01.
+    Returns (accepted: bool, baseline_rmse: float, proposed_rmse: float).
+    If no executed experiment exists, accepts unconditionally (fail-open).
+    """
+    # Find the most recent executed experiment
+    executed = [e for e in protocol.state.experiments if e.status == "executed" and e.data]
+    if not executed:
+        return (True, 0.0, 0.0)
+
+    exp = executed[-1]
+    struct_name = exp.design_spec.get("structure_name", "")
+    condition = exp.design_spec.get("condition", "baseline")
+
+    def compute_rmse(params):
+        """Compute RMSE between model predictions and actual data."""
+        try:
+            preds = protocol.compute_model_predictions(
+                agent, struct_name, condition, param_overrides=params
+            )
+        except Exception:
+            return float("inf")
+
+        # Compare item-level predictions against actual data
+        errors = []
+        for key in exp.data:
+            if key.startswith("item_") and key in preds:
+                errors.append((preds[key] - exp.data[key]) ** 2)
+        if not errors:
+            return float("inf")
+        return math.sqrt(sum(errors) / len(errors))
+
+    baseline_rmse = compute_rmse(agent.default_params)
+    proposed_rmse = compute_rmse(proposed_params)
+    accepted = proposed_rmse <= baseline_rmse + 0.01
+    return (accepted, baseline_rmse, proposed_rmse)
+
+
 def sync_params_from_theory(protocol: DebateProtocol):
     """Propagate revised theory params back to agent_config.default_params.
 
@@ -2164,6 +2209,9 @@ def sync_params_from_theory(protocol: DebateProtocol):
     model_params live on the TheoryCommitment but are never read by
     compute_model_predictions(), which uses agent_config.default_params.
     This function closes that loop.
+
+    Validates proposed params against the most recent experiment before
+    applying — rejects revisions that degrade model fit (M14).
     """
     for agent in protocol.agent_configs:
         theory = protocol.state.get_theory(agent.theory_name)
@@ -2173,7 +2221,21 @@ def sync_params_from_theory(protocol: DebateProtocol):
             valid -= {"self", "stimulus", "training_items", "training_labels"}
             filtered = {k: v for k, v in theory.model_params.items() if k in valid}
             if filtered:
-                agent.default_params = filtered
+                accepted, baseline_rmse, proposed_rmse = validate_param_revision(
+                    protocol, agent, filtered
+                )
+                if accepted:
+                    agent.default_params = filtered
+                    print(
+                        f"  Params accepted for {agent.name}: "
+                        f"RMSE {baseline_rmse:.4f} → {proposed_rmse:.4f}"
+                    )
+                else:
+                    print(
+                        f"  Params REJECTED for {agent.name}: "
+                        f"RMSE {baseline_rmse:.4f} → {proposed_rmse:.4f} "
+                        f"(degradation > 0.01)"
+                    )
 
 
 # ---------------------------------------------------------------------------
