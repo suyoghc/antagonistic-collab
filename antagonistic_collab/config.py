@@ -109,6 +109,7 @@ def apply_config_defaults(parser, config: dict[str, Any]):
         "learning_rate": "learning_rate",
         "no_tempering": "no_tempering",
         "no_arbiter": "no_arbiter",
+        "no_claim_responsive": "no_claim_responsive",
         "critique_rounds": "critique_rounds",
         "hitl_checkpoints": "hitl_checkpoints",
         "output_dir": "output_dir",
@@ -120,8 +121,16 @@ def apply_config_defaults(parser, config: dict[str, Any]):
             defaults[dest] = config[config_key]
 
     # Direct mappings (config key matches argparse dest)
-    for key in ("cycles", "backend", "model", "selection", "mode", "batch",
-                "selection_strategy", "crux_weight"):
+    for key in (
+        "cycles",
+        "backend",
+        "model",
+        "selection",
+        "mode",
+        "batch",
+        "selection_strategy",
+        "crux_weight",
+    ):
         if key in config and config[key] is not None:
             defaults[key] = config[key]
 

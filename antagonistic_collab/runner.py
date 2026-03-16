@@ -1200,8 +1200,10 @@ def run_full_pool_selection(
         boost_specs = cruxes_to_boost_specs(protocol.state)
         if boost_specs:
             crux_ids = [s["crux_id"] for s in boost_specs]
-            print(f"  Crux-directed: {len(boost_specs)} active cruxes "
-                  f"(weight={_CRUX_WEIGHT:.1f}, ids={crux_ids})")
+            print(
+                f"  Crux-directed: {len(boost_specs)} active cruxes "
+                f"(weight={_CRUX_WEIGHT:.1f}, ids={crux_ids})"
+            )
 
     best_idx, eig_scores = select_from_pool(
         protocol,
@@ -1232,7 +1234,9 @@ def run_full_pool_selection(
                 break
 
     if crux_directed:
-        print(f"  Strategy: crux-directed ({crux_match_id} → {best_struct}/{best_cond})")
+        print(
+            f"  Strategy: crux-directed ({crux_match_id} → {best_struct}/{best_cond})"
+        )
     elif _SELECTION_STRATEGY == "thompson" and best_idx != greedy_idx:
         g_s, g_c = pool[greedy_idx]
         print(f"  Strategy: thompson (greedy would pick {g_s}/{g_c})")
@@ -1379,13 +1383,42 @@ def run_interpretation_debate(
         if claims_context:
             claims_block = f"\n{claims_context}\n"
 
+        # Build claim-responsive directive for agents with falsified claims
+        falsified_directive = ""
+        if _CLAIM_RESPONSIVE:
+            falsified_claims = [
+                c
+                for c in protocol.state.claim_ledger
+                if c.agent == agent.name and c.status == "falsified"
+            ]
+            if falsified_claims:
+                lines = [
+                    "\n### FALSIFIED CLAIMS — You MUST address each one",
+                    "The following claims you made were tested and falsified. "
+                    "For each, you must either: (a) acknowledge the error and "
+                    "revise your theory, (b) explain why the falsification is "
+                    "misleading (e.g., confound, boundary condition), or "
+                    "(c) abandon the claim.",
+                ]
+                for i, c in enumerate(falsified_claims):
+                    lines.append(f'  {i + 1}. "{c.content}" — {c.evidence}')
+                lines.append(
+                    '\nInclude a "falsified_response" field in your JSON '
+                    "output: a list of objects, one per falsified claim, each "
+                    'with "claim" (the original claim text) and "action" '
+                    '("revise", "explain", or "abandon") and '
+                    '"reasoning" (your justification).'
+                )
+                falsified_directive = "\n".join(lines) + "\n"
+
         prompt = (
             f"PHASE: Interpretation Debate\n\n"
             f"You are interpreting experimental results. Analyze the data and "
             f"produce a structured response.\n\n"
             f"RESULTS AND CONTEXT:\n{extended_context}\n"
             f"{conflict_block}"
-            f"{claims_block}\n"
+            f"{claims_block}"
+            f"{falsified_directive}\n"
             f"You MUST output a JSON block with:\n"
             f'{{"interpretation": "your analysis of what the results show", '
             f'"confounds_flagged": ["list any confounds or methodological issues"], '
@@ -1702,7 +1735,7 @@ def run_crux_identification(
             "AVAILABLE CONDITIONS:\n"
             f"  {', '.join(condition_names)}\n\n"
             "Use EXACTLY the format structure_name/condition from the lists above.\n"
-            "Example: \"discriminating_experiment\": \"Type_VI/high_noise\"\n\n"
+            'Example: "discriminating_experiment": "Type_VI/high_noise"\n\n'
             "Output a JSON block:\n"
             '{"cruxes": [{"description": "...", '
             '"discriminating_experiment": "structure/condition", '
@@ -1873,11 +1906,13 @@ def cruxes_to_boost_specs(state: EpistemicState) -> list[dict]:
         if structure not in valid_structures or condition not in valid_conditions:
             continue
 
-        specs.append({
-            "structure": structure,
-            "condition": condition,
-            "crux_id": crux.id,
-        })
+        specs.append(
+            {
+                "structure": structure,
+                "condition": condition,
+                "crux_id": crux.id,
+            }
+        )
     return specs
 
 
@@ -2703,6 +2738,9 @@ def main():
     global _CRUX_WEIGHT
     _CRUX_WEIGHT = args.crux_weight
 
+    global _CLAIM_RESPONSIVE
+    _CLAIM_RESPONSIVE = not args.no_claim_responsive
+
     # Auto-generate output directory if not explicitly set
     if args.output_dir == ".":
         output_dir = auto_output_dir(
@@ -2794,9 +2832,12 @@ _BATCH_MODE = False
 _LLM_MODEL = "claude-sonnet-4-20250514"
 _SELECTION_METHOD = "bayesian"  # "bayesian" or "heuristic"
 _SELECTION_STRATEGY = "thompson"  # "thompson" or "greedy"
-_LEARNING_RATE = 0.005  # Likelihood tempering: tau in (0, 1]; calibrated for synthetic data
+_LEARNING_RATE = (
+    0.005  # Likelihood tempering: tau in (0, 1]; calibrated for synthetic data
+)
 _ARBITER = True  # ARBITER features: cruxes, meta-agents, conflict map
 _CRUX_WEIGHT = 0.3  # Probability of crux-directed selection in Thompson sampling
+_CLAIM_RESPONSIVE = True  # Agents must address falsified claims in interpretation
 
 
 if __name__ == "__main__":

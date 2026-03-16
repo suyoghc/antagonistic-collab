@@ -4209,7 +4209,12 @@ class TestFullPoolSelection:
         pool = generate_full_candidate_pool(protocol)
 
         best_idx, eig_scores = select_from_pool(
-            protocol, posterior, pool, n_subjects=20, n_sim=50, seed=42,
+            protocol,
+            posterior,
+            pool,
+            n_subjects=20,
+            n_sim=50,
+            seed=42,
             selection_strategy="greedy",
         )
         assert 0 <= best_idx < len(pool)
@@ -7509,11 +7514,19 @@ class TestCruxBoostSpecs:
         boost_specs = [{"structure": pool[0][0], "condition": pool[0][1]}]
 
         _, scores_no_boost = select_from_pool(
-            protocol, posterior, pool, n_sim=50, seed=42,
+            protocol,
+            posterior,
+            pool,
+            n_sim=50,
+            seed=42,
             selection_strategy="greedy",
         )
         _, scores_with_specs = select_from_pool(
-            protocol, posterior, pool, n_sim=50, seed=42,
+            protocol,
+            posterior,
+            pool,
+            n_sim=50,
+            seed=42,
             crux_boost_specs=boost_specs,
             selection_strategy="greedy",
         )
@@ -7584,8 +7597,13 @@ class TestCruxBoostSpecs:
         selections = set()
         for seed in range(10):
             idx, _ = select_from_pool(
-                protocol, posterior, pool, n_sim=50, seed=seed,
-                crux_boost_specs=boost_specs, crux_weight=1.0,
+                protocol,
+                posterior,
+                pool,
+                n_sim=50,
+                seed=seed,
+                crux_boost_specs=boost_specs,
+                crux_weight=1.0,
                 selection_strategy="thompson",
             )
             selections.add(idx)
@@ -8091,7 +8109,12 @@ class TestCurveEvidenceNotUsedInPosterior:
         # Without curves
         p1 = ModelPosterior.uniform(["A", "B", "C"])
         update_posterior_from_experiment(
-            p1, Proto(), data, "Type_II", "baseline", cycle=0,
+            p1,
+            Proto(),
+            data,
+            "Type_II",
+            "baseline",
+            cycle=0,
         )
 
         # With curves where A is distinctive (should NOT affect posterior)
@@ -8102,12 +8125,18 @@ class TestCurveEvidenceNotUsedInPosterior:
         }
         p2 = ModelPosterior.uniform(["A", "B", "C"])
         update_posterior_from_experiment(
-            p2, Proto(), data, "Type_II", "baseline", cycle=0,
+            p2,
+            Proto(),
+            data,
+            "Type_II",
+            "baseline",
+            cycle=0,
             learning_curves=fake_curves,
         )
 
         np.testing.assert_array_almost_equal(
-            p1.probs, p2.probs,
+            p1.probs,
+            p2.probs,
             err_msg="Curve data should not affect posterior (no observed curves to compare against)",
         )
 
@@ -8122,7 +8151,10 @@ class TestNovelStructureExecution:
 
     def test_synthetic_runner_uses_temporary_structures(self):
         """_synthetic_runner should execute novel structures from temporary_structures."""
-        from antagonistic_collab.debate_protocol import DebateProtocol, default_agent_configs
+        from antagonistic_collab.debate_protocol import (
+            DebateProtocol,
+            default_agent_configs,
+        )
         from antagonistic_collab.epistemic_state import EpistemicState
 
         state = EpistemicState(domain="test")
@@ -8151,7 +8183,10 @@ class TestNovelStructureExecution:
 
     def test_synthetic_runner_still_falls_back_for_unknown(self):
         """Completely unknown structures should still fall back gracefully."""
-        from antagonistic_collab.debate_protocol import DebateProtocol, default_agent_configs
+        from antagonistic_collab.debate_protocol import (
+            DebateProtocol,
+            default_agent_configs,
+        )
         from antagonistic_collab.epistemic_state import EpistemicState
 
         state = EpistemicState(domain="test")
@@ -8159,7 +8194,10 @@ class TestNovelStructureExecution:
         protocol = DebateProtocol(state=state, agent_configs=agents)
 
         result = protocol._synthetic_runner(
-            design_spec={"structure_name": "totally_nonexistent", "condition": "baseline"},
+            design_spec={
+                "structure_name": "totally_nonexistent",
+                "condition": "baseline",
+            },
             true_model="GCM",
             cycle=0,
         )
@@ -8176,7 +8214,10 @@ class TestDivergenceMapIncludesTemporaryStructures:
 
     def test_divergence_map_includes_novel_structures(self):
         """compute_divergence_map() should include temporary_structures."""
-        from antagonistic_collab.debate_protocol import DebateProtocol, default_agent_configs
+        from antagonistic_collab.debate_protocol import (
+            DebateProtocol,
+            default_agent_configs,
+        )
         from antagonistic_collab.epistemic_state import EpistemicState
 
         state = EpistemicState(domain="test")
@@ -8209,9 +8250,7 @@ class TestNoHardcodedCredentials:
     def test_no_hardcoded_key_in_live_validation(self):
         """validate_m6_live.py should not contain hardcoded API keys."""
 
-        live_path = os.path.join(
-            os.path.dirname(__file__), "..", "validate_m6_live.py"
-        )
+        live_path = os.path.join(os.path.dirname(__file__), "..", "validate_m6_live.py")
         if not os.path.exists(live_path):
             pytest.skip("validate_m6_live.py not found")
 
@@ -8236,9 +8275,7 @@ class TestMockCruxIdentificationMatchesRealPrompts:
         # Import validate_m6's mock
         import importlib.util
 
-        validate_path = os.path.join(
-            os.path.dirname(__file__), "..", "validate_m6.py"
-        )
+        validate_path = os.path.join(os.path.dirname(__file__), "..", "validate_m6.py")
         if not os.path.exists(validate_path):
             pytest.skip("validate_m6.py not found")
 
@@ -8280,9 +8317,7 @@ class TestRunValidationRestoresBatchMode:
         import importlib.util
         import antagonistic_collab.runner as runner_mod
 
-        validate_path = os.path.join(
-            os.path.dirname(__file__), "..", "validate_m6.py"
-        )
+        validate_path = os.path.join(os.path.dirname(__file__), "..", "validate_m6.py")
         if not os.path.exists(validate_path):
             pytest.skip("validate_m6.py not found")
 
@@ -8308,3 +8343,245 @@ class TestRunValidationRestoresBatchMode:
             )
         finally:
             runner_mod._BATCH_MODE = original_batch
+
+
+# =========================================================================
+# Feature: Claim-Responsive Debate (M10)
+# =========================================================================
+
+
+class TestClaimResponsiveDebate:
+    """Claim-responsive debate: agents must explicitly address their falsified
+    claims in the interpretation phase. When enabled (default), the prompt
+    includes a directive block listing falsified claims with instructions to
+    address each one. When disabled, the existing claims summary is shown
+    without the directive."""
+
+    def _make_protocol_with_falsified_claims(self):
+        """Helper: protocol with one falsified and one confirmed claim."""
+        from antagonistic_collab.epistemic_state import DebateClaim
+
+        agents = default_agent_configs()
+        state = EpistemicState(domain="test")
+        for agent in agents:
+            state.register_theory(
+                TheoryCommitment(
+                    name=agent.theory_name,
+                    agent_name=agent.name,
+                    core_claims=agent.model_class.core_claims,
+                    model_name=agent.model_class.name,
+                    model_params=dict(agent.default_params),
+                )
+            )
+
+        # Add a falsified claim for the first agent
+        state.add_claim(
+            DebateClaim(
+                agent=agents[0].name,
+                claim_type="prediction",
+                content="GCM RMSE < 0.1 on Type_VI",
+                testable=True,
+                structure="Type_VI",
+                predicted_outcome="RMSE < 0.1",
+                cycle_made=0,
+                status="falsified",
+                evidence="actual=0.350",
+                tested_at_cycle=1,
+            )
+        )
+        # Add a confirmed claim (should not trigger directive)
+        state.add_claim(
+            DebateClaim(
+                agent=agents[0].name,
+                claim_type="prediction",
+                content="GCM predicts high accuracy on Type_I",
+                testable=True,
+                structure="Type_I",
+                predicted_outcome="accuracy > 0.8",
+                cycle_made=0,
+                status="confirmed",
+                evidence="actual=0.85",
+                tested_at_cycle=1,
+            )
+        )
+
+        # Create an executed experiment
+        exp = state.propose_experiment(
+            proposed_by=agents[0].name,
+            title="Test Exp",
+            design_spec={"structure_name": "Type_I", "condition": "baseline"},
+            rationale="test",
+        )
+        state.approve_experiment(exp.experiment_id)
+        state.record_data(
+            exp.experiment_id,
+            {"mean_accuracy": 0.8, "item_accuracies": {"item_0": 0.9, "item_1": 0.7}},
+        )
+
+        protocol = DebateProtocol(state=state, agent_configs=agents)
+        return protocol, agents
+
+    def test_config_default_is_true(self):
+        """claim_responsive defaults to on (no_claim_responsive: false)."""
+        from antagonistic_collab.config import load_config
+
+        config = load_config()
+        assert config.get("no_claim_responsive") is False
+
+    def test_cli_flag_exists(self):
+        """--no-claim-responsive flag should be recognized by argparser."""
+        import sys
+
+        sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+        from antagonistic_collab.__main__ import _build_argparser
+
+        parser = _build_argparser()
+        args = parser.parse_args(["--no-claim-responsive"])
+        assert args.no_claim_responsive is True
+
+    def test_module_global_exists(self):
+        """_CLAIM_RESPONSIVE module global should exist in runner."""
+        import antagonistic_collab.runner as runner_mod
+
+        assert hasattr(runner_mod, "_CLAIM_RESPONSIVE")
+        # Default should be True
+        assert runner_mod._CLAIM_RESPONSIVE is True
+
+    def test_falsified_claims_directive_in_prompt_when_enabled(self):
+        """When claim_responsive is on, agents with falsified claims see a
+        directive block telling them to address those claims."""
+        from antagonistic_collab.runner import run_interpretation_debate
+        import antagonistic_collab.runner as runner_mod
+
+        protocol, agents = self._make_protocol_with_falsified_claims()
+
+        # Capture the prompts sent to agents
+        captured_prompts = []
+
+        def fake_call(client, system_prompt, prompt, model=None):
+            captured_prompts.append({"system": system_prompt, "prompt": prompt})
+            return json.dumps(
+                {
+                    "interpretation": "test",
+                    "confounds_flagged": [],
+                    "hypothesis": "test",
+                    "claims": [],
+                }
+            )
+
+        original = runner_mod._CLAIM_RESPONSIVE
+        runner_mod._CLAIM_RESPONSIVE = True
+        try:
+            with patch("antagonistic_collab.runner.call_agent", side_effect=fake_call):
+                run_interpretation_debate(protocol, None, [])
+        finally:
+            runner_mod._CLAIM_RESPONSIVE = original
+
+        # The first agent (Exemplar_Agent) has a falsified claim
+        first_agent_prompt = captured_prompts[0]["prompt"]
+        assert "FALSIFIED CLAIMS" in first_agent_prompt
+        assert "GCM RMSE < 0.1 on Type_VI" in first_agent_prompt
+        assert "actual=0.350" in first_agent_prompt
+
+    def test_no_directive_when_disabled(self):
+        """When claim_responsive is off, no FALSIFIED CLAIMS directive block
+        appears, though the standard claims summary still does."""
+        from antagonistic_collab.runner import run_interpretation_debate
+        import antagonistic_collab.runner as runner_mod
+
+        protocol, agents = self._make_protocol_with_falsified_claims()
+
+        captured_prompts = []
+
+        def fake_call(client, system_prompt, prompt, model=None):
+            captured_prompts.append({"system": system_prompt, "prompt": prompt})
+            return json.dumps(
+                {
+                    "interpretation": "test",
+                    "confounds_flagged": [],
+                    "hypothesis": "test",
+                    "claims": [],
+                }
+            )
+
+        original = runner_mod._CLAIM_RESPONSIVE
+        runner_mod._CLAIM_RESPONSIVE = False
+        try:
+            with patch("antagonistic_collab.runner.call_agent", side_effect=fake_call):
+                run_interpretation_debate(protocol, None, [])
+        finally:
+            runner_mod._CLAIM_RESPONSIVE = original
+
+        first_agent_prompt = captured_prompts[0]["prompt"]
+        # Should NOT have the directive block
+        assert "FALSIFIED CLAIMS" not in first_agent_prompt
+        # But should still have the standard claims summary
+        assert "Your Prior Claims" in first_agent_prompt
+
+    def test_no_directive_when_no_falsified_claims(self):
+        """When claim_responsive is on but an agent has no falsified claims,
+        no directive block is added."""
+        from antagonistic_collab.runner import run_interpretation_debate
+        import antagonistic_collab.runner as runner_mod
+
+        protocol, agents = self._make_protocol_with_falsified_claims()
+
+        captured_prompts = []
+
+        def fake_call(client, system_prompt, prompt, model=None):
+            captured_prompts.append({"system": system_prompt, "prompt": prompt})
+            return json.dumps(
+                {
+                    "interpretation": "test",
+                    "confounds_flagged": [],
+                    "hypothesis": "test",
+                    "claims": [],
+                }
+            )
+
+        original = runner_mod._CLAIM_RESPONSIVE
+        runner_mod._CLAIM_RESPONSIVE = True
+        try:
+            with patch("antagonistic_collab.runner.call_agent", side_effect=fake_call):
+                run_interpretation_debate(protocol, None, [])
+        finally:
+            runner_mod._CLAIM_RESPONSIVE = original
+
+        # Second agent (Rule_Agent) has no claims at all — no directive
+        second_agent_prompt = captured_prompts[1]["prompt"]
+        assert "FALSIFIED CLAIMS" not in second_agent_prompt
+
+    def test_directive_requires_acknowledgment_in_json(self):
+        """The prompt should instruct agents to include a 'falsified_response'
+        field in their JSON output."""
+        from antagonistic_collab.runner import run_interpretation_debate
+        import antagonistic_collab.runner as runner_mod
+
+        protocol, agents = self._make_protocol_with_falsified_claims()
+
+        captured_prompts = []
+
+        def fake_call(client, system_prompt, prompt, model=None):
+            captured_prompts.append({"system": system_prompt, "prompt": prompt})
+            return json.dumps(
+                {
+                    "interpretation": "test",
+                    "confounds_flagged": [],
+                    "hypothesis": "test",
+                    "claims": [],
+                    "falsified_response": [
+                        {"claim": "GCM RMSE < 0.1 on Type_VI", "action": "abandon"}
+                    ],
+                }
+            )
+
+        original = runner_mod._CLAIM_RESPONSIVE
+        runner_mod._CLAIM_RESPONSIVE = True
+        try:
+            with patch("antagonistic_collab.runner.call_agent", side_effect=fake_call):
+                run_interpretation_debate(protocol, None, [])
+        finally:
+            runner_mod._CLAIM_RESPONSIVE = original
+
+        first_agent_prompt = captured_prompts[0]["prompt"]
+        assert "falsified_response" in first_agent_prompt

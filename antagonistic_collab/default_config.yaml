@@ -93,6 +93,16 @@ no_arbiter: false
 #   1.0 — always pick a crux-matching experiment when cruxes exist
 crux_weight: 0.3
 
+# Claim-responsive debate.
+# When enabled, agents with falsified claims receive an explicit directive
+# in the interpretation prompt listing their falsified claims and requiring
+# them to address each one (acknowledge, revise, or explain). This closes
+# the feedback loop: agents can no longer ignore disconfirming evidence.
+#
+# Set no_claim_responsive: true to disable (agents still see the standard
+# claims summary but are not explicitly directed to respond).
+no_claim_responsive: false
+
 
 # ---------------------------------------------------------------------------
 # LLM Backend

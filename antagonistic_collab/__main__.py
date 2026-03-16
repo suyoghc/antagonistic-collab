@@ -93,6 +93,12 @@ def _build_argparser() -> argparse.ArgumentParser:
         default=0.3,
         help="Probability of crux-directed selection in Thompson sampling [0,1]. Default 0.3.",
     )
+    parser.add_argument(
+        "--no-claim-responsive",
+        action="store_true",
+        default=False,
+        help="Disable claim-responsive debate (agents won't be directed to address falsified claims).",
+    )
     return parser
 
 
