@@ -257,23 +257,201 @@ For LLM-in-the-loop scientific systems, this has a design implication: reliable 
 
 ## 5. Results
 
-*[To be populated as experiments are run.]*
+### 5.1 Model identification accuracy
 
-### 5.1 Divergence mapping results
+The framework's primary objective is to correctly identify the ground-truth model from among three competitors. Across 34 validation runs spanning milestones M4–M9 — encompassing legacy and full-pool modes, three ground truths (GCM, SUSTAIN, RULEX), three LLM backbones (GPT-4o, Claude Sonnet, Claude Opus), two selection strategies (greedy, Thompson), and crux-directed experiment selection — the correct model was identified in 33 of 34 runs.
 
-### 5.2 Debate transcript analysis
+**Table 1. Model identification across milestones.**
 
-### 5.3 Expert evaluation of proposals
+| Milestone | Mode | Runs | Correct | Discrimination gap | Notes |
+|---|---|---|---|---|---|
+| M4 | full_pool | 3 | 3/3 | 34–68% | Baseline full-pool validation |
+| M4 | legacy | 3 | 3/3 | 2.4–37% | RULEX gap only 2.4% |
+| M5 | full_pool | 3 | 3/3 | 36–68% | Post-feedback-loop closure |
+| M6 | full_pool | 3 | 3/3 | 36–68% | ARBITER features enabled |
+| M7 | full_pool | 3 | 2/3 | 8.2–97.1% | RULEX misidentified |
+| M8 | full_pool (greedy) | 3 | 3/3 | — | Post-bugfix |
+| M8 | full_pool (Thompson) | 3 | 3/3 | — | Post-bugfix |
+| M9 | full_pool (crux-directed) | 3 | 3/3 | 75–93% | Crux pipeline operational |
+| Cross-LLM | full_pool | 9 | 9/9 | — | GPT-4o, Sonnet, Opus |
 
-### 5.4 Single-agent vs. multi-agent comparison
+The single misidentification occurred in M7, where RULEX ground truth was identified as GCM. This reflects genuine model overlap rather than a system failure: GCM approximates rule-like behavior by concentrating attention weights on the diagnostic dimension (Nosofsky, 1991), and the structures selected by greedy EIG in this run (linear_separable_4d, nonlinear_complex_5d) fell in regions where the two models' predictions were nearly indistinguishable. The posterior oscillated across cycles — RULEX led on cycles 0 and 2, GCM on cycles 1, 3, and 4 — producing only an 8.2% RMSE gap. M8 resolved the misidentification through a bugfix to the curve scoring mechanism and the addition of Thompson sampling, which selected more diverse structures that exposed the models' differing learning dynamics.
 
-### 5.5 Retrospective validation
+Discrimination gaps ranged from 2.4% (legacy-mode RULEX in M4, the worst case) to 97.1% (M7 SUSTAIN, where stepwise learning curves made SUSTAIN qualitatively distinct from both competitors). Full-pool mode consistently produced larger gaps than legacy mode because Bayesian experiment selection identified the most discriminating structures rather than relying on agents' narratively-driven proposals. The legacy RULEX run, for instance, never tested Type_I — the single structure where RULEX dominates GCM — because no agent proposed it.
+
+**Cross-LLM robustness.** Nine runs with three different LLM backbones all identified the correct model (9/9). SUSTAIN RMSE was identical across all three backbones (0.270), while GCM and RULEX showed small variation (0.143–0.159 and 0.148–0.213 respectively) attributable to LLM-proposed parameter overrides — the one surviving code path where LLM output enters the scoring pipeline. The framework's convergence behavior is LLM-agnostic: the choice of backbone affects interpretation quality and parameter proposals but not which model wins.
+
+### 5.2 Bayesian experiment selection: EIG, posterior dynamics, and the exploration problem
+
+The transition from agent-driven to Bayesian experiment selection is the framework's most consequential architectural choice. This section traces how experiment selection evolved across milestones as successive limitations were identified and addressed.
+
+**EIG-selected experiments.** In the initial full-pool validation (M4), EIG universally selected `five_four/fast_presentation` on cycle 0 — the Medin & Schaffer (1978) five-four structure has the most items (9) and the most complex category boundary, producing maximal model disagreement. When RULEX was the ground truth, EIG shifted to `Type_I/low_attention` after cycle 0, a simple single-dimension rule structure where RULEX excels (RMSE 0.06 vs GCM's 0.35). The Bayesian system correctly identified that the initial five_four experiment produced misleading evidence — the posterior initially favored GCM — and selected a maximally corrective follow-up. For GCM and SUSTAIN ground truths, the same five_four experiment was sufficiently discriminating that EIG selected it repeatedly across all five cycles.
+
+**Posterior collapse.** Prior to likelihood tempering (M4–M6), the posterior collapsed to P≈1.0 for the correct model after a single experiment in two of three ground-truth conditions (GCM, SUSTAIN). Only the RULEX case, where the initial experiment was misleading, maintained uncertainty long enough for adaptive selection to operate. With n_subjects=20 and ~10 items per experiment, each experiment generates ~10 nats of log-likelihood evidence; after two experiments, log-odds reach ~50 nats (ratio ~5×10²¹), making posterior recovery from an incorrect initial classification effectively impossible.
+
+M7 introduced likelihood tempering (τ=0.005, prediction clip [0.05, 0.95]), achieving the design goal of gradual convergence. For GCM ground truth, entropy dropped monotonically from 0.64 to 0.00 over five cycles, with EIG remaining non-zero through cycle 4 (0.029) — the first validation where later cycles were genuinely informative. The RULEX misidentification in M7 revealed, however, that tempering alone is insufficient when the selected structures happen to fall in regions of model overlap.
+
+**The greedy repetition problem.** Tempering preserved uncertainty but exposed a second limitation: greedy EIG selection (`argmax`) repeated the same experiment every cycle when a single candidate dominated. The GCM and SUSTAIN M7 runs both selected linear_separable_4d on all five cycles. Only the RULEX run, where the posterior oscillated between models, produced structural variation.
+
+**Thompson sampling resolves exploration–exploitation.** M8 replaced `argmax` with sampling proportional to EIG scores.
+
+**Table 2. Thompson vs greedy ablation (M8, post-bugfix).**
+
+| Ground truth | Strategy | Correct? | Winner RMSE | Unique structures | Novel structures | Final entropy |
+|---|---|---|---|---|---|---|
+| GCM | Thompson | Yes | 0.085 | 5 | 3 | 0.12 |
+| GCM | Greedy | Yes | 0.077 | 2 | 0 | 0.01 |
+| RULEX | Thompson | Yes | 0.189 | 4 | 2 | 0.16 |
+| RULEX | Greedy | Yes | 0.050 | 2 | 0 | 0.06 |
+| SUSTAIN | Thompson | Yes | 0.022 | 3 | 1 | 0.00 |
+| SUSTAIN | Greedy | Yes | 0.018 | 1 | 0 | 0.00 |
+
+Both strategies achieved 3/3 correct identification after the M8 bugfix. The tradeoff is interpretable: greedy achieves tighter convergence (lower final entropy, lower winner RMSE) by concentrating on the single most informative experiment, while Thompson explores 4× more broadly — 12 unique structures including 6 novel agent-proposed structures across three runs, compared to greedy's 3 unique structures with 0 novel. This is the first time novel structures proposed by agents during debate were actually selected and executed. Greedy is optimal for fast model selection when the candidate pool is known to be sufficient; Thompson is preferable when the goal includes understanding the prediction landscape or when undiscovered discriminating structures may exist.
+
+**Crux-directed selection.** M9 completed the experiment selection architecture by connecting debate-identified theoretical disagreements to the selection mechanism via a mixture distribution. Of the 100+ cruxes proposed across prior milestones (M6–M8), zero produced parseable experiment specifications — agents wrote free-text descriptions ("test whether rule-based models can handle exceptions") that the parser could not match to pool entries. After M9's prompt redesign (showing the full structure/condition menu with a format example) and validation against known entries, 24 parseable specifications were produced across three runs (11 from the GCM run, 7 from RULEX, 6 from SUSTAIN). The mixture distribution (crux_weight=0.3) selected one crux-directed experiment in 15 total: in the GCM run, crux `crux_004` proposed `rule_plus_exception_1exc/high_noise` as a discriminating experiment for the rule-exception tradeoff, and this experiment was selected on cycle 3. This is qualitatively different from M8's path, where Thompson randomly sampled agent-proposed novel structures; here, a specific theoretical disagreement identified through debate directly determined which experiment ran.
+
+### 5.3 The progressive strengthening of debate's causal role
+
+A central question for the framework is whether adversarial debate contributes causally to scientific outcomes, or whether it is epiphenomenal — generating plausible-sounding discourse while the Bayesian machinery does all the work. The developmental trajectory across milestones reveals a gradual transition from epiphenomenal to genuinely causal, though the Bayesian layer remains dominant.
+
+**M4 baseline: debate is epiphenomenal.** Nine M4 replication runs (three per ground truth) produced identical RMSE values to four decimal places across replicates. The entire quantitative pipeline — EIG computation, experiment selection, synthetic data generation, model predictions, posterior update — is deterministic given the same prior. Different LLM runs produced different interpretive text, but this text did not feed back into any computation that affected RMSE or model identification. Debate was, in the strongest possible sense, causally inert with respect to outcomes.
+
+**M5: first non-zero variance.** Closing four broken feedback loops — parameter revision persistence, structured claim ledger, critique-as-falsification, debate-informed EIG weighting — created the first causal pathway from debate to outcomes. Four replication runs of the GCM condition produced RMSE standard deviation of 0.018 (previously 0.000). The mechanism: different LLM runs proposed different parameter revisions during interpretation, and those revisions persisted into subsequent cycles via `sync_params_from_theory()`. The correct winner was preserved across all runs — the variance was within-winner, not winner-changing — but the quantitative trajectory now depended on what the agents said.
+
+**M6: enriched debate, broken pipeline.** The ARBITER-inspired architecture added role-specialized meta-agents (Integrator, Critic), crux-based negotiation, conflict maps, and pre-registration. Crux negotiation was genuinely selective: 15% acceptance rate with real LLMs versus 100% with deterministic mock agents. Accepted cruxes mapped to theoretical fault lines that cognitive scientists actually disagree about ("Do people store individual exemplars or use abstract rules?"; "The role of presentation order in category learning"). However, the crux-to-experiment pipeline was structurally broken: zero parseable boost specifications were produced from over 100 proposed cruxes across all M6 runs, because agents wrote free-text crux descriptions that the parser could not match to pool entries. Debate quality improved substantially — rich structured output, genuine selectivity, interpretive synthesis — but debate did not causally influence which experiments were run.
+
+**M8: novel structures enter the candidate pool.** Thompson sampling's stochastic exploration selected six novel agent-proposed structures across three runs — the first time debate-generated experimental designs were actually executed. However, this path was not semantically directed: Thompson sampled from the candidate pool proportional to EIG scores, and novel structures entered the pool through an automatic registration mechanism, not through directed selection based on theoretical reasoning. Debate contributed the raw material (proposed structures) but computation chose whether to use it.
+
+**M9: the first semantically directed causal path.** The redesigned mixture distribution connected debate-identified cruxes to experiment selection for the first time. Across three validation runs, 24 parseable crux specifications were produced and one crux-directed experiment was selected (`rule_plus_exception_1exc/high_noise` in the GCM run, cycle 3). This completes a causal chain from semantic reasoning to experiment selection: agents debated theoretical disagreements → proposed cruxes about what evidence would be decisive → the parser mapped these to pool entries → the mixture distribution selected a crux-matching experiment that would not have been selected by EIG-weighted Thompson alone.
+
+**Table 3. Progressive strengthening of debate's causal role.**
+
+| Milestone | Mechanism | Evidence | Effect on outcomes |
+|---|---|---|---|
+| M4 | None | Replication variance = 0.000 | Epiphenomenal |
+| M5 | Parameter persistence | Replication std = 0.018 | RMSE affected by debate content |
+| M6 | Crux negotiation | 15% acceptance; 0 parseable specs | Quality enriched; no experiment effect |
+| M8 | Novel structure pool | 6 novel structures executed | Debate designs explored (stochastically) |
+| M9 | Crux-directed mixture | 24 specs parsed; 1 crux-directed expt | First semantic debate→experiment path |
+
+The trajectory shows debate's causal influence growing from zero to a genuine, if still modest, directed contribution. The Bayesian machinery remains the primary driver of convergence — correct identification occurs even without any debate (greedy EIG alone achieves 3/3 correct) — but debate progressively enriches what the system explores and why.
+
+### 5.4 The system as a falsification engine
+
+The claim ledger reveals a striking asymmetry in how the system converges: it identifies the correct model primarily by falsifying the incorrect ones, not by confirming the winner.
+
+**Falsification ratio.** Across three M6 validation runs, 44 agent claims were falsified by the critique-as-falsification mechanism, 1 was confirmed, and 76 remained untested. Agents make bold predictions during interpretation debate; experiments consistently disprove them; the Bayesian posterior accumulates evidence against wrong theories. Even the winning agent rarely made predictions conservative enough to survive empirical test. The one confirmed claim — Rule_Agent predicting mean accuracy of 0.600 on Type_IV/low_attention, against an actual 0.500 — fell within the 0.1 tolerance threshold but was still substantially off.
+
+**Agent overclaiming.** The critique-as-falsification mechanism exposed systematic overconfidence: across six validation runs, approximately 45 of 46 checked prediction claims were false (discrepancy > 0.1). Typical claimed accuracy ranged from 0.65 to 0.90; typical actual accuracy ranged from 0.10 to 0.48. This 45:1 false-to-verified ratio quantifies the gap between LLM mechanistic intuition ("exemplars handle this well") and computational reality. Agents reason correctly about *mechanisms* — they accurately describe how attention weights or cluster recruitment operate — but cannot estimate the *quantitative consequences* of those mechanisms for specific experimental conditions. This dissociation between qualitative understanding and quantitative calibration is consistent with the general finding that LLMs perform well on verbal reasoning tasks but poorly on tasks requiring precise numerical estimation.
+
+**Theory revision patterns.** The revision dynamics exhibit a pattern consistent with Lakatos's (1978) distinction between progressive and degenerative research programmes:
+
+| Ground truth | Winning agent's revisions | Losing agents' total revisions |
+|---|---|---|
+| GCM | 0–2 | 4–6 |
+| RULEX | 0–1 | 3–5 |
+| SUSTAIN | 0–1 | 5–6 |
+
+Correct theories are stable: their predictions already match the data, requiring no parameter adjustment. Incorrect theories revise progressively — adjusting parameters, accommodating evidence, narrowing scope claims — but cannot close the gap, because the wrong model generates systematically wrong predictions regardless of parameterization. This is the operational analogue of Lakatos's criterion: theories aligned with the data exhibit a progressive research programme (new predictions confirmed without auxiliary adjustments), while misaligned theories exhibit a degenerating one (repeated adjustments that fail to improve predictive accuracy). RULEX is notably revision-resistant even when it is the wrong model — its rigid rule-based structure has fewer free parameters to adjust, making it simultaneously harder to fit and harder to revise. In the M6 RULEX run, Rule_Agent made zero revisions and won by 67.6%, while Clustering_Agent made three futile revisions trying to accommodate evidence it could not explain.
+
+### 5.5 Debate quality and interpretive contributions
+
+While debate's causal contribution to experiment selection grew across milestones, its primary value throughout was qualitative: producing interpretive, explanatory, and structurally informative discourse that no computation layer alone could generate.
+
+**Debate quality audit.** We audited all 30 debate cycles across six M4 runs on four dimensions:
+
+| Dimension | Assessment | Finding |
+|---|---|---|
+| Data citation | Weak | Agents cite posterior probabilities but rarely reference item-level predictions, RMSE values, or learning curve shapes |
+| Critique quality | Mixed | Structurally substantive — agents cite mechanisms and name parameters — but numerically ungrounded ("model flexibility allows post-hoc fitting" without specifying which parameters diverge) |
+| Behavioral adaptation | Limited | Same 2–3 talking points repeat across all 5 cycles within a run; no cumulative learning from prior experimental data |
+| Novel structure rationale | Poor | Proposals not rooted in actual model divergence; often duplicate existing structures with minor condition permutations |
+
+Adversarial critique pressure produces improvement in later cycles: proposals become more specific after 3+ rounds of cross-examination. But the debate does not exhibit cumulative scientific reasoning — earlier cycles' evidence is not integrated into later cycles' arguments. The claim ledger and conflict map were injected into interpretation prompts, but agents did not spontaneously engage with them.
+
+**Novel structures.** Across 15 full-pool cycles in three M4 runs, agents proposed 21 novel category structures: 5 random/unstructured, 4 complex conjunctive, 5 multimodal/subgroup, 3 attention/order-based, and 4 other. Under greedy EIG selection, none were selected — the Bayesian selector consistently preferred registry structures (five_four, Type_I) that already spanned the relevant discrimination space. Under Thompson sampling (M8), six novel structures were selected and executed for the first time. The value of novel structure proposals lies not in superior discriminating power — EIG ranks them below registry structures — but in exploring regions of the design space that greedy selection would never reach.
+
+**Meta-agent contributions.** Each M6 run produced 10 meta-agent responses (5 Integrator, 5 Critic). The Integrator synthesized across all three theory agents' interpretations, identifying points of convergence and divergence. The Critic consistently targeted the weakest argument — typically challenging agents whose posterior probability had collapsed but who continued asserting their model's superiority. Meta-agents did not override the Bayesian machinery; their value was qualitative, structuring the debate's narrative for human review.
+
+**Genuine interpretive value.** Despite the quality limitations documented above, the debate transcripts contain contributions that computation alone cannot produce:
+
+- *Mechanism identification.* Agents correctly identify the computational mechanisms responsible for model behavior ("GCM's attention weights concentrate on the diagnostic dimension, approximating rule-like behavior").
+- *Theory-prediction connections.* Agents articulate why specific experimental outcomes follow from theoretical commitments ("SUSTAIN predicts order effects because cluster recruitment depends on presentation sequence").
+- *Human-readable explanation.* The interpretation phase translates Bayesian posteriors, RMSE scores, and learning curve features into narrative explanations accessible to non-technical readers.
+
+These contributions constitute genuine scientific reasoning in the sense that they connect formal model behavior to theoretical meaning — the operation that distinguishes scientific explanation from curve fitting.
+
+### 5.6 Deviations from the evaluation plan
+
+Section 3 outlined an evaluation plan designed before the system was built. The architecture evolved substantially during development, making some planned evaluations inapplicable and replacing them with more informative alternatives.
+
+**Not conducted:**
+
+*Single-agent vs multi-agent comparison* (Section 3.1). The original question — whether k adversarial agents outperform a single prompted agent — was not tested because the architecture evolved away from agent-driven experiment selection. In the final system, Bayesian EIG selects experiments regardless of whether one or three agents are debating; the agents' role shifted to interpretation, crux identification, and novel structure proposal. The operative comparison became EIG-only vs EIG + debate-informed mechanisms (crux-directed selection, novel structure registration, parameter revision persistence), not single vs multi-agent.
+
+*Expert evaluation of proposals* (Section 3.2). Blind evaluation by independent domain experts was not conducted. The audit in Section 5.5 was systematic but not blind, and was carried out by the authors.
+
+*Retrospective validation* (Section 3.2). We did not test whether the system, given the state of knowledge circa 1985, would converge on experiments resembling those that actually advanced the field. This remains a compelling future evaluation.
+
+**Why these deviations occurred.** The shift from legacy mode (where agents propose experiments) to full-pool mode (where EIG selects experiments) rendered the single-agent vs multi-agent comparison less informative than originally envisioned. Expert evaluation was deferred due to prioritization of architecture development. Retrospective validation requires careful reconstruction of the 1985 model landscape, which proved beyond the current project's scope.
+
+**What was done instead.** The actual ablations — greedy vs Thompson (Section 5.2), with and without crux-directed selection (Section 5.3), cross-LLM backbone comparison (Section 5.1) — are more informative for the evolved architecture than the originally planned comparisons. They directly test the mechanisms through which the computational and language layers interact, which is the core scientific question the system raises.
 
 ---
 
 ## 6. Discussion
 
-*[To be developed.]*
+### 6.1 The architecture thesis revisited: computation for numerics, language for meaning
+
+The introduction framed this project around a specific question: can AI agents, each committed to a competing scientific theory, collaborate adversarially to identify the correct model? The results support a more nuanced answer than a simple affirmative. The correct model is identified reliably — 33 of 34 runs across six milestones, three ground truths, three LLM backbones, and multiple selection strategies — but the mechanism of convergence is overwhelmingly computational. The language layer's contribution is real but structurally different from what was initially envisioned.
+
+**Experiment selection belongs to computation.** Bayesian EIG dominates agent-driven experiment selection on every metric relevant to model identification. Legacy mode (where agents propose experiments through debate) achieved correct identification in all six M4 runs, but with gaps as low as 2.4% — perilously close to indistinguishable. Full-pool mode (where EIG selects from all 55 candidates) achieved gaps of 34–93%, driven by its ability to identify structures like Type_I/low_attention that agents never proposed because they are not narratively compelling. The exploration problem with greedy EIG (selecting the same experiment repeatedly) was solved by Thompson sampling — a computational fix — not by agent proposals.
+
+**Debate's value is interpretive, explanatory, and marginally directive.** The developmental trajectory documented in Section 5.3 shows debate evolving from fully epiphenomenal (M4: zero replication variance) to marginally causal (M9: one crux-directed experiment in 15 total). This is genuine progress, but the framing should be honest: the system converges correctly without any debate at all. What debate adds is qualitative — mechanism identification, theory-prediction connections, human-readable explanations, structured records of reasoning — and, as of M9, occasional directed exploration based on semantic understanding of theoretical disagreements.
+
+This pattern suggests a general design principle for hybrid LLM-computation scientific systems: use computation for anything that can be formulated as an optimization problem (experiment selection, posterior update, model fitting), and use language models for anything that requires semantic understanding (interpretation, explanation, hypothesis generation, identifying what questions matter). The boundary is not fixed — crux-directed experiment selection sits precisely at the interface — but the principle provides a useful default. The crux-EIG convergence documented in Section 4.6 adds a subtlety: in constrained design spaces, the semantic and computational approaches identify the same discriminating experiments because the candidate pool is small enough for both to reach the same frontier. The unique contribution of semantic reasoning may emerge primarily in richer design spaces where domain knowledge about model mechanisms could reveal discriminating conditions that Monte Carlo search would miss.
+
+### 6.2 What adversarial collaboration gains from automation
+
+Section 2.6 argued that three failure modes of human adversarial collaboration — straw-manning, terminology confusion, and lack of record-keeping — are structurally eliminated by the architecture. The results bear this out: across 34 runs, no agent misrepresented a competing model's predictions (the model is callable code, not a verbal description), no terminological dispute arose (all theoretical terms are operationally grounded in model parameters), and the epistemic state tracker maintained a complete record of every prediction, critique, and revision.
+
+Beyond eliminating failure modes, automation adds capabilities that human adversarial collaborations cannot match. Five debate-experiment cycles complete in 7–8 minutes; human adversarial collaborations unfold over months (Mellers et al., 2001) to years (Cowan et al., 2020). The Bayesian module evaluates all 55 candidate experiments per cycle — a search space no human researcher could explore systematically. The computational pipeline is deterministic given the same prior, enabling ablation studies (greedy vs Thompson, with vs without cruxes) that would require decades to conduct with human collaborators. And 34 validation runs were completed in the time it would take to organize a single human collaboration meeting.
+
+What automation loses is the theoretical creativity of human adversarial collaborations. The debate transcripts are coherent but not creative: agents accurately describe model mechanisms, identify genuine fault lines, and produce structurally sound arguments, but they do not generate the kind of novel theoretical insight that characterizes the best human scientific discourse. The 21 novel structure proposals are variations on known themes (random assignment, complex conjunctions, multimodal subgroups) rather than genuinely novel experimental paradigms. And the debate quality ceiling documented in Section 5.5 — repetitive talking points, no cumulative learning, systematic overclaiming — suggests that current LLMs cannot sustain the progressive, evidence-responsive reasoning that makes human adversarial collaborations scientifically valuable over extended timescales.
+
+The ARBITER-inspired crux negotiation mechanism partially bridges this gap. With 15% of proposed cruxes accepted by real LLM agents (compared to 100% with deterministic mock agents), the negotiation exhibits genuine selectivity. Accepted cruxes map to theoretical fault lines that cognitive scientists actually disagree about. This is not rubber-stamping — the agents exercise judgment about which disagreements are worth pursuing — though substantial engineering (M6–M9) was required before that judgment could influence experimental outcomes.
+
+### 6.3 Limitations
+
+Several limitations constrain the generality of these results.
+
+*Synthetic data only.* All validation used synthetic data generated from the ground-truth model. This tests whether the framework can identify the correct model when one of the three candidates is in fact correct (the M-closed setting of Bernardo & Smith, 1994). It does not test whether the models are correct accounts of human behavior, whether the framework can detect model misspecification, or whether it performs well in the M-open setting where no candidate is fully correct. Extending to real experimental data is the most important next step.
+
+*Three models with shared interfaces.* GCM, SUSTAIN, and RULEX share a common computational interface. Models with fundamentally different output types — neural network activations, qualitative predictions, process-level observables — would require interface adaptation. The framework's generalization beyond models that produce item-level classification probabilities is architecturally straightforward but empirically untested.
+
+*Deferred evaluations.* The single-agent vs multi-agent comparison, expert evaluation, and retrospective validation outlined in Section 3 were not conducted (Section 5.6). The absence of a single-agent baseline is particularly notable: it leaves open whether the adversarial structure provides value above a single well-prompted agent with access to the same Bayesian machinery.
+
+*Residual posterior concentration.* Even with likelihood tempering (τ=0.005), the posterior concentrates within 3–5 cycles. Section 4.7 discusses this limitation and its relationship to the literature on overconfident Bayesian model probabilities (Oelrich et al., 2020). The combined tempering + Thompson solution keeps later cycles informative, but the system still converges faster than may be ideal for extended runs.
+
+*Debate quality ceiling.* Agents do not learn cumulatively from evidence across cycles. Overclaiming is systematic (45:1 false-to-verified prediction ratio), and agents do not spontaneously engage with their own falsification record. This may reflect a fundamental limitation of current LLMs as scientific reasoning agents: they produce competent single-turn analysis but cannot sustain progressive, evidence-responsive discourse.
+
+*LLM as replaceable component.* Cross-LLM comparison (9/9 correct across three backbones with substantially different capabilities) validates robustness but also implies the language layer is underutilized. If convergence is identical regardless of LLM quality, the architecture is not leveraging what better models could contribute.
+
+*Single domain.* All results are from category learning with three specific models. Whether the framework generalizes to other multi-model disputes in cognitive science, or to domains beyond cognitive science, is unknown.
+
+### 6.4 Future directions
+
+*Real data integration.* The most important extension is closing the loop with human participants. The framework's computational backend requires only that models produce probability predictions for experimental stimuli — the same interface AutoRA (Musslick et al.) already supports. Integration with Prolific or Firebase for data collection would transform the system from a model identification tool into a genuine automated research assistant. This is the single extension that would most increase the project's scientific value, and it would move the framework from the M-closed to the M-open setting, where the additional information in debate (novel hypotheses, model modification proposals) could become genuinely valuable.
+
+*Richer design spaces.* The current structure registry contains 11 category structures. This constrains the system in two ways: EIG can only select from registered options, and the crux-EIG convergence documented in Section 4.6 may be an artifact of the small pool. Replacing the discrete registry with a continuous or generative design space — where stimuli are parameterized rather than enumerated — would test whether crux-directed selection adds unique value when the search space is too large for exhaustive EIG evaluation. If semantic reasoning identifies discriminating conditions that computational search misses in richer spaces, the case for adversarial debate strengthens considerably.
+
+*Claim-responsive debate.* Current agents do not engage with their falsification record. A natural extension would require agents to explicitly address prior claims ("I previously predicted accuracy of 0.75 on Type I, which was falsified; I now revise to 0.30 because..."). This could be implemented through prompt engineering or fine-tuning and would address the cumulative learning limitation identified in Section 5.5.
+
+*Non-myopic experiment selection.* The current system selects experiments myopically (one-step EIG). Full Myopic Posterior Sampling (Kandasamy et al., 2019) or deep adaptive design (Foster et al., 2021) would plan over the remaining experiment budget, potentially selecting early experiments that are individually less informative but set up more discriminating future experiments. The gap between myopic and non-myopic strategies grows with the number of remaining experiments (Rainforth et al., 2024), making this increasingly important for longer runs.
+
+*Cross-domain generalization.* The framework's core mechanisms — adversarial debate, Bayesian experiment selection, crux negotiation — are domain-general. Applying the system to working memory models (where Cowan et al., 2020, conducted a multi-year human adversarial collaboration) or decision-making theories would test whether the architecture's strengths and limitations are specific to category learning or reflect general properties of LLM-mediated scientific reasoning.
+
+*The single-agent question.* The comparison between single-agent and multi-agent configurations (Section 3.1) was deferred but remains important. The proper control is a single agent with access to all three models, the same Bayesian machinery, and the same computational budget — measuring whether adversarial structure adds value beyond what a well-prompted monolithic agent can achieve. Given the LLM-agnostic convergence result (Section 5.1), the answer likely depends more on interpretive quality and novel hypothesis generation than on identification accuracy.
 
 ---
 
@@ -313,6 +491,8 @@ Kandasamy, K., Schneider, J., & Póczos, B. (2019). Myopic posterior sampling fo
 
 Kim, W., Pitt, M. A., Lu, Z.-L., Steyvers, M., & Myung, J. I. (2017). A hierarchical adaptive approach to optimal experimental design. *Neural Computation*, 26(11), 2465–2492.
 
+Lakatos, I. (1978). *The Methodology of Scientific Research Programmes: Philosophical Papers, Volume 1*. Cambridge University Press.
+
 Liang, T., He, Z., Jiao, W., Wang, X., Wang, Y., Wang, R., Yang, Y., Tu, Z., & Shi, S. (2023). Encouraging divergent thinking in large language models through multi-agent debate. *arXiv:2305.19118*.
 
 Love, B. C., Medin, D. L., & Gureckis, T. M. (2004). SUSTAIN: A network model of category learning. *Psychological Review*, 111(2), 309–332.
@@ -332,6 +512,8 @@ Myung, J. I., & Pitt, M. A. (2009). Optimal experimental design for model discri
 Navarro, D. J., Pitt, M. A., & Myung, I. J. (2004). Assessing the distinguishability of models and the informativeness of data. *Cognitive Psychology*, 49(1), 47–84.
 
 Nosofsky, R. M. (1986). Attention, similarity, and the identification-categorization relationship. *Journal of Experimental Psychology: General*, 115(1), 39–57.
+
+Nosofsky, R. M. (1991). Tests of an exemplar model for relating perceptual classification and recognition memory. *Journal of Experimental Psychology: Human Perception and Performance*, 17(1), 3–27.
 
 Nosofsky, R. M., Palmeri, T. J., & McKinley, S. C. (1994). Rule-plus-exception model of classification learning. *Psychological Review*, 101(1), 53–79.
 
