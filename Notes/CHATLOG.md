@@ -409,7 +409,7 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 **Commits:** `3109d14`, `dfc6ed2`, `201ff06`, `35485d8`, `fde4949`, `e1920a4`, `f49818c`, `7fb5de3`, `d7b8ca6`, `be91b7b`, `2a57937`
 
 **What we did:**
-- Implemented all 5 M6 ARBITER features via TDD (54 new tests):
+- Implemented all 5 M6 arbiter-v0.1 features via TDD (54 new tests):
   - M6a: MetaAgentConfig — role-specialized Integrator & Critic meta-agents
   - M6b: Crux Negotiation — 6 sub-commits covering Crux dataclass, identification, negotiation, finalization, EIG boosting, and run_cycle wiring
   - M6e: Conflict Map — category field on claims, conflict_map_summary()
@@ -431,11 +431,11 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 - **Meta-agents substantive**: Critic consistently identifies weakest argument; Integrator synthesizes across theories. Neither overrides Bayesian machinery.
 
 **Key discussion:**
-- ARBITER architecture is now operational: role specialization, crux negotiation, conflict tracking, pre-registration
+- arbiter-v0.1 architecture is now operational: role specialization, crux negotiation, conflict tracking, pre-registration
 - Posterior collapse identified as the primary bottleneck for M7 (D29)
 - Updated all project documentation (TASKS, SCRATCHPAD, DECISIONS, CHATLOG, REPORT, LESSONS_LEARNED, FEATURES, README)
 
-**Status:** M6 complete and validated. 287 tests, 3/3 correct, ARBITER features producing meaningful debate dynamics.
+**Status:** M6 complete and validated. 287 tests, 3/3 correct, arbiter-v0.1 features producing meaningful debate dynamics.
 
 ---
 
@@ -764,7 +764,7 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 - Built reusable experiment framework (`experiment.py`): YAML-driven multi-condition ablation with `ExperimentCondition` dataclass, `load_experiment()`, `run_condition()`, `run_experiment()`
 - Implemented no-debate mode: `_NO_DEBATE` global skips all LLM phases, runs computational pipeline only (EIG + predictions + posterior)
 - Ran full 3×2 ablation: No-Debate / Debate-No-Arbiter / Debate+Arbiter × Thompson / Greedy × 3 ground truths
-- Expanded from original 2×2 after user pointed out conflation of base debate with ARBITER features
+- Expanded from original 2×2 after user pointed out conflation of base debate with arbiter-v0.1 features
 - Created `experiments/debate_no_arbiter.yaml` for supplemental runs + `merge_summaries()` utility
 - Fixed Codex review finding: unknown YAML keys now rejected (prevents silent misconfig)
 - Fixed missing CLI args in runner.py's parser (`--no-claim-responsive`, `--design-space`, etc.)

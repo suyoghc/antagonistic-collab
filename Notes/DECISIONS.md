@@ -560,9 +560,9 @@ Pattern covered `debate_cycle_*.json` but not `.md` transcripts.
 
 ---
 
-## D28: M6 — ARBITER Integration: role-specialized agents & crux negotiation — 2026-03-15
+## D28: M6 — arbiter-v0.1 Integration: role-specialized agents & crux negotiation — 2026-03-15
 
-**Problem:** M5 closed feedback loops but debate structure remained flat: all agents share the same prompt template, there's no mechanism for identifying decisive questions, and no structured output summarizing predictions before experiments run. ARBITER (Kachergis et al.) provides an architecture with role-specialized meta-agents, crux-based negotiation, conflict maps, and pre-registration.
+**Problem:** M5 closed feedback loops but debate structure remained flat: all agents share the same prompt template, there's no mechanism for identifying decisive questions, and no structured output summarizing predictions before experiments run. The ARBITER framework (Kachergis et al.) provides an architecture with role-specialized meta-agents, crux-based negotiation, conflict maps, and pre-registration. Our implementation is versioned as **arbiter-v0.1** to distinguish it from future iterations that may change agent roster, model set, or debate protocol structure.
 
 **Solution:** Implemented 5 features (54 tests, 11 commits):
 
@@ -595,7 +595,7 @@ Pattern covered `debate_cycle_*.json` but not `.md` transcripts.
 - Winning theories need fewer revisions (Rule_Agent: 0 revisions, 67.6% gap)
 - Meta-agents contribute substantively but don't override Bayesian machinery
 
-**Impact:** Full ARBITER architecture operational. System now has role specialization, focused debate via cruxes, conflict tracking, and pre-registered predictions. 287 tests total.
+**Impact:** Full arbiter-v0.1 architecture operational. System now has role specialization, focused debate via cruxes, conflict tracking, and pre-registered predictions. 287 tests total.
 
 **Status:** Done.
 
@@ -973,7 +973,7 @@ Key findings:
 **Decision:** Build a reusable experiment framework and run a 3×2 ablation: No-Debate / Debate-No-Arbiter / Debate+Arbiter × Thompson / Greedy × 3 ground truths = 18 conditions. The "no debate" mode runs only the computational pipeline with zero LLM calls, providing a clean computational-only baseline.
 
 **Alternatives considered:**
-1. **2×2 ablation (debate/no-debate only)** — Original plan, but conflates base debate with ARBITER features. User pointed out we need to separate debate-without-arbiter from debate-with-arbiter to estimate each contribution independently.
+1. **2×2 ablation (debate/no-debate only)** — Original plan, but conflates base debate with arbiter-v0.1 features. User pointed out we need to separate debate-without-arbiter from debate-with-arbiter to estimate each contribution independently.
 2. **Ablate individual features** — Too many combinations (claim-responsive, crux-directed, meta-agents, etc.). The 3-level debate factor captures the main architectural distinction.
 3. **Compare across milestones** — Confounded by other changes between milestones (tempering, continuous design, etc.). Same-config ablation is cleaner.
 

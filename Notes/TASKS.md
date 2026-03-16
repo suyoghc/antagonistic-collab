@@ -216,7 +216,7 @@ Key findings:
 ## Completed: M7 — Likelihood Tempering + Codex Fixes (DONE)
 
 ### M7 Tasks
-- [x] **M7: Likelihood Tempering** — Add `learning_rate` (tau) parameter to Bayesian posterior updates to prevent posterior collapse. Multiplies log-likelihoods by tau ∈ (0, 1] before adding to prior. Threaded through `ModelPosterior.update()`, `compute_eig()`, `select_from_pool()`, `select_experiment()`, `update_posterior_from_experiment()`. Default tau=0.2 with `--no-tempering` to disable. `--no-arbiter` toggle for ARBITER features. YAML config file with layered precedence. 10 tests.
+- [x] **M7: Likelihood Tempering** — Add `learning_rate` (tau) parameter to Bayesian posterior updates to prevent posterior collapse. Multiplies log-likelihoods by tau ∈ (0, 1] before adding to prior. Threaded through `ModelPosterior.update()`, `compute_eig()`, `select_from_pool()`, `select_experiment()`, `update_posterior_from_experiment()`. Default tau=0.2 with `--no-tempering` to disable. `--no-arbiter` toggle for arbiter-v0.1 features. YAML config file with layered precedence. 10 tests.
 - [x] **Codex Review Fixes** — 5 bugs identified by Codex automated review (D31):
   - [x] Fix #1: Ground-truth leakage in curve evidence → pairwise divergence
   - [x] Fix #2: Novel structure silent fallback → merge temporary_structures
@@ -241,13 +241,13 @@ Key findings:
 - RULEX misidentification reflects genuine GCM flexibility (Nosofsky 1991) — GCM approximates rule-like behavior through attention weights. RMSE gap only 8.2%.
 
 ### M7 Commits
-- `0c43faf` feat(M7): likelihood tempering, ARBITER toggle, and config file
+- `0c43faf` feat(M7): likelihood tempering, arbiter-v0.1 toggle, and config file
 - `b79829c` fix: 5 Codex review bugs — ground-truth leakage, novel structures, LOO mismatch, RULEX curves, n_subjects threading
 - `9138b42` fix(M7): calibrate tempering — tau=0.005, clip [0.05, 0.95]
 
 ---
 
-## Completed: M6 — ARBITER Integration (DONE)
+## Completed: M6 — arbiter-v0.1 Integration (DONE)
 
 ### M6 Tasks
 - [x] **M6a: MetaAgentConfig** — `MetaAgentConfig` dataclass (name, role, system_prompt), `create_default_meta_agents()` factory, Integrator + Critic role-specific prompts, wired into `run_interpretation_debate()`. 8 tests.

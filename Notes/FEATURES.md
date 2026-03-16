@@ -354,7 +354,17 @@ and more targeted hypotheses.
 
 ---
 
-## 8. ARBITER Features (Implemented — M6, validated 2026-03-15)
+## 8. arbiter-v0.1 Features (Implemented — M6, validated 2026-03-15)
+
+> **arbiter-v0.1** is the current version of the debate architecture. It includes:
+> 3 theory agents (Exemplar_Agent/GCM, Rule_Agent/RULEX, Clustering_Agent/SUSTAIN),
+> 2 meta-agents (Integrator, Critic), crux-based negotiation, conflict maps,
+> pre-registration, claim-responsive debate, and HITL checkpoints. Agents debate
+> in natural language but predictions come from executable models (`model.predict()`).
+> The computational layer (Bayesian EIG, Thompson sampling, likelihood tempering,
+> continuous design space) drives experiment selection; debate provides interpretation
+> and hypothesis generation. Future versions may change the agent roster, model set,
+> debate protocol structure, or the division of labor between computation and debate.
 
 ### 8.1 Role-specialized meta-agents (`MetaAgentConfig`)
 **What it does:** Adds Integrator and Critic meta-agents with role-specific system prompts.
@@ -437,7 +447,7 @@ Ranked by estimated impact on which theory wins and how fast convergence occurs:
 variance is non-zero (std=0.018 vs 0.000 pre-M5). Debate causally affects RMSE
 through parameter revision persistence. All 3 ground truths still correctly
 identified. Cross-LLM comparison (GPT-4o, Sonnet, Opus) confirms: 9/9 correct.
-**Update (M6, 2026-03-15):** Features 15–18 now implemented. ARBITER features
+**Update (M6, 2026-03-15):** Features 15–18 now implemented. arbiter-v0.1 features
 enrich debate quality (crux selectivity, meta-agent synthesis, conflict tracking)
 but do not alter convergence mechanism. Posterior collapse (D29) was the primary
 bottleneck — crux boost cannot overcome zero EIG. 3/3 correct with 36–68% gaps.
@@ -474,7 +484,7 @@ entropy=0.635→0.325, EIG=0.233 on cycle 1 (was 0.000 with tau=0.2). Correct
 winner identified. 12 tests across `TestLikelihoodTempering`, `TestConfig`, and
 `TestPredictionClipping` (308 total passing).
 **Toggles:** `--no-tempering` sets tau=1.0 (standard Bayesian). `--no-arbiter`
-disables ARBITER features (crux negotiation, meta-agents, conflict map).
+disables arbiter-v0.1 features (crux negotiation, meta-agents, conflict map).
 Both configurable via YAML config file with layered precedence.
 
 ### 9.2 Experiment selection strategy (`--selection-strategy`)
@@ -501,7 +511,7 @@ with pre-bugfix curve bonus that caused greedy RULEX misidentification in M7.
 Thompson sampling. With probability `crux_weight`, the system samples uniformly from
 candidates matching active cruxes; with probability `1 - crux_weight`, it uses
 standard EIG-weighted Thompson. This makes debate causally relevant to experiment
-selection: accepted cruxes (from ARBITER negotiation) directly influence which
+selection: accepted cruxes (from arbiter-v0.1 negotiation) directly influence which
 experiment is run.
 **Where:** `bayesian_selection.py` (`_select_index` crux mixture, `select_from_pool`
 crux_indices computation), `runner.py` (`_CRUX_WEIGHT` global, crux-directed

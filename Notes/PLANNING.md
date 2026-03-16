@@ -80,7 +80,7 @@ models/
 - Parameter revision persistence, critique-as-falsification, debate-informed EIG, claim ledger
 - Replication variance went from 0.000 to std=0.018
 
-### M6: ARBITER integration (DONE)
+### M6: arbiter-v0.1 integration (DONE)
 - MetaAgentConfig, crux negotiation, conflict map, pre-registration, HITL checkpoints
 - Live validation: 3/3 correct (GCM 36.4%, SUSTAIN 45.6%, RULEX 67.6%)
 - Identified posterior collapse as primary bottleneck (D29)

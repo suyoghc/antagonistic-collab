@@ -828,7 +828,7 @@ The RULEX ground truth run shows the most interesting trajectory: posterior star
 
 ---
 
-## Phase 11 — M6: ARBITER Integration — Live Validation (2026-03-15)
+## Phase 11 — M6: arbiter-v0.1 Integration — Live Validation (2026-03-15)
 
 ### 11.1 The system is a falsification engine
 
@@ -912,7 +912,7 @@ Distilled from 11 phases of development, ~70 validation runs, and 4 LLM backbone
 
 **12. Closing feedback loops makes debate matter, but modestly.** Post-M5, replication variance went from zero to std≈0.018 (10% CV). The debate now causally affects outcomes through parameter revision persistence. But the Bayesian machinery still dominates — correct winners in all runs regardless of what agents say. The debate's primary value remains qualitative: human-readable explanations and mechanistic narratives. (Phase 10, M5)
 
-### On ARBITER features (M6)
+### On arbiter-v0.1 features (M6)
 
 **13. Crux negotiation identifies real scientific questions, but only with real LLMs.** Mock validation showed 100% crux acceptance (rubber-stamping). Live GPT-4o showed 15% acceptance. Accepted cruxes map to genuine theoretical fault lines in cognitive science. Always validate debate features with live LLM calls. (Phase 11, M6)
 
@@ -1267,7 +1267,7 @@ Three validation runs: 3 ground truths × 5 cycles, GPT-4o via Princeton, crux_w
 
 **37. Debate without structured arbitration actively degrades performance.** Debate-no-arbiter had the worst average RMSE (0.078) and gap (82.4%) — worse than both no-debate and debate+arbiter. Two mechanisms: (a) LLM-proposed param_overrides introduce noise into model predictions that default params avoid, and (b) interpretation and critique phases produce text that is disconnected from the scoring pipeline — debate output doesn't feed back into EIG computation or posterior updates. Adding debate without closing the feedback loop is strictly worse than not debating. (Phase 19, M13)
 
-**38. ARBITER features partially compensate for debate-induced noise.** Debate+arbiter (RMSE 0.060, gap 86.5%) substantially recovers from debate-no-arbiter (0.078, 82.4%) but still doesn't beat no-debate (0.055, 87.6%). The mechanism: crux-directed selection steers EIG toward experiments that agents identified as decisive, compensating for noise introduced elsewhere. This suggests crux negotiation adds genuine information about which experiments matter, even if the broader debate doesn't improve identification. (Phase 19, M13)
+**38. arbiter-v0.1 features partially compensate for debate-induced noise.** Debate+arbiter (RMSE 0.059, gap 86.8%) substantially recovers from debate-no-arbiter (0.078, 82.4%) but still doesn't beat no-debate (0.055, 87.6%). The mechanism: crux-directed selection steers EIG toward experiments that agents identified as decisive, compensating for noise introduced elsewhere. This suggests crux negotiation adds genuine information about which experiments matter, even if the broader debate doesn't improve identification. (Phase 19, M13)
 
 **39. Greedy selection outperforms Thompson when likelihood signals are strong.** Greedy averaged 88.2% gap vs Thompson's 83.0%. With clean synthetic data, the posterior concentrates quickly and Thompson's exploration wastes cycles on suboptimal experiments. However, greedy drives posterior entropy to 0.000 (total certainty) while Thompson retains residual uncertainty (0.001–0.032). On noisier real-world data, Thompson's exploration and honest uncertainty may prove advantageous. (Phase 19, M13)
 

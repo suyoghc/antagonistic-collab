@@ -128,7 +128,7 @@ Validated across 43 runs (3 ground truths × multiple milestones/modes, 5 cycles
 | SUSTAIN | legacy | Clustering_Agent | 0.361 | 34% |
 | RULEX | legacy | Rule_Agent | 0.429 | 2.4% |
 
-**M6 ARBITER live validation** (GPT-4o, role-specialized agents + crux negotiation + conflict maps + pre-registration):
+**M6 arbiter-v0.1 live validation** (GPT-4o, role-specialized agents + crux negotiation + conflict maps + pre-registration):
 
 | Ground Truth | Winner | RMSE | Gap | Cruxes | Claims Falsified |
 |---|---|---|---|---|---|
@@ -147,16 +147,28 @@ Validated across 43 runs (3 ground truths × multiple milestones/modes, 5 cycles
 
 See [Notes/REPORT.md](Notes/REPORT.md) for the full write-up and [Notes/LESSONS_LEARNED.md](Notes/LESSONS_LEARNED.md) for 35 theses on LLM-mediated scientific debate.
 
+## Current version: arbiter-v0.1
+
+The current debate architecture (**arbiter-v0.1**) consists of:
+- **3 theory agents**: Exemplar_Agent (GCM), Rule_Agent (RULEX), Clustering_Agent (SUSTAIN)
+- **2 meta-agents**: Integrator (cross-theory synthesis), Critic (weakest-argument identification)
+- **Debate protocol**: commitment → divergence mapping → crux negotiation → EIG selection → execution → interpretation debate → interpretation critique → audit
+- **Feedback paths**: parameter revision persistence, claim-responsive debate (revise/explain/abandon), crux-directed Thompson sampling, critique-as-falsification
+- **Computational layer**: Bayesian EIG over continuous design space (~427 candidates/cycle), likelihood tempering (tau=0.005), Thompson sampling, learning curves as second evidence channel
+
+Future versions may change the agent roster, model set, debate protocol structure, or the division of labor between computation and debate.
+
 ## What's next
 
 - [x] ~~Close debate feedback loops~~ — parameter revision persistence, structured claim ledger, critique-as-falsification, debate-informed EIG weighting (M5, done)
 - [x] ~~Compare LLM backbones~~ — Claude Sonnet/Opus vs GPT-4o: correct model wins in 9/9 runs, framework is LLM-agnostic (M4, done)
-- [x] ~~ARBITER integration~~ — role-specialized meta-agents, crux negotiation, conflict maps, pre-registration output, HITL checkpoints (M6, done — 3/3 correct, 36–68% gaps)
+- [x] ~~arbiter-v0.1 integration~~ — role-specialized meta-agents, crux negotiation, conflict maps, pre-registration output, HITL checkpoints (M6, done — 3/3 correct, 36–68% gaps)
 - [x] ~~Address posterior collapse~~ — likelihood tempering (M7), Thompson sampling (M8), crux-directed selection (M9)
 - [x] ~~Claim-responsive debate~~ — agents must address falsified claims (M10, 80% FR rate)
 - [x] ~~Richer design spaces~~ — parametric structures + interpolated conditions (M11, superseded by M12)
 - [x] ~~Continuous design space~~ — fresh samples each cycle from parameter ranges (M12, 15/15 sampled selected, 0% overlap)
-- [ ] Ablation study: EIG-only (no debate) vs full system — measure debate's causal contribution
+- [x] ~~Ablation study~~ — 3×2 ablation (No-Debate / Debate-No-Arbiter / Debate+Arbiter × Thompson / Greedy): 18/18 correct, debate epiphenomenal on synthetic benchmarks (M13)
+- [ ] Close debate→computation feedback loop — debate output currently disconnected from scoring pipeline
 - [ ] Additional cognitive domains — memory retrieval, associative learning, decision making
 - [ ] AutoRA integration — real data collection via Prolific
 - [ ] Longer runs (10+ cycles) — test cumulative reasoning at longer horizons
