@@ -4,9 +4,9 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ---
 
-## Current status — M10 complete (code), pending validation
+## Current status — M10 complete
 
-M10 claim-responsive debate implemented: agents with falsified claims must revise/explain/abandon. 7 new tests, 343 total passing. Live validation needed to measure whether agents actually engage with falsified claims and produce cumulative reasoning.
+M10 claim-responsive debate validated: 3/3 correct, 80% falsified_response rate. Agents engage with falsified claims via revise/explain/abandon actions. "Explain" dominates (Lakatos-compatible). Overclaiming persists but agents now confront failures.
 
 ### Open issues
 1. **SUSTAIN converges too fast** — even tau=0.005 can't slow it because predictions are categorically different. Not a bug.

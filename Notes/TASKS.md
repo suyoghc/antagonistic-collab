@@ -7,10 +7,26 @@
 - [x] **Falsified claims directive** — When `_CLAIM_RESPONSIVE` is true and agent has falsified claims, inject `### FALSIFIED CLAIMS` block into interpretation prompt listing each falsified claim with evidence. Agents must respond with revise/explain/abandon via `"falsified_response"` JSON field
 - [x] **7 new tests** (TestClaimResponsiveDebate): config default, CLI flag, module global, directive present when enabled, absent when disabled, absent when no falsified claims, JSON field instruction present
 - [x] **Documentation** — D38 in DECISIONS.md, REPORT.md 4.4/4.7 updated, WRITEUP.md 6.3/6.4 updated with Reflexion citation, PLANNING.md M10 milestone
-- [ ] **Live validation** — Compare debate transcripts with/without claim-responsive across 3 ground truths. Measure: do agents acknowledge falsified claims? Do they revise theories? Is the `falsified_response` field populated?
+- [x] **Live validation** — 3/3 correct across all ground truths. 80% falsified_response rate. Agents use revise/explain/abandon actions.
+
+### M10 Validation Results (claim_responsive=true, GPT-4o, 2026-03-15)
+
+| Ground Truth | Winner | Correct? | RMSE | Gap | Falsified | FR rate |
+|---|---|---|---|---|---|---|
+| GCM | Exemplar_Agent | Yes | 0.071 | 79.3% | 12 | 80% |
+| SUSTAIN | Clustering_Agent | Yes | 0.018 | 96.6% | 14 | 80% |
+| RULEX | Rule_Agent | Yes | 0.166 | 51.8% | 15 | 80% |
+
+Key findings:
+- 80% response rate (12/15 theory agent interpretations include falsified_response; the 3 missing are cycle 0 where no claims exist yet)
+- Agents use all three actions: revise, explain, abandon
+- "explain" dominates — agents prefer attributing falsification to confounds over revising theories (Lakatos-compatible auxiliary hypothesis shielding)
+- Overclaiming persists (claimed 0.65–0.85, actual 0.10–0.50) but agents now confront failures
+- One "abandon" action observed (SUSTAIN run, Exemplar_Agent)
 
 ### M10 Commits
 - `cb9c69a` feat(M10): claim-responsive debate — agents must address falsified claims
+- `e199090` docs: M10 claim-responsive debate across all project documentation
 
 ### M10 Literature
 - Shinn, N. et al. (2023). Reflexion: Language agents with verbal reinforcement learning. NeurIPS 36.

@@ -872,4 +872,14 @@ Key outcome: Before M9, 0 crux boost specs were parsed across all runs (100+ cru
 
 **Tests:** 7 new tests (TestClaimResponsiveDebate), 343 total passing.
 
-**Status:** Done (code). Pending live validation.
+**Live validation (2026-03-15):**
+
+| Ground Truth | Winner | Correct? | RMSE | Gap | Falsified claims | FR rate |
+|---|---|---|---|---|---|---|
+| GCM | Exemplar_Agent | Yes | 0.071 | 79.3% | 12 | 80% |
+| SUSTAIN | Clustering_Agent | Yes | 0.018 | 96.6% | 14 | 80% |
+| RULEX | Rule_Agent | Yes | 0.166 | 51.8% | 15 | 80% |
+
+Key outcome: Agents engage with falsified claims at 80% rate (12/15 theory interpretations include structured `falsified_response` fields; 3 missing are cycle-0 where no claims yet exist). All three response actions observed: revise (adjusting parameters), explain (attributing to confounds), abandon (1 instance). "Explain" dominates — consistent with Lakatos's auxiliary hypothesis shielding. Overclaiming persists (claimed 0.65–0.85, actual 0.10–0.50) but agents now confront their failures rather than ignoring them.
+
+**Status:** Done.

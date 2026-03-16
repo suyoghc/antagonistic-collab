@@ -669,7 +669,18 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 - 7 new tests (TestClaimResponsiveDebate), 343 total passing
 - Updated all docs: D38 in DECISIONS.md, REPORT.md 4.4/4.7, WRITEUP.md 6.3/6.4, PLANNING.md M10, TASKS.md M10
 - Added Shinn et al. (2023) Reflexion reference to both WRITEUP.md and REPORT.md
-- Codex review flagged 2 issues in validate_m6.py / validate_m6_live.py (mock routing, credential handling) — addressing next
+- Codex review flagged 2 issues in validate_m6.py / validate_m6_live.py (mock routing, credential handling) — assessed as not worth fixing (dead script + already fixed)
+- Ran M10 live validation: 3 ground truths × 5 cycles with GPT-4o, claim_responsive=true
+
+**M10 validation results:**
+
+| Ground Truth | Winner | RMSE | Gap | Falsified | FR rate |
+|---|---|---|---|---|---|
+| GCM | Exemplar_Agent | 0.071 | 79.3% | 12 | 80% |
+| SUSTAIN | Clustering_Agent | 0.018 | 96.6% | 14 | 80% |
+| RULEX | Rule_Agent | 0.166 | 51.8% | 15 | 80% |
+
+**Key finding:** Claim-responsive debate works. 80% of theory agent interpretations include structured `falsified_response` fields. Agents use all three actions (revise, explain, abandon). "Explain" dominates — agents prefer attributing falsification to confounds over revising theories, consistent with Lakatos. One "abandon" action observed. Overclaiming persists but agents now confront failures.
 
 ---
 
