@@ -2239,6 +2239,137 @@ def sync_params_from_theory(protocol: DebateProtocol):
 
 
 # ---------------------------------------------------------------------------
+# Claim auto-resolution: resolve claims from experimental data
+# ---------------------------------------------------------------------------
+
+
+def resolve_claims_from_data(
+    state: EpistemicState,
+    structure: str,
+    condition: str,
+    data: dict,
+    protocol: DebateProtocol,
+    cycle: int,
+):
+    """Resolve untested claims matching the just-executed structure/condition.
+
+    Hybrid resolution strategy:
+    1. Try parsing predicted_outcome with simple patterns (mean_accuracy=X.XX, RMSE < X.XX)
+    2. If parseable: compare against actual data, confirm if within tolerance (0.15)
+    3. Fallback: compare claiming agent's model RMSE vs other models.
+       Best RMSE → confirmed, otherwise → falsified.
+    """
+    for idx, claim in enumerate(state.claim_ledger):
+        if claim.status != "untested" or not claim.testable:
+            continue
+        if claim.structure != structure or claim.condition != condition:
+            continue
+
+        # Try parseable resolution first
+        resolved = _try_parse_resolution(claim, data)
+        if resolved is not None:
+            status, evidence = resolved
+            state.update_claim_status(idx, status, evidence, cycle)
+            print(f"  Claim resolved (parsed): [{status}] {claim.content} — {evidence}")
+            continue
+
+        # Fallback: RMSE comparison across agents
+        status, evidence = _rmse_fallback_resolution(claim, structure, condition, data, protocol)
+        state.update_claim_status(idx, status, evidence, cycle)
+        print(f"  Claim resolved (RMSE): [{status}] {claim.content} — {evidence}")
+
+
+def _try_parse_resolution(claim: DebateClaim, data: dict):
+    """Try to resolve a claim by parsing its predicted_outcome against data.
+
+    Returns (status, evidence) or None if unparseable.
+    """
+    pred = claim.predicted_outcome
+    if not pred or not isinstance(pred, str):
+        return None
+
+    # Pattern: "mean_accuracy=X.XX"
+    match = re.match(r"mean_accuracy\s*=\s*([0-9.]+)", pred)
+    if match:
+        predicted_val = float(match.group(1))
+        actual_val = data.get("mean_accuracy")
+        if actual_val is not None:
+            diff = abs(predicted_val - actual_val)
+            if diff <= 0.15:
+                return ("confirmed", f"predicted={predicted_val:.3f}, actual={actual_val:.3f}, diff={diff:.3f}")
+            else:
+                return ("falsified", f"predicted={predicted_val:.3f}, actual={actual_val:.3f}, diff={diff:.3f}")
+
+    # Pattern: "RMSE < X.XX" or "RMSE > X.XX"
+    match = re.match(r"RMSE\s*([<>])\s*([0-9.]+)", pred)
+    if match:
+        op, threshold = match.group(1), float(match.group(2))
+        # Compute actual RMSE from data vs perfect accuracy (1.0)
+        items = [v for k, v in data.items() if k.startswith("item_")]
+        if items:
+            rmse = math.sqrt(sum((1.0 - v) ** 2 for v in items) / len(items))
+            if op == "<":
+                status = "confirmed" if rmse < threshold else "falsified"
+            else:
+                status = "confirmed" if rmse > threshold else "falsified"
+            return (status, f"RMSE={rmse:.3f}, threshold {op} {threshold}")
+
+    return None
+
+
+def _rmse_fallback_resolution(
+    claim: DebateClaim,
+    structure: str,
+    condition: str,
+    data: dict,
+    protocol: DebateProtocol,
+):
+    """Resolve a claim by comparing the claiming agent's model RMSE vs others.
+
+    If the claiming agent's model has the best (lowest) RMSE → confirmed.
+    Otherwise → falsified.
+    """
+    # Find the claiming agent
+    claiming_agent = None
+    for agent in protocol.agent_configs:
+        if agent.name == claim.agent:
+            claiming_agent = agent
+            break
+
+    if claiming_agent is None:
+        return ("falsified", f"agent '{claim.agent}' not found")
+
+    # Compute RMSE for each agent's model against actual data
+    agent_rmses = {}
+    for agent in protocol.agent_configs:
+        try:
+            preds = protocol.compute_model_predictions(agent, structure, condition)
+        except Exception:
+            continue
+        errors = []
+        for key in data:
+            if key.startswith("item_") and key in preds:
+                errors.append((preds[key] - data[key]) ** 2)
+        if errors:
+            agent_rmses[agent.name] = math.sqrt(sum(errors) / len(errors))
+
+    if not agent_rmses:
+        return ("falsified", "no model predictions available")
+
+    # Best agent = lowest RMSE
+    best_agent = min(agent_rmses, key=agent_rmses.get)
+    claim_rmse = agent_rmses.get(claim.agent, float("inf"))
+    best_rmse = agent_rmses[best_agent]
+
+    rmse_summary = ", ".join(f"{k}={v:.3f}" for k, v in sorted(agent_rmses.items()))
+
+    if claim.agent == best_agent:
+        return ("confirmed", f"{claim.agent} best RMSE ({rmse_summary})")
+    else:
+        return ("falsified", f"{best_agent} beat {claim.agent} ({rmse_summary})")
+
+
+# ---------------------------------------------------------------------------
 # Claim parsing: extract structured claims from agent JSON
 # ---------------------------------------------------------------------------
 
@@ -2391,6 +2522,21 @@ def run_cycle(
     # Phase 7: Execution
     result = run_execution(protocol, client, transcript, true_model=true_model)
     protocol.advance_phase(result)
+
+    # Resolve claims against the just-collected data
+    executed_exps = [
+        e for e in protocol.state.experiments
+        if e.cycle == protocol.state.cycle and e.status == "executed"
+    ]
+    if executed_exps:
+        exp = executed_exps[0]
+        struct_name = exp.design_spec.get("structure_name", "")
+        condition = exp.design_spec.get("condition", "baseline")
+        if exp.data:
+            resolve_claims_from_data(
+                protocol.state, struct_name, condition, exp.data,
+                protocol, protocol.state.cycle,
+            )
 
     if mode == "full_pool":
         # Interpretation debate + critique replaces simple interpretation
