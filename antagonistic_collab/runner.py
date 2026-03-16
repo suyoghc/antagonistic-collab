@@ -2184,6 +2184,9 @@ def validate_param_revision(
     struct_name = exp.design_spec.get("structure_name", "")
     condition = exp.design_spec.get("condition", "baseline")
 
+    # Actual data may store items at top level or inside "item_accuracies"
+    actual_items = exp.data.get("item_accuracies", exp.data)
+
     def compute_rmse(params):
         """Compute RMSE between model predictions and actual data."""
         try:
@@ -2195,9 +2198,9 @@ def validate_param_revision(
 
         # Compare item-level predictions against actual data
         errors = []
-        for key in exp.data:
+        for key in actual_items:
             if key.startswith("item_") and key in preds:
-                errors.append((preds[key] - exp.data[key]) ** 2)
+                errors.append((preds[key] - actual_items[key]) ** 2)
         if not errors:
             return float("inf")
         return math.sqrt(sum(errors) / len(errors))
@@ -2319,7 +2322,10 @@ def _try_parse_resolution(claim: DebateClaim, data: dict):
     if match:
         op, threshold = match.group(1), float(match.group(2))
         # Compute actual RMSE from data vs perfect accuracy (1.0)
-        items = [v for k, v in data.items() if k.startswith("item_")]
+        actual_items = (
+            data.get("item_accuracies", data) if isinstance(data, dict) else data
+        )
+        items = [v for k, v in actual_items.items() if k.startswith("item_")]
         if items:
             rmse = math.sqrt(sum((1.0 - v) ** 2 for v in items) / len(items))
             if op == "<":
@@ -2353,6 +2359,9 @@ def _rmse_fallback_resolution(
     if claiming_agent is None:
         return ("falsified", f"agent '{claim.agent}' not found")
 
+    # Actual data may store items at top level or inside "item_accuracies"
+    actual_items = data.get("item_accuracies", data) if isinstance(data, dict) else data
+
     # Compute RMSE for each agent's model against actual data
     agent_rmses = {}
     for agent in protocol.agent_configs:
@@ -2361,9 +2370,9 @@ def _rmse_fallback_resolution(
         except Exception:
             continue
         errors = []
-        for key in data:
+        for key in actual_items:
             if key.startswith("item_") and key in preds:
-                errors.append((preds[key] - data[key]) ** 2)
+                errors.append((preds[key] - actual_items[key]) ** 2)
         if errors:
             agent_rmses[agent.name] = math.sqrt(sum(errors) / len(errors))
 
