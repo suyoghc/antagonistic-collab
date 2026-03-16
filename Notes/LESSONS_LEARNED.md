@@ -1116,3 +1116,49 @@ Three validation runs: 3 ground truths × 5 cycles, GPT-4o via Princeton, crux_w
 **26. Design for low format compliance when LLMs produce structured output.** Even with explicit menus and format examples, LLMs produce compliant output <50% of the time for constrained formats. The mixture distribution succeeds because it works with even 1 parseable crux per run. Robust pipelines should assume majority non-compliance and degrade gracefully. (Phase 15, M9)
 
 **27. Crux-directed and EIG-driven selection converge on the same experiments.** Agents' theoretical disagreements cluster around the same discriminating structures that Bayesian EIG identifies — consistent with Corcoran et al.'s (2023) prediction that adversarial collaboration and optimal design should converge, and with Ouyang et al.'s (2018) finding that Medin & Schaffer's intuitive design was near-EIG-optimal. Crux-directed selection's unique value is at the margins, when cruxes point to experiments that EIG undervalues. (Phase 15, M9)
+
+---
+
+## Phase 16: Claim-Responsive Debate (M10)
+
+### 16.1 Directed engagement works; voluntary engagement doesn't
+
+**Expected:** Agents would spontaneously engage with falsified claims shown in their prompt context (the claim ledger summary has been injected since M5).
+
+**Actual:** Agents ignored the claim ledger for 5 milestones despite it appearing in every interpretation prompt. Adding an explicit directive ("you MUST address each falsified claim") with a structured response format immediately achieved 80% compliance (12/15 theory agent interpretations). The 3 missing responses are all cycle-0 interpretations where no falsified claims exist yet — when applicable, compliance was 100%.
+
+**Implication:** LLM agents do not spontaneously engage with context they are given. They need explicit instructions about *what to do with it*. Providing information (the claim summary) and providing a directive (address each claim) are qualitatively different interventions. This generalizes beyond claims: any context injected into an LLM prompt that is meant to change agent behavior requires an explicit instruction, not just passive presence. The Reflexion pattern (Shinn et al., NeurIPS 2023) works precisely because it provides structured feedback *with explicit instructions to respond*, not because it provides feedback alone.
+
+### 16.2 Agents prefer auxiliary hypothesis shielding over theory revision
+
+**Expected:** Agents would distribute roughly evenly across revise, explain, and abandon actions.
+
+**Actual:** "Explain" dominates overwhelmingly. Agents attribute falsification to confounds ("the fast presentation condition may have limited exemplar retrieval"), boundary conditions ("the high noise condition disrupted rule application"), or experimental artifacts rather than revising their theories. Only 1 "abandon" action was observed across all 3 runs (SUSTAIN run, Exemplar_Agent abandoning an overly optimistic prediction). "Revise" actions typically adjusted parameter predictions rather than core theoretical claims.
+
+**Implication:** This is Lakatos's auxiliary hypothesis shielding, emerging naturally from LLM behavior without being programmed. Agents protect their core theoretical commitments and modify auxiliary assumptions to accommodate disconfirming evidence — exactly how Lakatos described degenerating research programmes. The pattern suggests that LLMs, trained on scientific literature where this behavior is common, reproduce the same protective strategies human scientists use. Whether this is a feature (realistic scientific behavior) or a bug (resistance to genuine revision) depends on whether the explanations are substantive or ad hoc. In our data, the explanations are plausible but untested — agents invoke confounds they never propose to test. Future work could close this loop by requiring "explain" responses to propose a follow-up experiment that would disambiguate the confound.
+
+### 16.3 Claim-responsive debate fixes ignoring, not calibration
+
+**Expected:** Agents forced to confront falsified predictions would produce better-calibrated predictions in subsequent cycles.
+
+**Actual:** Overclaiming persists across all cycles. Agents claim 0.65–0.85 when actual model output is 0.10–0.50. The mechanism forces agents to *confront* their failures and produce structured reasoning about them, but does not improve the quantitative accuracy of subsequent predictions. Agents reason at the mechanism level ("exemplar retrieval efficiency may be impaired under fast presentation") and translate this into optimistic numbers that bear no relationship to their model's actual output.
+
+**Implication:** Claim-responsive debate addresses the *ignoring* problem (agents no longer pretend falsification didn't happen) but not the *calibration* problem (agents still can't estimate their model's quantitative behavior). This is the same root cause as D8 (LLMs guess rather than compute): agents reason qualitatively about mechanisms and produce numbers that reflect narrative plausibility, not computational reality. The fix for calibration is the same as D8's fix — model-computed predictions, not LLM-generated ones. Claim-responsive debate's value is in the *qualitative* reasoning it produces: why a prediction failed, what confounds may be at play, whether the core theory needs revision. These are genuine scientific contributions that computation alone cannot provide.
+
+### 16.4 JSON field compliance is task-complexity-dependent
+
+**Expected:** Given the 23% crux format compliance rate (Phase 15), falsified_response compliance might be similarly low.
+
+**Actual:** 80% compliance (100% when applicable). The falsified_response field is populated with structured revise/explain/abandon objects in 12 of 12 eligible interpretations.
+
+**Implication:** Format compliance depends on task complexity, not just format constraints. Crux format requires matching exact structure/condition pairs from a 55-entry registry — a retrieval task that competes with the agent's generation process (Tam et al. 2024). The falsified_response format requires free-text reasoning within a simple schema (claim, action, reasoning) — a generation task that *aligns with* what the agent is already doing. The lesson: design structured output formats that align with the agent's natural generation direction. Formats that require precise retrieval or constrained vocabulary will have low compliance; formats that scaffold natural reasoning will have high compliance.
+
+### Emerging Principles (continued)
+
+### On agent engagement and scientific reasoning (M10)
+
+**28. LLM agents require explicit directives, not just context, to engage with information.** Injecting falsified claims into prompts (M5–M9) produced zero engagement. Adding "you MUST address each claim" with a response format produced 100% engagement. Passive context injection is insufficient for changing agent behavior. (Phase 16, M10)
+
+**29. LLM agents reproduce Lakatos's auxiliary hypothesis shielding without being programmed to do so.** When forced to confront falsified predictions, agents overwhelmingly protect core theoretical commitments and invoke untested confounds — the signature of a degenerating research programme. This behavior is realistic but may require further intervention (e.g., requiring agents to design experiments that test their proposed confounds). (Phase 16, M10)
+
+**30. Structured output compliance depends on alignment with the agent's natural generation direction.** Formats requiring precise retrieval (crux structure/condition matching: 23%) have low compliance. Formats scaffolding natural reasoning (falsified_response with free text: 100%) have high compliance. Design output schemas accordingly. (Phase 16, M10)
