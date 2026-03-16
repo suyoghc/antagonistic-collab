@@ -14,14 +14,13 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from antagonistic_collab.epistemic_state import EpistemicState, TheoryCommitment
+from antagonistic_collab.epistemic_state import EpistemicState
 from antagonistic_collab.debate_protocol import DebateProtocol, default_agent_configs
 from antagonistic_collab.runner import (
     run_cycle,
     create_default_meta_agents,
     generate_preregistration,
     _create_client,
-    _DEFAULT_MODELS,
 )
 import antagonistic_collab.runner as runner_mod
 
@@ -35,8 +34,8 @@ def run_validation(client, true_model: str, n_cycles: int = 5):
     print(f"\n{'=' * 70}")
     print(f"M6 ARBITER LIVE VALIDATION — Ground Truth: {true_model}")
     print(f"{'=' * 70}")
-    print(f"  LLM: gpt-4o via Princeton AI Sandbox")
-    print(f"  Features: meta-agents, crux negotiation, conflict map, pre-registration")
+    print("  LLM: gpt-4o via Princeton AI Sandbox")
+    print("  Features: meta-agents, crux negotiation, conflict map, pre-registration")
     print(f"  Cycles: {n_cycles}")
     print(f"  Output: {output_dir}")
     print()
@@ -112,13 +111,13 @@ def run_validation(client, true_model: str, n_cycles: int = 5):
         print(f"\n  Winner: {winner} (gap: {gap_pct:.1f}%)")
 
     # Crux analysis
-    print(f"\n### Crux Negotiation Summary")
+    print("\n### Crux Negotiation Summary")
     total_cruxes = len(protocol.state.cruxes)
     accepted = [c for c in protocol.state.cruxes if c.status == "accepted"]
     rejected = [c for c in protocol.state.cruxes if c.status == "rejected"]
     print(f"  Total proposed: {total_cruxes}, Accepted: {len(accepted)}, Rejected: {len(rejected)}")
     if accepted:
-        print(f"  Accepted cruxes:")
+        print("  Accepted cruxes:")
         for c in accepted[:5]:
             print(f"    - {c.id}: {c.description[:80]}")
             print(f"      Exp: {c.discriminating_experiment}, Supporters: {len(c.supporters)}")
@@ -135,7 +134,7 @@ def run_validation(client, true_model: str, n_cycles: int = 5):
             print(f"  ... ({len(lines) - 20} more lines)")
 
     # Claim ledger
-    print(f"\n### Claim Ledger")
+    print("\n### Claim Ledger")
     total_claims = len(protocol.state.claim_ledger)
     confirmed = sum(1 for c in protocol.state.claim_ledger if c.status == "confirmed")
     falsified = sum(1 for c in protocol.state.claim_ledger if c.status == "falsified")
@@ -151,7 +150,7 @@ def run_validation(client, true_model: str, n_cycles: int = 5):
         print(f"  [{m['agent']}]: {interp}...")
 
     # Theory trajectories
-    print(f"\n### Theory Trajectories")
+    print("\n### Theory Trajectories")
     for theory in protocol.state.active_theories():
         try:
             traj = protocol.state.theory_trajectory(theory.name)
@@ -166,7 +165,7 @@ def run_validation(client, true_model: str, n_cycles: int = 5):
         probs = np.exp(lp - np.max(lp))
         probs = probs / probs.sum()
         model_names = protocol.state.model_posterior.get("model_names", [])
-        print(f"\n### Final Bayesian Posterior")
+        print("\n### Final Bayesian Posterior")
         for i, p in enumerate(probs):
             name = model_names[i] if i < len(model_names) else f"model_{i}"
             marker = " ← MOST PROBABLE" if p == max(probs) else ""
@@ -175,7 +174,7 @@ def run_validation(client, true_model: str, n_cycles: int = 5):
     # Experiment selections
     eig_selections = [m for m in transcript if m.get("phase") == "FULL_POOL_SELECTION"]
     if eig_selections:
-        print(f"\n### Experiment Selection History")
+        print("\n### Experiment Selection History")
         for sel in eig_selections:
             s = sel.get("selected", {})
             eig = sel.get("eig", 0)
@@ -210,8 +209,11 @@ if __name__ == "__main__":
     runner_mod._BATCH_MODE = True
     runner_mod._SELECTION_METHOD = "bayesian"
 
-    # Create Princeton client
-    os.environ.setdefault("AI_SANDBOX_KEY", "T7ldjeA6ugVWCbNmyAXLUuuj5aza")
+    # Create Princeton client — requires AI_SANDBOX_KEY env var
+    if not os.environ.get("AI_SANDBOX_KEY"):
+        print("ERROR: AI_SANDBOX_KEY environment variable is not set.")
+        print("Set it before running: export AI_SANDBOX_KEY=your_key_here")
+        sys.exit(1)
     client = _create_client(backend="princeton")
 
     models = ["GCM", "SUSTAIN", "RULEX"]

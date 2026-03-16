@@ -8181,3 +8181,118 @@ class TestDivergenceMapIncludesTemporaryStructures:
         assert "xor_test" in div_map, (
             "temporary_structures should appear in divergence map"
         )
+
+
+# ── Codex review round 7 ──────────────────────────────────────────────
+
+
+class TestNoHardcodedCredentials:
+    """P1: validate_m6_live.py embedded a real-looking API key as a fallback.
+
+    The script used os.environ.setdefault("AI_SANDBOX_KEY", "T7ldjeA6..."),
+    which bakes a credential into source. It should fail closed when the
+    env var is missing, not fall back to a hardcoded key.
+    """
+
+    def test_no_hardcoded_key_in_live_validation(self):
+        """validate_m6_live.py should not contain hardcoded API keys."""
+
+        live_path = os.path.join(
+            os.path.dirname(__file__), "..", "validate_m6_live.py"
+        )
+        if not os.path.exists(live_path):
+            pytest.skip("validate_m6_live.py not found")
+
+        source = open(live_path).read()
+        # Should not contain setdefault with a key value
+        assert "setdefault" not in source or "AI_SANDBOX_KEY" not in source, (
+            "validate_m6_live.py should not use os.environ.setdefault for API keys"
+        )
+
+
+class TestMockCruxIdentificationMatchesRealPrompts:
+    """P2: Mock crux identification matched on agent name substrings
+    like 'exemplar agent' which don't appear in real system prompts.
+
+    Real prompts use 'EXEMPLAR theory', 'RULE-BASED theory',
+    'CLUSTERING theory'. The mock must match on strings that actually
+    appear in the real prompts.
+    """
+
+    def test_mock_crux_matches_real_prompts(self):
+        """mock_llm crux branch should produce cruxes for each real agent."""
+        # Import validate_m6's mock
+        import importlib.util
+
+        validate_path = os.path.join(
+            os.path.dirname(__file__), "..", "validate_m6.py"
+        )
+        if not os.path.exists(validate_path):
+            pytest.skip("validate_m6.py not found")
+
+        spec = importlib.util.spec_from_file_location("validate_m6", validate_path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        from antagonistic_collab.debate_protocol import (
+            EXEMPLAR_AGENT_PROMPT,
+            RULE_AGENT_PROMPT,
+            CLUSTERING_AGENT_PROMPT,
+        )
+
+        prompts = {
+            "Exemplar_Agent": EXEMPLAR_AGENT_PROMPT,
+            "Rule_Agent": RULE_AGENT_PROMPT,
+            "Clustering_Agent": CLUSTERING_AGENT_PROMPT,
+        }
+
+        for agent_name, prompt in prompts.items():
+            result = json.loads(
+                mod.mock_llm(None, prompt, "Please perform crux identification")
+            )
+            assert len(result["cruxes"]) > 0, (
+                f"mock_llm should produce cruxes for {agent_name} "
+                f"but got empty list. The matching logic doesn't "
+                f"recognize the real system prompt."
+            )
+
+
+class TestRunValidationRestoresBatchMode:
+    """P3: run_validation() in validate_m6.py set _BATCH_MODE = True
+    but the finally block only restored call_agent, leaving _BATCH_MODE
+    mutated for the rest of the process.
+    """
+
+    def test_batch_mode_restored_after_validation(self):
+        """run_validation() should restore _BATCH_MODE to its prior value."""
+        import importlib.util
+        import antagonistic_collab.runner as runner_mod
+
+        validate_path = os.path.join(
+            os.path.dirname(__file__), "..", "validate_m6.py"
+        )
+        if not os.path.exists(validate_path):
+            pytest.skip("validate_m6.py not found")
+
+        spec = importlib.util.spec_from_file_location("validate_m6", validate_path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        # Set a known state
+        original_batch = runner_mod._BATCH_MODE
+        runner_mod._BATCH_MODE = False
+
+        try:
+            # run_validation may fail — that's fine, we just need to check
+            # the finally block restores state
+            try:
+                mod.run_validation("GCM", n_cycles=1)
+            except Exception:
+                pass
+
+            assert runner_mod._BATCH_MODE is False, (
+                "run_validation() should restore _BATCH_MODE to its original "
+                f"value (False), but it is {runner_mod._BATCH_MODE}"
+            )
+        finally:
+            runner_mod._BATCH_MODE = original_batch
