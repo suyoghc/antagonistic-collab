@@ -87,6 +87,12 @@ def _build_argparser() -> argparse.ArgumentParser:
         default=False,
         help="Disable ARBITER features (crux negotiation, meta-agents, conflict map).",
     )
+    parser.add_argument(
+        "--crux-weight",
+        type=float,
+        default=0.3,
+        help="Probability of crux-directed selection in Thompson sampling [0,1]. Default 0.3.",
+    )
     return parser
 
 

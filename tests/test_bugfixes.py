@@ -7480,7 +7480,14 @@ class TestFinalizeCruxes:
 
 
 class TestCruxBoostSpecs:
-    """Tests for crux_boost_specs parameter in select_from_pool."""
+    """Tests for crux_boost_specs and crux_weight in select_from_pool.
+
+    Crux boost specs identify which pool candidates match active cruxes.
+    With crux_weight > 0, Thompson sampling uses a mixture distribution
+    that samples from crux-matching candidates with that probability.
+    EIG scores are NOT modified by crux boost specs (the old multiplicative
+    boost was removed in favor of the mixture distribution).
+    """
 
     def _make_protocol_and_posterior(self):
         state = EpistemicState(domain="test")
@@ -7489,8 +7496,8 @@ class TestCruxBoostSpecs:
         posterior = ModelPosterior.uniform([a.name for a in agents])
         return protocol, posterior
 
-    def test_crux_boost_matching_candidates(self):
-        """Matching candidates should have EIG boosted."""
+    def test_crux_boost_eig_scores_unchanged(self):
+        """Crux boost specs should NOT modify EIG scores (mixture, not multiplicative)."""
         from antagonistic_collab.bayesian_selection import (
             generate_full_candidate_pool,
             select_from_pool,
@@ -7499,42 +7506,21 @@ class TestCruxBoostSpecs:
         protocol, posterior = self._make_protocol_and_posterior()
         pool = generate_full_candidate_pool(protocol)[:5]
 
-        boost_specs = [{"structure": pool[0][0], "condition": pool[0][1], "boost": 3.0}]
+        boost_specs = [{"structure": pool[0][0], "condition": pool[0][1]}]
 
         _, scores_no_boost = select_from_pool(
-            protocol, posterior, pool, n_sim=50, seed=42
+            protocol, posterior, pool, n_sim=50, seed=42,
+            selection_strategy="greedy",
         )
-        _, scores_boosted = select_from_pool(
-            protocol, posterior, pool, n_sim=50, seed=42, crux_boost_specs=boost_specs
-        )
-
-        # First candidate should be boosted
-        if scores_no_boost[0] > 0:
-            assert scores_boosted[0] > scores_no_boost[0]
-
-    def test_crux_boost_non_matching_unchanged(self):
-        """Non-matching candidates should not be boosted."""
-        from antagonistic_collab.bayesian_selection import (
-            generate_full_candidate_pool,
-            select_from_pool,
+        _, scores_with_specs = select_from_pool(
+            protocol, posterior, pool, n_sim=50, seed=42,
+            crux_boost_specs=boost_specs,
+            selection_strategy="greedy",
         )
 
-        protocol, posterior = self._make_protocol_and_posterior()
-        pool = generate_full_candidate_pool(protocol)[:5]
-
-        # Boost only first candidate
-        boost_specs = [{"structure": pool[0][0], "condition": pool[0][1], "boost": 3.0}]
-
-        _, scores_no_boost = select_from_pool(
-            protocol, posterior, pool, n_sim=50, seed=42
-        )
-        _, scores_boosted = select_from_pool(
-            protocol, posterior, pool, n_sim=50, seed=42, crux_boost_specs=boost_specs
-        )
-
-        # Candidates 1-4 should be unchanged
-        for i in range(1, len(pool)):
-            assert abs(scores_boosted[i] - scores_no_boost[i]) < 1e-10
+        # EIG scores should be identical — crux specs affect selection, not scores
+        for a, b in zip(scores_no_boost, scores_with_specs):
+            assert abs(a - b) < 1e-10
 
     def test_crux_boost_backward_compat(self):
         """Without crux_boost_specs, select_from_pool works as before."""
@@ -7555,7 +7541,7 @@ class TestCruxBoostSpecs:
             assert abs(a - b) < 1e-10
 
     def test_crux_boost_coexists_with_focus_pair(self):
-        """crux_boost_specs and focus_pair should both apply."""
+        """crux_boost_specs and focus_pair should both apply without crashing."""
         from antagonistic_collab.bayesian_selection import (
             generate_full_candidate_pool,
             select_from_pool,
@@ -7566,7 +7552,7 @@ class TestCruxBoostSpecs:
         agent_names = [a.name for a in protocol.agent_configs]
         focus = (agent_names[0], agent_names[1])
 
-        boost_specs = [{"structure": pool[0][0], "condition": pool[0][1], "boost": 2.0}]
+        boost_specs = [{"structure": pool[0][0], "condition": pool[0][1]}]
 
         _, scores_both = select_from_pool(
             protocol,
@@ -7577,10 +7563,36 @@ class TestCruxBoostSpecs:
             focus_pair=focus,
             pair_boost=1.5,
             crux_boost_specs=boost_specs,
+            crux_weight=0.3,
         )
 
         # Should not crash; scores should be valid
         assert all(s >= 0 for s in scores_both)
+
+    def test_crux_weight_directs_selection(self):
+        """With crux_weight=1.0, matching candidate is always selected."""
+        from antagonistic_collab.bayesian_selection import (
+            generate_full_candidate_pool,
+            select_from_pool,
+        )
+
+        protocol, posterior = self._make_protocol_and_posterior()
+        pool = generate_full_candidate_pool(protocol)[:5]
+
+        boost_specs = [{"structure": pool[2][0], "condition": pool[2][1]}]
+
+        selections = set()
+        for seed in range(10):
+            idx, _ = select_from_pool(
+                protocol, posterior, pool, n_sim=50, seed=seed,
+                crux_boost_specs=boost_specs, crux_weight=1.0,
+                selection_strategy="thompson",
+            )
+            selections.add(idx)
+
+        assert selections == {2}, (
+            f"crux_weight=1.0 should always pick the crux candidate, got {selections}"
+        )
 
 
 class TestCruxIntegration:
@@ -7656,7 +7668,7 @@ class TestCruxIntegration:
         assert len(specs) == 1
         assert specs[0]["structure"] == "Type_VI"
         assert specs[0]["condition"] == "baseline"
-        assert specs[0]["boost"] > 1.0
+        assert specs[0]["crux_id"] == "c1"
 
     def test_cruxes_without_experiment_skipped(self):
         """Cruxes without a discriminating_experiment produce no boost spec."""

@@ -85,6 +85,14 @@ no_tempering: false
 
 no_arbiter: false
 
+# Crux-directed Thompson sampling weight.
+# When active cruxes exist, this is the probability of sampling from
+# crux-matching candidates instead of EIG-weighted Thompson.
+#   0.0 — cruxes don't affect experiment selection (pre-M9 behavior)
+#   0.3 — 30% crux-directed, 70% EIG-weighted (default)
+#   1.0 — always pick a crux-matching experiment when cruxes exist
+crux_weight: 0.3
+
 
 # ---------------------------------------------------------------------------
 # LLM Backend

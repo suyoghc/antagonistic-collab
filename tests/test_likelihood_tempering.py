@@ -626,3 +626,161 @@ class TestSelectionStrategy:
         # Override to greedy
         args = parser.parse_args(["--selection-strategy", "greedy"])
         assert args.selection_strategy == "greedy"
+
+
+class TestCruxDirectedThompson:
+    """Tests for crux-directed mixture distribution in Thompson sampling.
+
+    When active cruxes exist, _select_index should sample from a mixture:
+    with probability crux_weight, pick uniformly from crux-matching candidates;
+    otherwise sample from standard EIG-weighted Thompson.
+    """
+
+    def test_crux_weight_one_always_picks_crux(self):
+        """With crux_weight=1.0, always selects from crux_indices."""
+        from antagonistic_collab.bayesian_selection import _select_index
+
+        scores = [0.1, 0.5, 0.3, 0.2]
+        for seed in range(20):
+            idx = _select_index(
+                scores, "thompson", seed=seed,
+                crux_indices=[2], crux_weight=1.0,
+            )
+            assert idx == 2
+
+    def test_crux_weight_zero_ignores_cruxes(self):
+        """With crux_weight=0.0, crux_indices have no effect."""
+        from antagonistic_collab.bayesian_selection import _select_index
+
+        scores = [0.1, 0.5, 0.3, 0.2]
+        for seed in range(20):
+            without = _select_index(scores, "thompson", seed=seed)
+            with_crux = _select_index(
+                scores, "thompson", seed=seed,
+                crux_indices=[2], crux_weight=0.0,
+            )
+            assert without == with_crux
+
+    def test_crux_weight_increases_crux_frequency(self):
+        """crux_weight=0.5 should select crux candidates more often."""
+        from antagonistic_collab.bayesian_selection import _select_index
+
+        scores = [0.2, 0.2, 0.2, 0.2, 0.2]  # uniform EIG
+        n_trials = 500
+
+        count_without = sum(
+            1 for s in range(n_trials)
+            if _select_index(scores, "thompson", seed=s) == 0
+        )
+        count_with = sum(
+            1 for s in range(n_trials)
+            if _select_index(
+                scores, "thompson", seed=s,
+                crux_indices=[0], crux_weight=0.5,
+            ) == 0
+        )
+        # Without cruxes: ~20% (1/5). With crux_weight=0.5: ~60% (0.5*1 + 0.5*0.2)
+        assert count_with > count_without * 1.5, (
+            f"Crux direction should increase crux candidate frequency: "
+            f"{count_with} vs {count_without}"
+        )
+
+    def test_crux_weight_greedy_unchanged(self):
+        """Crux direction only applies to Thompson; greedy still picks argmax."""
+        from antagonistic_collab.bayesian_selection import _select_index
+
+        scores = [0.1, 0.5, 0.3, 0.2]
+        idx = _select_index(
+            scores, "greedy",
+            crux_indices=[0], crux_weight=1.0,
+        )
+        assert idx == 1  # argmax
+
+    def test_crux_weight_empty_indices_unchanged(self):
+        """Empty crux_indices behaves like no crux direction."""
+        from antagonistic_collab.bayesian_selection import _select_index
+
+        scores = [0.1, 0.5, 0.3, 0.2]
+        for seed in range(20):
+            without = _select_index(scores, "thompson", seed=seed)
+            with_empty = _select_index(
+                scores, "thompson", seed=seed,
+                crux_indices=[], crux_weight=0.5,
+            )
+            assert without == with_empty
+
+    def test_crux_weight_validation(self):
+        """crux_weight outside [0, 1] should raise ValueError."""
+        from antagonistic_collab.bayesian_selection import _select_index
+
+        with pytest.raises(ValueError, match="crux_weight"):
+            _select_index([0.1], "thompson", crux_weight=-0.1)
+        with pytest.raises(ValueError, match="crux_weight"):
+            _select_index([0.1], "thompson", crux_weight=1.5)
+
+    def test_crux_weight_multiple_crux_indices(self):
+        """With multiple crux_indices, samples uniformly among them."""
+        from antagonistic_collab.bayesian_selection import _select_index
+
+        scores = [0.01, 0.01, 0.01, 0.01]
+        # With crux_weight=1.0 and crux_indices=[1,3], should only pick 1 or 3
+        selected = set()
+        for seed in range(50):
+            idx = _select_index(
+                scores, "thompson", seed=seed,
+                crux_indices=[1, 3], crux_weight=1.0,
+            )
+            selected.add(idx)
+        assert selected == {1, 3}
+
+    def test_select_from_pool_crux_weight(self):
+        """select_from_pool threads crux_weight to _select_index."""
+        from antagonistic_collab.bayesian_selection import (
+            select_from_pool,
+            generate_full_candidate_pool,
+        )
+        from antagonistic_collab.debate_protocol import DebateProtocol, default_agent_configs
+        from antagonistic_collab.epistemic_state import EpistemicState
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state=state, agent_configs=agents)
+        posterior = ModelPosterior.uniform([a.name for a in agents])
+        pool = generate_full_candidate_pool(protocol)[:5]
+
+        # With crux_weight=1.0 matching pool[0], should always pick index 0
+        boost_specs = [{"structure": pool[0][0], "condition": pool[0][1], "boost": 2.0}]
+        selections = set()
+        for seed in range(10):
+            idx, _ = select_from_pool(
+                protocol, posterior, pool, n_sim=50, seed=seed,
+                crux_boost_specs=boost_specs, crux_weight=1.0,
+                selection_strategy="thompson",
+            )
+            selections.add(idx)
+        assert selections == {0}, (
+            f"crux_weight=1.0 should always select matching candidate, got {selections}"
+        )
+
+    def test_select_from_pool_crux_weight_default_zero(self):
+        """Default crux_weight is 0.0, preserving backward compatibility."""
+        from antagonistic_collab.bayesian_selection import select_from_pool
+        import inspect
+
+        sig = inspect.signature(select_from_pool)
+        assert sig.parameters["crux_weight"].default == 0.0
+
+    def test_config_crux_weight(self):
+        """default_config.yaml includes crux_weight."""
+        from antagonistic_collab.config import load_config
+
+        config = load_config()
+        assert "crux_weight" in config
+
+    def test_cli_crux_weight_parsed(self):
+        """--crux-weight CLI flag is parsed correctly."""
+        from antagonistic_collab.__main__ import _build_argparser
+
+        parser = _build_argparser()
+        args = parser.parse_args(["--crux-weight", "0.5"])
+        assert args.crux_weight == 0.5

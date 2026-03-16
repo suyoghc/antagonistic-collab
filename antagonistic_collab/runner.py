@@ -1199,7 +1199,9 @@ def run_full_pool_selection(
     if _ARBITER:
         boost_specs = cruxes_to_boost_specs(protocol.state)
         if boost_specs:
-            print(f"  Crux boost: {len(boost_specs)} active cruxes boosting EIG")
+            crux_ids = [s["crux_id"] for s in boost_specs]
+            print(f"  Crux-directed: {len(boost_specs)} active cruxes "
+                  f"(weight={_CRUX_WEIGHT:.1f}, ids={crux_ids})")
 
     best_idx, eig_scores = select_from_pool(
         protocol,
@@ -1213,11 +1215,25 @@ def run_full_pool_selection(
         crux_boost_specs=boost_specs or None,
         learning_rate=_LEARNING_RATE,
         selection_strategy=_SELECTION_STRATEGY,
+        crux_weight=_CRUX_WEIGHT if _ARBITER else 0.0,
     )
 
     best_struct, best_cond = pool[best_idx]
     greedy_idx = int(np.argmax(eig_scores))
-    if _SELECTION_STRATEGY == "thompson" and best_idx != greedy_idx:
+
+    # Determine if this selection was crux-directed
+    crux_directed = False
+    crux_match_id = None
+    if boost_specs:
+        for spec in boost_specs:
+            if spec["structure"] == best_struct and spec["condition"] == best_cond:
+                crux_directed = True
+                crux_match_id = spec["crux_id"]
+                break
+
+    if crux_directed:
+        print(f"  Strategy: crux-directed ({crux_match_id} → {best_struct}/{best_cond})")
+    elif _SELECTION_STRATEGY == "thompson" and best_idx != greedy_idx:
         g_s, g_c = pool[greedy_idx]
         print(f"  Strategy: thompson (greedy would pick {g_s}/{g_c})")
     else:
@@ -1256,6 +1272,8 @@ def run_full_pool_selection(
             "phase": "FULL_POOL_SELECTION",
             "selected": {"structure": best_struct, "condition": best_cond},
             "eig": eig_scores[best_idx],
+            "crux_directed": crux_directed,
+            "crux_id": crux_match_id,
         }
     ]
     transcript.extend(messages)
@@ -1664,6 +1682,12 @@ def run_crux_identification(
     print("PHASE: CRUX IDENTIFICATION — What would change your mind?")
     print("=" * 70)
 
+    # Build structure/condition menu for the prompt
+    from .debate_protocol import STRUCTURE_REGISTRY, CONDITION_EFFECTS
+
+    structure_names = sorted(STRUCTURE_REGISTRY.keys())
+    condition_names = sorted(CONDITION_EFFECTS.keys())
+
     for agent in protocol.agent_configs:
         prompt = (
             "PHASE: Crux Identification\n\n"
@@ -1673,6 +1697,12 @@ def run_crux_identification(
             "- What experiment would be decisive\n"
             "- What outcome would change your mind\n"
             "- Why this is a genuine crux (not a question you already know the answer to)\n\n"
+            "AVAILABLE STRUCTURES:\n"
+            f"  {', '.join(structure_names)}\n\n"
+            "AVAILABLE CONDITIONS:\n"
+            f"  {', '.join(condition_names)}\n\n"
+            "Use EXACTLY the format structure_name/condition from the lists above.\n"
+            "Example: \"discriminating_experiment\": \"Type_VI/high_noise\"\n\n"
             "Output a JSON block:\n"
             '{"cruxes": [{"description": "...", '
             '"discriminating_experiment": "structure/condition", '
@@ -1818,19 +1848,36 @@ def finalize_cruxes(
     return finalized
 
 
-def cruxes_to_boost_specs(state: EpistemicState, boost: float = 2.0) -> list[dict]:
+def cruxes_to_boost_specs(state: EpistemicState) -> list[dict]:
     """Convert active cruxes with discriminating experiments into boost specs.
 
     Parses "structure/condition" from crux.discriminating_experiment.
-    Returns list of {"structure": ..., "condition": ..., "boost": ...}.
+    Normalizes whitespace and validates against known structures/conditions.
+    Returns list of {"structure": ..., "condition": ..., "crux_id": ...}.
     """
+    from .debate_protocol import STRUCTURE_REGISTRY, CONDITION_EFFECTS
+
+    valid_structures = set(STRUCTURE_REGISTRY.keys())
+    valid_conditions = set(CONDITION_EFFECTS.keys())
+
     specs = []
     for crux in state.get_active_cruxes():
         exp = crux.discriminating_experiment
-        if not exp or "/" not in exp:
+        if not exp or "/" not in str(exp):
             continue
-        parts = exp.split("/", 1)
-        specs.append({"structure": parts[0], "condition": parts[1], "boost": boost})
+        parts = str(exp).split("/", 1)
+        structure = parts[0].strip()
+        condition = parts[1].strip()
+
+        # Validate against known structures and conditions
+        if structure not in valid_structures or condition not in valid_conditions:
+            continue
+
+        specs.append({
+            "structure": structure,
+            "condition": condition,
+            "crux_id": crux.id,
+        })
     return specs
 
 
@@ -2593,6 +2640,12 @@ def main():
         default=False,
         help="Disable ARBITER features (crux negotiation, meta-agents, conflict map).",
     )
+    parser.add_argument(
+        "--crux-weight",
+        type=float,
+        default=0.3,
+        help="Probability of crux-directed selection in Thompson sampling [0,1]. Default 0.3.",
+    )
     # Two-pass parsing: peek at --config first, then apply config defaults
     # before the real parse so CLI flags override config values.
     pre_args, _ = parser.parse_known_args()
@@ -2646,6 +2699,9 @@ def main():
 
     global _ARBITER
     _ARBITER = not args.no_arbiter
+
+    global _CRUX_WEIGHT
+    _CRUX_WEIGHT = args.crux_weight
 
     # Auto-generate output directory if not explicitly set
     if args.output_dir == ".":
@@ -2740,6 +2796,7 @@ _SELECTION_METHOD = "bayesian"  # "bayesian" or "heuristic"
 _SELECTION_STRATEGY = "thompson"  # "thompson" or "greedy"
 _LEARNING_RATE = 0.005  # Likelihood tempering: tau in (0, 1]; calibrated for synthetic data
 _ARBITER = True  # ARBITER features: cruxes, meta-agents, conflict map
+_CRUX_WEIGHT = 0.3  # Probability of crux-directed selection in Thompson sampling
 
 
 if __name__ == "__main__":

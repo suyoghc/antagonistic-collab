@@ -250,6 +250,8 @@ def _select_index(
     scores: list[float],
     strategy: str,
     seed: Optional[int] = None,
+    crux_indices: Optional[list[int]] = None,
+    crux_weight: float = 0.0,
 ) -> int:
     """Pick an index from EIG scores using the given strategy.
 
@@ -257,13 +259,22 @@ def _select_index(
         scores: EIG scores (non-negative).
         strategy: "greedy" (argmax) or "thompson" (sample proportional to scores).
         seed: random seed for Thompson sampling reproducibility.
+        crux_indices: indices of candidates matching active cruxes.
+        crux_weight: probability of sampling from crux_indices instead of
+            EIG-weighted Thompson. Must be in [0, 1]. Only applies when
+            strategy="thompson" and crux_indices is non-empty.
 
     Returns:
         Selected index.
 
     Raises:
-        ValueError: if strategy is unknown.
+        ValueError: if strategy is unknown or crux_weight out of range.
     """
+    if not (0.0 <= crux_weight <= 1.0):
+        raise ValueError(
+            f"crux_weight must be in [0, 1], got {crux_weight}"
+        )
+
     if strategy not in ("greedy", "thompson"):
         raise ValueError(
             f"selection_strategy must be 'greedy' or 'thompson', got '{strategy}'"
@@ -272,16 +283,21 @@ def _select_index(
     if strategy == "greedy":
         return int(np.argmax(scores))
 
-    # Thompson: sample proportional to EIG scores
+    # Thompson with crux-directed mixture
+    rng = np.random.default_rng(seed)
+
+    if crux_indices and crux_weight > 0:
+        if rng.random() < crux_weight:
+            # Sample uniformly from crux-matching candidates
+            return int(rng.choice(crux_indices))
+
+    # Standard Thompson: sample proportional to EIG scores
     arr = np.array(scores, dtype=np.float64)
     total = arr.sum()
     if total <= 0:
-        # All EIG zero → uniform random
-        rng = np.random.default_rng(seed)
         return int(rng.integers(len(arr)))
 
     weights = arr / total
-    rng = np.random.default_rng(seed)
     return int(rng.choice(len(arr), p=weights))
 
 
@@ -297,6 +313,7 @@ def select_from_pool(
     crux_boost_specs: Optional[list[dict]] = None,
     learning_rate: float = 1.0,
     selection_strategy: str = "thompson",
+    crux_weight: float = 0.0,
 ) -> tuple[int, list[float]]:
     """Select a (structure, condition) pair from the full pool by EIG.
 
@@ -311,11 +328,13 @@ def select_from_pool(
             for candidates where these two models diverge.
         pair_boost: multiplier for EIG when focus pair has high divergence.
         crux_boost_specs: optional list of dicts with keys "structure",
-            "condition", "boost". Matching candidates get EIG multiplied
-            by boost.
+            "condition". Used to identify crux-matching candidates for
+            crux-directed Thompson sampling.
         learning_rate: likelihood tempering parameter in (0, 1].
         selection_strategy: "greedy" (argmax) or "thompson" (sample
             proportional to EIG; Russo & Van Roy 2018, Kandasamy et al. 2019).
+        crux_weight: probability of sampling from crux-matching candidates
+            instead of EIG-weighted Thompson. In [0, 1]. Default 0.0.
 
     Returns:
         (best_index, eig_scores) — selected index and EIG for each candidate.
@@ -351,18 +370,24 @@ def select_from_pool(
             if divergence > 0.05:  # Only boost if meaningfully divergent
                 eig *= pair_boost
 
-        # Apply crux boost
-        if crux_boost_specs:
+        eig_scores.append(eig)
+
+    # Identify crux-matching candidates for mixture sampling
+    crux_indices = []
+    if crux_boost_specs:
+        for i, (struct_name, condition) in enumerate(pool):
             for spec in crux_boost_specs:
                 if (
                     spec.get("structure") == struct_name
                     and spec.get("condition") == condition
                 ):
-                    eig *= spec.get("boost", 1.0)
+                    crux_indices.append(i)
+                    break
 
-        eig_scores.append(eig)
-
-    best_idx = _select_index(eig_scores, selection_strategy, seed=seed)
+    best_idx = _select_index(
+        eig_scores, selection_strategy, seed=seed,
+        crux_indices=crux_indices, crux_weight=crux_weight,
+    )
     return best_idx, eig_scores
 
 
