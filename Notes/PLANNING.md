@@ -113,6 +113,14 @@ models/
 - [x] 336 tests passing
 - [x] Live validation: 3/3 correct, 24 parseable crux specs (was 0), 1 crux-directed experiment
 
+### M10: Claim-responsive debate (DONE — code; pending live validation)
+- [x] Config: `no_claim_responsive: false` (default on), CLI: `--no-claim-responsive`
+- [x] Interpretation prompt injects `FALSIFIED CLAIMS` directive when agent has falsified claims
+- [x] Agents must respond with revise/explain/abandon per claim via `"falsified_response"` JSON field
+- [x] 7 tests (TestClaimResponsiveDebate), 343 total passing
+- [ ] Live validation: compare debate quality with/without claim-responsive across 3 ground truths
+- Literature: Shinn et al. (2023) Reflexion, AGM belief revision (Alchourrón et al. 1985)
+
 ## Key constraints
 
 - Synthetic data only (no real experiments) — but must be model-sensitive

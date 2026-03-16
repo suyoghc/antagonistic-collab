@@ -661,6 +661,16 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 - Reviewed LESSONS_LEARNED.md; identified 4 potential additions but deferred for now
 - WRITEUP.md now ~592 lines, all sections complete
 
+### Session 27 — 2026-03-15 (M10: Claim-Responsive Debate)
+- Implemented claim-responsive debate: agents with falsified claims receive explicit directive to address each one
+- Motivation: agents ignore falsification record (45:1 overclaiming ratio, LESSONS Phase 9 & 10), multi-cycle debate was "hollow" (Principle 19). Literature: Shinn et al. Reflexion (NeurIPS 2023) — LLM agents improve with structured feedback about prior failures; AGM belief revision (Alchourrón et al. 1985); Walton dialogical norms (1998)
+- Config: `no_claim_responsive: false` (default on), CLI: `--no-claim-responsive`
+- Prompt injects `### FALSIFIED CLAIMS` block with revise/explain/abandon options and `"falsified_response"` JSON field
+- 7 new tests (TestClaimResponsiveDebate), 343 total passing
+- Updated all docs: D38 in DECISIONS.md, REPORT.md 4.4/4.7, WRITEUP.md 6.3/6.4, PLANNING.md M10, TASKS.md M10
+- Added Shinn et al. (2023) Reflexion reference to both WRITEUP.md and REPORT.md
+- Codex review flagged 2 issues in validate_m6.py / validate_m6_live.py (mock routing, credential handling) — addressing next
+
 ---
 
 *This log is maintained manually. Update it at the end of each session.*

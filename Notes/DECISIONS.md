@@ -848,3 +848,28 @@ Key outcome: Before M9, 0 crux boost specs were parsed across all runs (100+ cru
 **Literature context:** The convergence between crux-directed and EIG-driven selection was predicted by Corcoran, Hohwy & Friston (2023, *Neuron*) who argue adversarial collaboration and Bayesian optimal design should be unified. Low format compliance (23%) is consistent with Tam et al. (EMNLP 2024) showing format restrictions degrade LLM reasoning, and Zhou et al. (2023) IFEval showing <80% compliance for all models.
 
 **Status:** Done.
+
+---
+
+### D38: Claim-responsive debate — agents must address falsified claims (2026-03-15)
+
+**Problem:** Agents systematically ignore their own falsification record. The claim ledger tracks falsified claims and injects summaries into interpretation prompts, but agents do not spontaneously engage with this information. They repeat the same 2–3 talking points across all 5 cycles within a run (LESSONS Phase 9, Principle 7), producing multi-cycle debate that lacks cumulative scientific reasoning. The 45:1 false-to-verified prediction ratio (M6) makes the problem quantitatively stark: agents make bold claims, those claims are tested and falsified, and the agents proceed as though the falsification never occurred.
+
+**Decision:** Add a claim-responsive directive to the interpretation debate prompt. When an agent has falsified claims and `_CLAIM_RESPONSIVE` is true (default), the prompt includes a structured `### FALSIFIED CLAIMS` block that:
+- Lists each falsified claim with its evidence (e.g., "actual=0.350")
+- Requires the agent to respond with one of: revise (adjust theory/predictions), explain (argue the falsification is misleading), or abandon (drop the claim)
+- Requests a `"falsified_response"` JSON field with structured reasoning per claim
+
+**Alternatives considered:**
+- **Fine-tuning on falsification response:** Would produce more natural engagement but requires training infrastructure and model-specific tuning. Prompt engineering is model-agnostic.
+- **Penalizing agents with falsified claims in posterior:** Conflates agent behavior with model quality. An agent may overclaim while its model is correct.
+- **Automatic theory revision on falsification:** Removes agent judgment. The "explain" option preserves the possibility that a falsification is misleading (boundary condition, confound) — a legitimate scientific response.
+- **Doing nothing (status quo):** The claim summary already appears in prompts. But LESSONS Phase 9 showed agents do not engage with it voluntarily. Explicit directives are needed.
+
+**Literature context:** The design is inspired by Shinn et al.'s Reflexion (NeurIPS 2023), which demonstrated that LLM agents improve significantly when given structured linguistic feedback about prior failures. Claim-responsive debate is a targeted form of reflexion: instead of general "reflect on what went wrong," agents address specific falsified predictions. The revise/explain/abandon trichotomy maps onto AGM belief revision operators (Alchourrón, Gärdenfors & Makinson, 1985). The requirement to respond to disconfirming evidence is a basic norm in dialogical argumentation theory (Walton, 1998).
+
+**Config:** `no_claim_responsive: false` in default_config.yaml (on by default). CLI: `--no-claim-responsive`. Follows the same `no_*` pattern as `no_arbiter` and `no_tempering`.
+
+**Tests:** 7 new tests (TestClaimResponsiveDebate), 343 total passing.
+
+**Status:** Done (code). Pending live validation.

@@ -4,9 +4,9 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ---
 
-## Current status — M9 complete
+## Current status — M10 complete (code), pending validation
 
-M9 live validation passed: 3/3 correct, 24 parseable crux specs (was 0), 1 crux-directed experiment. All documentation updated.
+M10 claim-responsive debate implemented: agents with falsified claims must revise/explain/abandon. 7 new tests, 343 total passing. Live validation needed to measure whether agents actually engage with falsified claims and produce cumulative reasoning.
 
 ### Open issues
 1. **SUSTAIN converges too fast** — even tau=0.005 can't slow it because predictions are categorically different. Not a bug.

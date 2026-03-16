@@ -1,5 +1,24 @@
 # Tasks
 
+## Completed: M10 — Claim-Responsive Debate (DONE — code; pending validation)
+
+### M10 Tasks
+- [x] **Config + CLI** — `no_claim_responsive: false` in default_config.yaml, `--no-claim-responsive` CLI flag, `_CLAIM_RESPONSIVE` module global, wired through config.py key_map
+- [x] **Falsified claims directive** — When `_CLAIM_RESPONSIVE` is true and agent has falsified claims, inject `### FALSIFIED CLAIMS` block into interpretation prompt listing each falsified claim with evidence. Agents must respond with revise/explain/abandon via `"falsified_response"` JSON field
+- [x] **7 new tests** (TestClaimResponsiveDebate): config default, CLI flag, module global, directive present when enabled, absent when disabled, absent when no falsified claims, JSON field instruction present
+- [x] **Documentation** — D38 in DECISIONS.md, REPORT.md 4.4/4.7 updated, WRITEUP.md 6.3/6.4 updated with Reflexion citation, PLANNING.md M10 milestone
+- [ ] **Live validation** — Compare debate transcripts with/without claim-responsive across 3 ground truths. Measure: do agents acknowledge falsified claims? Do they revise theories? Is the `falsified_response` field populated?
+
+### M10 Commits
+- `cb9c69a` feat(M10): claim-responsive debate — agents must address falsified claims
+
+### M10 Literature
+- Shinn, N. et al. (2023). Reflexion: Language agents with verbal reinforcement learning. NeurIPS 36.
+- Alchourrón, Gärdenfors & Makinson (1985). On the logic of theory change (AGM belief revision).
+- Walton, D. (1998). The New Dialectic (dialogical argumentation norms).
+
+---
+
 ## Completed: M9 — Crux-Directed Thompson Sampling (DONE)
 
 ### M9 Tasks

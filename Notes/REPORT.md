@@ -514,7 +514,7 @@ The solution was a constrained menu (structure registry + condition effects) tha
 
 **What debate does not contribute:**
 - Experiment selection quality (EIG dominates; LLM proposals are narrative-driven)
-- Cumulative scientific reasoning (agents repeat talking points across cycles despite the claim ledger)
+- Cumulative scientific reasoning (agents repeat talking points across cycles despite the claim ledger). M10's claim-responsive directive addresses this by requiring explicit engagement with falsified claims, inspired by Reflexion (Shinn et al., NeurIPS 2023)
 - Data-grounded argumentation (posteriors cited as proxy; item-level data ignored)
 - Calibrated quantitative predictions (agents overclaim accuracy by 3–5× when fact-checked)
 - Overcoming posterior collapse (crux boost is active but powerless when EIG=0)
@@ -548,7 +548,7 @@ The combined M7+M8+M9 solution (tempering + Thompson + crux-directed mixture) ke
 ### 4.7 Future directions
 
 1. **Higher crux-directed selection rates** — M9 establishes the crux→experiment causal path (1/15 experiments in validation). Higher rates require either a larger crux_weight, fuzzy matching that maps cruxes to nearby pool entries, or constrained decoding (Tam et al. 2024) to guarantee format compliance. The convergence between crux-directed and EIG-driven selection (Corcoran et al. 2023) suggests the unique value of cruxes may be at the margins — pointing to experiments that EIG undervalues.
-2. **Claim-responsive debate** — agents should explicitly address their prior claims ("I previously predicted X, which was falsified; I now revise to Y") rather than repeating generic talking points
+2. **Claim-responsive debate (M10 — DONE)** — agents now receive explicit directives listing their falsified claims and must address each one (revise, explain, or abandon) via a `"falsified_response"` JSON field. Inspired by Shinn et al.'s Reflexion (NeurIPS 2023). Config: `no_claim_responsive` (default false), CLI: `--no-claim-responsive`. 7 tests, 343 total passing. Pending live validation
 3. **Longer runs (10+ cycles)** — assess whether Thompson sampling's structural diversity compounds over many cycles, whether novel structures eventually outperform registry structures, and whether the claim ledger produces cumulative reasoning at longer horizons
 4. **Non-myopic experiment selection** — full Myopic Posterior Sampling (Kandasamy et al. 2019) or deep adaptive design (Foster et al. 2021) could replace the current simplified Thompson implementation
 5. **Cross-domain generalization** — apply the framework to other multi-model disputes in cognitive science (memory models, decision-making theories)
@@ -586,6 +586,7 @@ Antagonistic collaboration via LLM debate can successfully identify the correct 
 - Rainforth, T., Foster, A., Ivanova, D. R., & Smith, F. B. (2024). Modern Bayesian experimental design. *Statistical Science, 39*(1), 100–114.
 - Russo, D. J., & Van Roy, B. (2018). Learning to optimize via information-directed sampling. *Operations Research, 66*(1), 230–252.
 - Shepard, R. N., Hovland, C. I., & Jenkins, H. M. (1961). Learning and memorization of classifications. *Psychological Monographs: General and Applied, 75*(13), 1–42.
+- Shinn, N., Cassano, F., Gopinath, A., Narasimhan, K., & Yao, S. (2023). Reflexion: Language agents with verbal reinforcement learning. *Advances in Neural Information Processing Systems, 36*.
 - Tam, Z. R., Wu, C., et al. (2024). Let me speak freely? A study on the impact of format restrictions on performance of large language models. *Proceedings of EMNLP 2024 Industry Track*.
 - Thompson, W. R. (1933). On the likelihood that one unknown probability exceeds another in view of the evidence of two samples. *Biometrika, 25*(3/4), 285–294.
 - Wu, P.-S., & Martin, R. (2023). A comparison of learning rate selection methods in generalized Bayesian inference. *Bayesian Analysis, 18*(1), 105–132.
