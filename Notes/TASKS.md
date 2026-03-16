@@ -9,8 +9,8 @@
 - [x] **3×2 ablation config** — `experiments/debate_ablation.yaml`: No-Debate / Debate-No-Arbiter / Debate+Arbiter × Thompson / Greedy × 3 ground truths = 18 conditions
 - [x] **Merge utility** — `merge_summaries()` combines multiple summary.json files, prints unified comparison table
 - [x] **15 new tests** (TestExperimentFramework, TestNoDebateMode, TestDebateAblationConfig), 388 total passing
-- [x] **Ablation run** — 17/18 completed (1 connection error), all 17 correct winners
-- [ ] Re-run failed `greedy_debate_RULEX` (connection error)
+- [x] **Ablation run** — 18/18 completed, all 18 correct winners
+- [x] Re-run failed `greedy_debate_RULEX` (connection error) — Rule_Agent wins, RMSE=0.053, gap=88.9%
 
 ### M13 Ablation Results (3×2, GPT-4o, 2026-03-16)
 
@@ -21,15 +21,15 @@
 | thompson_debate+arbiter | 0.081, 79.9% | 0.051, 86.9% | 0.077, 83.8% |
 | greedy_no_debate | 0.065, 87.6% | 0.053, 90.0% | 0.016, 97.4% |
 | greedy_debate_no_arbiter | 0.068, 84.7% | 0.172, 66.7% | 0.016, 97.4% |
-| greedy_debate+arbiter | 0.071, 85.3% | ERROR | 0.021, 96.7% |
+| greedy_debate+arbiter | 0.071, 85.3% | 0.053, 88.9% | 0.021, 96.7% |
 
 Summary by debate level:
 - **none**: 6/6 correct, avg RMSE=0.055, avg gap=87.6%, avg time=368s
 - **debate (no arbiter)**: 6/6 correct, avg RMSE=0.078, avg gap=82.4%, avg time=1315s
-- **debate+arbiter**: 5/5 correct, avg RMSE=0.060, avg gap=86.5%, avg time=1107s
+- **debate+arbiter**: 6/6 correct, avg RMSE=0.059, avg gap=86.8%, avg time=1107s
 
 Key findings:
-- **Debate is epiphenomenal on synthetic benchmarks.** No-debate has the best RMSE and gap while running 3-4× faster.
+- **Debate is epiphenomenal on synthetic benchmarks.** 18/18 correct. No-debate has the best RMSE and gap while running 3-4× faster.
 - **Debate without arbiter actively hurts** — LLM param_overrides introduce noise; debate output is disconnected from scoring pipeline.
 - **Arbiter partially recovers** — crux-directed selection compensates for noise, but still doesn't beat no-debate.
 - **Greedy > Thompson** when signal is strong (gap 88.2% vs 83.0%), but Thompson retains healthy uncertainty (entropy 0.001–0.032 vs 0.000).

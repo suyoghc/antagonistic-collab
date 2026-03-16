@@ -1,0 +1,23 @@
+name: debate_ablation
+description: "Re-run failed greedy_debate_arbiter × RULEX condition"
+
+defaults:
+  cycles: 5
+  mode: full_pool
+  design_space: continuous
+  n_continuous_samples: 50
+  backend: princeton
+  model: gpt-4o
+  learning_rate: 0.005
+  arbiter: true
+  crux_weight: 0.3
+  claim_responsive: true
+  no_debate: false
+
+ground_truths:
+  - RULEX
+
+conditions:
+  greedy_debate_arbiter:
+    selection_strategy: greedy
+    arbiter: true
