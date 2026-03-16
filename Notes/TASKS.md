@@ -1,6 +1,6 @@
 # Tasks
 
-## Completed: M10 — Claim-Responsive Debate (DONE — code; pending validation)
+## Completed: M10 — Claim-Responsive Debate (DONE)
 
 ### M10 Tasks
 - [x] **Config + CLI** — `no_claim_responsive: false` in default_config.yaml, `--no-claim-responsive` CLI flag, `_CLAIM_RESPONSIVE` module global, wired through config.py key_map

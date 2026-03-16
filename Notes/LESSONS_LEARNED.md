@@ -824,7 +824,7 @@ The RULEX ground truth run shows the most interesting trajectory: posterior star
 
 **Actual:** The ledger fills quickly (3 claims per agent per cycle from interpretation debate, plus critique claims) but most claims remain "untested" because they reference conditions or structures not subsequently selected by EIG. Claims that are testable tend to be falsified rather than confirmed (see 10.2). No agent references the ledger's content in their subsequent interpretations — the claims_summary is injected into the prompt, but agents don't explicitly engage with it.
 
-**Implication:** The ledger infrastructure works, but its impact on debate quality is not yet visible in 5-cycle runs. The key missing piece is agents *responding* to the ledger — adjusting their claims based on what was confirmed or falsified, retiring stale claims, and building new claims on established results. This may require stronger prompt engineering (e.g., "You previously claimed X, which was falsified. How does this change your position?") or explicit penalties for agents that repeat falsified claims.
+**Implication:** The ledger infrastructure works, but its impact on debate quality is not visible without explicit directives. The key missing piece — agents *responding* to the ledger — was addressed by M10's claim-responsive directive (Phase 16). The prediction here was correct: stronger prompt engineering ("You MUST address each falsified claim") achieved 100% engagement when applicable. However, the dominant response is "explain" (auxiliary hypothesis shielding) rather than genuine claim retirement or cumulative building. See Phase 16 for full analysis.
 
 ---
 
