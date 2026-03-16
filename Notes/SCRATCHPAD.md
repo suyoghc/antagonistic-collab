@@ -4,28 +4,16 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ---
 
-## Current focus — M9 crux-directed Thompson sampling
+## Current status — M9 complete
 
-Mixture distribution implemented and all unit tests pass (336). The crux prompt now shows the structure/condition menu so agents can produce parseable format. Pending live validation to confirm crux-directed selections appear in real runs.
-
-### Pending
-- **Live validation** — Run 5-cycle debate with GPT-4o and verify that (a) cruxes are parsed into boost specs, (b) some experiments are crux-directed, (c) correct model still wins.
-
-### Key design choice
-Mixture distribution with `crux_weight=0.3`:
-- 30% of experiments are crux-directed (if active cruxes match pool entries)
-- 70% follow standard EIG-weighted Thompson
-- When no cruxes are active, 100% EIG-weighted (graceful fallback)
-
-### What this changes about the debate's role
-Pre-M9: debate was epiphenomenal to experiment selection. Cruxes existed but never affected which experiment ran (parsing always failed + multiplicative boost ineffective).
-Post-M9: debate causally affects experiment selection. Accepted cruxes directly influence which experiment is run ~30% of the time. This is the first time the debate structure shapes the quantitative pipeline.
+M9 live validation passed: 3/3 correct, 24 parseable crux specs (was 0), 1 crux-directed experiment. All documentation updated.
 
 ### Open issues
 1. **SUSTAIN converges too fast** — even tau=0.005 can't slow it because predictions are categorically different. Not a bug.
-2. **Agents may still write free-text crux experiments** — the prompt improvement may not be sufficient. If live validation shows parsing still fails, consider post-hoc fuzzy matching.
+2. **Low crux-directed rate** — 1/15 experiments (6.7% vs 30% theoretical). Most cruxes reference structures already in the EIG frontier. Consider fuzzy matching or higher crux_weight for future work.
+3. **Low format compliance** — 24/105 cruxes parsed (23%). Agents prefer semantic expressiveness over structured format.
 
-### Next steps (post-validation)
+### Possible next steps
 - Claim-responsive debate: agents should address prior falsified claims
 - New cognitive domains (memory retrieval, decision making)
 - AutoRA integration for real data

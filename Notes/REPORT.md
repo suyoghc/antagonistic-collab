@@ -189,9 +189,24 @@ P(select experiment i) = EIG(i) / Σ_j EIG(j)
 
 When all EIG scores are zero (or negative), falls back to uniform random selection. This is a simplified form of Myopic Posterior Sampling (Kandasamy et al. 2019), providing principled exploration without ad-hoc diversity bonuses. Configurable via `--selection-strategy thompson|greedy`.
 
-### 2.13 Validation protocol
+### 2.13 Crux-directed Thompson sampling (M9)
 
-Six M4 runs: 3 ground truths × 2 modes, each 5 cycles. Nine cross-LLM runs: 3 ground truths × 3 LLMs. Three M5 validation runs: 3 ground truths, full_pool with GPT-4o. Four M5 replication runs: GCM ground truth, full_pool with GPT-4o (for variance analysis). Three M6 live validation runs: 3 ground truths, full_pool with GPT-4o, all ARBITER features enabled. Three M7 validation runs: 3 ground truths, full_pool with tau=0.005. Six M8 ablation runs: 3 ground truths × 2 strategies (Thompson vs greedy), full_pool with tau=0.005. 322 automated tests verify framework correctness.
+The crux-to-experiment pipeline (introduced in M6) had two structural failures: (1) agents wrote free-text crux descriptions ("test whether rule-based models can handle exceptions") instead of the required `structure/condition` format, so parsing always failed — 0 boost specs across all M6/M7/M8 runs despite 100+ cruxes proposed; (2) the multiplicative EIG boost (2×) barely shifted Thompson's sampling distribution when EIG scores clustered narrowly (e.g., 0.18–0.23).
+
+M9 replaces the multiplicative boost with a **mixture distribution**:
+
+```
+With probability crux_weight:
+    Sample uniformly from crux-matching candidates
+Otherwise:
+    Sample from standard EIG-weighted Thompson distribution
+```
+
+Default `crux_weight=0.3`. When no active cruxes match pool entries, falls back to 100% EIG-weighted Thompson. The crux identification prompt now shows the full structure/condition menu with a format example, and `cruxes_to_boost_specs()` validates against known structures and conditions. Configurable via `--crux-weight`.
+
+### 2.14 Validation protocol
+
+Six M4 runs: 3 ground truths × 2 modes, each 5 cycles. Nine cross-LLM runs: 3 ground truths × 3 LLMs. Three M5 validation runs: 3 ground truths, full_pool with GPT-4o. Four M5 replication runs: GCM ground truth, full_pool with GPT-4o (for variance analysis). Three M6 live validation runs: 3 ground truths, full_pool with GPT-4o, all ARBITER features enabled. Three M7 validation runs: 3 ground truths, full_pool with tau=0.005. Six M8 ablation runs: 3 ground truths × 2 strategies (Thompson vs greedy), full_pool with tau=0.005. Three M9 validation runs: 3 ground truths, full_pool with crux_weight=0.3. 336 automated tests verify framework correctness.
 
 ---
 
@@ -442,6 +457,24 @@ M8 replaces greedy EIG selection with Thompson sampling (proportional to EIG sco
 
 **Debate's causal role remains modest.** Thompson's random exploration, not debate-guided selection, drives structural diversity. The debate contributes parameter revisions (replication variance) and novel structure proposals (6 novel structures selected by Thompson), but the exploration itself is stochastic, not semantically directed.
 
+### 3.23 M9: Crux-directed Thompson sampling — debate causally affects experiment selection
+
+M9 fixes the crux-to-experiment pipeline (D37) and validates with 3 ground truths × 5 cycles:
+
+| Ground Truth | Winner | Correct? | RMSE | Gap | Cruxes parsed | Crux-directed |
+|---|---|---|---|---|---|---|
+| GCM | Exemplar_Agent | Yes | 0.084 | 74.7% | 11/34 | 1/5 |
+| RULEX | Rule_Agent | Yes | 0.050 | 83.9% | 7/34 | 0/5 |
+| SUSTAIN | Clustering_Agent | Yes | 0.033 | 93.1% | 6/37 | 0/5 |
+
+**The crux pipeline is operational for the first time.** Across all prior milestones (M6–M8), 0 crux boost specs were parsed from 100+ proposed cruxes — agents wrote free-text descriptions that the parser couldn't match. After M9's prompt fix (showing the structure/condition menu) and parsing validation, 24 parseable specs were produced across 3 runs (11 from GCM, 7 from RULEX, 6 from SUSTAIN).
+
+**Debate causally affects experiment selection.** In the GCM run, crux `crux_004` proposed `rule_plus_exception_1exc/high_noise` as a discriminating experiment. The mixture distribution selected this experiment on cycle 3 — the first time a debate-identified theoretical disagreement directly determined which experiment ran. This is qualitatively different from M8's novel structure path (where Thompson randomly sampled debate-proposed structures): here the selection was specifically directed by a crux about rule-exception tradeoffs.
+
+**Crux-directed selection rate is low but non-zero.** Only 1 of 15 total experiments was crux-directed (6.7% vs the 30% theoretical maximum). This is because crux-matching requires both the structure and condition to match pool entries exactly, and most accepted cruxes reference structures or conditions that are already represented in the standard EIG pool. The mixture distribution guarantees selection when a match exists, but most cruxes don't produce unique matches.
+
+**Correctness is preserved.** All 3 ground truths correctly identified with strong gaps (74.7–93.1%), comparable to or better than M8 Thompson results (which had gaps of 74–94% depending on the run). The crux-directed experiment in the GCM run did not degrade convergence.
+
 ---
 
 ## 4. Discussion
@@ -486,7 +519,7 @@ The solution was a constrained menu (structure registry + condition effects) tha
 - Calibrated quantitative predictions (agents overclaim accuracy by 3–5× when fact-checked)
 - Overcoming posterior collapse (crux boost is active but powerless when EIG=0)
 
-Pre-M5, the debate was entirely epiphenomenal to RMSE — replication variance was zero, and convergence was driven by the Bayesian machinery alone. Post-M5, parameter revision persistence creates a modest but real causal link: different LLM runs produce different parameter revisions, which produce different model predictions. Post-M6, the ARBITER architecture enriches debate quality (cruxes, conflict maps, meta-agents) but does not fundamentally alter the convergence mechanism, which remains Bayesian. Post-M8, debate contributes novel structure proposals that Thompson sampling actually selects (6 novel structures in ablation), but the exploration is stochastic, not debate-directed. The debate's primary value is qualitative — mechanistic narratives, structured disagreement, and human-readable explanations — augmented by M6's role specialization and M8's ability to execute debate-proposed structures.
+Pre-M5, the debate was entirely epiphenomenal to RMSE — replication variance was zero, and convergence was driven by the Bayesian machinery alone. Post-M5, parameter revision persistence creates a modest but real causal link: different LLM runs produce different parameter revisions, which produce different model predictions. Post-M6, the ARBITER architecture enriches debate quality (cruxes, conflict maps, meta-agents) but does not fundamentally alter the convergence mechanism, which remains Bayesian. Post-M8, debate contributes novel structure proposals that Thompson sampling actually selects (6 novel structures in ablation), but the exploration is stochastic, not debate-directed. Post-M9, the crux pipeline is operational: accepted cruxes directly bias experiment selection via a mixture distribution. In the GCM validation, crux `crux_004` selected `rule_plus_exception_1exc/high_noise` — the first time a debate-identified theoretical disagreement determined which experiment ran. The debate's primary value remains qualitative — mechanistic narratives, structured disagreement, and human-readable explanations — but M9 establishes the first semantically directed path from debate to experiment selection.
 
 ### 4.5 Posterior collapse: diagnosis and treatment
 
@@ -494,13 +527,13 @@ M6 validation revealed that the Bayesian posterior collapses to certainty after 
 
 However, tempering exposed a second problem: greedy EIG selection repeats the same experiment when the posterior concentrates even slightly. M8's Thompson sampling addresses this by sampling proportional to EIG scores, producing 4× structural diversity.
 
-The combined M7+M8 solution (tempering + Thompson) keeps later cycles informative and structurally diverse. The remaining limitation is that exploration is stochastic, not crux-directed — Thompson randomly samples from the EIG distribution rather than selecting experiments that resolve specific theoretical disagreements identified during debate.
+The combined M7+M8+M9 solution (tempering + Thompson + crux-directed mixture) keeps later cycles informative and structurally diverse. M9 adds semantic direction: accepted cruxes bias selection toward experiments that resolve specific theoretical disagreements. The remaining limitation is that the crux-directed selection rate is low (1/15 experiments in validation) because most cruxes reference structures already well-represented in the EIG pool.
 
 ### 4.6 Limitations
 
 1. **Residual posterior concentration.** M7 tempering (tau=0.005) prevents immediate collapse but the posterior still concentrates within 3–5 cycles. Combined with Thompson sampling (M8), later cycles are informative and structurally diverse, but the system still converges faster than may be ideal for extended runs. Deeper solutions include sequential BOED framed as POMDP (Huan & Marzouk 2016) or deep adaptive design (Foster et al. 2021).
 
-2. **Modest debate impact.** Post-M5, replication variance is non-zero but small (std≈0.018 on RMSE≈0.18, ~10% coefficient of variation). Post-M6, ARBITER features enrich debate quality but do not fundamentally alter convergence. The Bayesian machinery still dominates.
+2. **Growing but still modest debate impact.** Post-M5, replication variance is non-zero but small (std≈0.018). Post-M9, debate causally affects experiment selection via crux-directed mixture (1/15 experiments in validation). The Bayesian machinery still dominates, but the debate→selection causal path is now operational.
 
 3. **Synthetic data only.** The framework validates whether correct models are identifiable in principle, not whether the models are correct accounts of human behavior. Extending to real experimental data would require a lab-automation interface.
 
@@ -514,7 +547,7 @@ The combined M7+M8 solution (tempering + Thompson) keeps later cycles informativ
 
 ### 4.7 Future directions
 
-1. **Crux-directed experiment selection** — Thompson sampling explores stochastically; a natural next step is crux-directed selection where accepted cruxes override or bias Thompson weights toward experiments that resolve specific theoretical disagreements. This would make debate causally relevant to experiment selection for the first time.
+1. **Higher crux-directed selection rates** — M9 establishes the crux→experiment causal path (1/15 experiments in validation). Higher rates require either a larger crux_weight or fuzzy matching that maps cruxes to nearby pool entries when exact structure/condition matches don't exist.
 2. **Claim-responsive debate** — agents should explicitly address their prior claims ("I previously predicted X, which was falsified; I now revise to Y") rather than repeating generic talking points
 3. **Longer runs (10+ cycles)** — assess whether Thompson sampling's structural diversity compounds over many cycles, whether novel structures eventually outperform registry structures, and whether the claim ledger produces cumulative reasoning at longer horizons
 4. **Non-myopic experiment selection** — full Myopic Posterior Sampling (Kandasamy et al. 2019) or deep adaptive design (Foster et al. 2021) could replace the current simplified Thompson implementation
@@ -525,7 +558,7 @@ The combined M7+M8 solution (tempering + Thompson) keeps later cycles informativ
 
 ## 5. Conclusion
 
-Antagonistic collaboration via LLM debate can successfully identify the correct model from competing theories. The mechanism of convergence is primarily Bayesian computation, but M5's feedback loop closures demonstrate that debate can causally affect outcomes — parameter revisions proposed during interpretation now persist into subsequent predictions, producing non-zero replication variance for the first time. M6's ARBITER integration adds role-specialized meta-agents, crux-based negotiation, conflict maps, and pre-registration output, enriching debate quality while preserving correct convergence (3/3 ground truths, 36–68% gaps). M7's likelihood tempering (tau=0.005) resolves the posterior collapse bottleneck, achieving gradual convergence where later cycles are genuinely informative (EIG>0 through cycle 4). M8's Thompson sampling replaces greedy experiment selection with principled exploration: a clean ablation (6 runs) shows both strategies achieve 3/3 correct, but Thompson explores 12 unique structures (6 novel) vs greedy's 3 (0 novel) — the first time agent-proposed novel structures have been selected and executed. The system operates as a falsification engine: 44 claims falsified vs 1 confirmed across M6 runs. The optimal architecture separates computation (experiment selection via tempered EIG + Thompson sampling, posterior update) from language (interpretation, hypothesis generation, novel structure design), connecting them through validated feedback paths (parameter persistence, claim verification, novel structure registration). The framework demonstrates both the promise and the current limits of LLMs in the scientific method: they identify genuine theoretical fault lines through crux negotiation, propose novel experimental structures that Thompson sampling explores, and produce human-readable mechanistic narratives — but they cannot yet learn cumulatively from evidence, calibrate their quantitative expectations, or direct experiment selection semantically rather than stochastically.
+Antagonistic collaboration via LLM debate can successfully identify the correct model from competing theories. The mechanism of convergence is primarily Bayesian computation, but successive milestones have progressively strengthened debate's causal role. M5's feedback loop closures create non-zero replication variance through parameter revision persistence. M6's ARBITER integration adds role-specialized meta-agents, crux-based negotiation, conflict maps, and pre-registration output, enriching debate quality while preserving correct convergence (3/3 ground truths, 36–68% gaps). M7's likelihood tempering (tau=0.005) resolves the posterior collapse bottleneck, achieving gradual convergence where later cycles are genuinely informative (EIG>0 through cycle 4). M8's Thompson sampling replaces greedy experiment selection with principled exploration: 12 unique structures (6 novel) vs greedy's 3 (0 novel). M9's crux-directed Thompson sampling fixes the broken crux-to-experiment pipeline (0 parseable crux specs across all prior runs → 24 across 3 validation runs) and establishes the first semantically directed path from debate to experiment selection: accepted cruxes bias the mixture distribution toward experiments that resolve specific theoretical disagreements. In the GCM validation run, crux `crux_004` directly selected `rule_plus_exception_1exc/high_noise` — the first time a debate-identified theoretical fault line determined which experiment ran. The system operates as a falsification engine: 44 claims falsified vs 1 confirmed across M6 runs. The optimal architecture separates computation (experiment selection via tempered EIG + crux-directed Thompson sampling, posterior update) from language (interpretation, hypothesis generation, crux identification, novel structure design), connecting them through validated feedback paths (parameter persistence, claim verification, novel structure registration, crux-directed selection). The framework demonstrates both the promise and the growing capabilities of LLMs in the scientific method: they identify genuine theoretical fault lines through crux negotiation that now causally direct experiment selection, propose novel experimental structures that Thompson sampling explores, and produce human-readable mechanistic narratives — though they cannot yet learn cumulatively from evidence or calibrate their quantitative expectations.
 
 ---
 

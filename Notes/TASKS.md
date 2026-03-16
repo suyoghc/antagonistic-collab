@@ -1,6 +1,6 @@
 # Tasks
 
-## Current Milestone: M9 — Crux-Directed Thompson Sampling
+## Completed: M9 — Crux-Directed Thompson Sampling (DONE)
 
 ### M9 Tasks
 - [x] **Crux-directed mixture distribution** — `_select_index()` accepts `crux_indices` + `crux_weight`. With probability crux_weight, samples uniformly from crux-matching candidates; otherwise standard EIG-weighted Thompson. Replaces ineffective multiplicative EIG boost (D37).
@@ -10,11 +10,20 @@
 - [x] **Crux-directed logging** — Transcript messages include `crux_directed` and `crux_id` fields.
 - [x] **Codex review round 7** — 3 bugs: hardcoded credential, mock crux matching, batch mode leak.
 - [x] **11 new tests** (TestCruxDirectedThompson), 336 total passing.
-- [ ] **Live validation** — Verify crux-directed selections appear in real runs with GPT-4o.
+- [x] **Live validation** — 3/3 correct. 24 parseable crux specs (was 0). 1 crux-directed experiment (GCM run).
+
+### M9 Validation Results (crux_weight=0.3, GPT-4o, 2026-03-15)
+
+| Ground Truth | Winner | Correct? | RMSE | Gap | Cruxes parsed | Crux-directed |
+|---|---|---|---|---|---|---|
+| GCM | Exemplar_Agent | Yes | 0.084 | 74.7% | 11/34 | 1/5 |
+| RULEX | Rule_Agent | Yes | 0.050 | 83.9% | 7/34 | 0/5 |
+| SUSTAIN | Clustering_Agent | Yes | 0.033 | 93.1% | 6/37 | 0/5 |
 
 ### M9 Commits
 - `7e26048` fix: 3 Codex review bugs — hardcoded credential, mock crux matching, batch mode leak
 - `466d1c0` feat(M9): crux-directed Thompson sampling — debate now affects experiment selection
+- `e8fbb00` docs: M9 crux-directed Thompson sampling across all project documentation
 
 ---
 

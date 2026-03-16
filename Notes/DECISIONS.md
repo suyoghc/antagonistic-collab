@@ -835,4 +835,14 @@ Pattern covered `debate_cycle_*.json` but not `.md` transcripts.
 
 **Tests:** 11 new tests in `TestCruxDirectedThompson`, 336 total passing.
 
-**Status:** Implemented. Pending live validation.
+**Live validation (2026-03-15):**
+
+| Ground Truth | Winner | Correct? | RMSE | Gap | Cruxes parsed | Crux-directed |
+|---|---|---|---|---|---|---|
+| GCM | Exemplar_Agent | Yes | 0.084 | 74.7% | 11/34 | 1/5 |
+| RULEX | Rule_Agent | Yes | 0.050 | 83.9% | 7/34 | 0/5 |
+| SUSTAIN | Clustering_Agent | Yes | 0.033 | 93.1% | 6/37 | 0/5 |
+
+Key outcome: Before M9, 0 crux boost specs were parsed across all runs (100+ cruxes proposed). After M9, 24 parseable specs across 3 runs. 1 crux-directed experiment (GCM run: `rule_plus_exception_1exc/high_noise` from `crux_004`). Debate now causally affects experiment selection — the crux pipeline is operational for the first time.
+
+**Status:** Done.

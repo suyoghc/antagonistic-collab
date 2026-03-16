@@ -622,4 +622,31 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 
 ---
 
+## Session 25 — 2026-03-15
+
+**Commits:** (documentation updates only)
+
+**What we did:**
+- Ran M9 live validation: 3 ground truths × 5 cycles with GPT-4o, crux_weight=0.3
+- Updated all documentation with M9 validation results:
+  - REPORT.md: Section 2.13 (crux-directed methods), Section 3.23 (M9 results), updated discussion 4.4/4.5/4.6/4.7, updated conclusion
+  - LESSONS_LEARNED.md: Phase 15 with 4 findings + 3 emerging principles
+  - DECISIONS.md: D37 updated with validation results, status → Done
+  - TASKS.md: M9 marked complete with results table
+  - PLANNING.md: M9 marked DONE
+  - SCRATCHPAD.md: cleaned up post-validation
+  - CHATLOG.md: this session
+
+**M9 validation results:**
+
+| Ground Truth | Winner | RMSE | Gap | Cruxes parsed | Crux-directed |
+|---|---|---|---|---|---|
+| GCM | Exemplar_Agent | 0.084 | 74.7% | 11/34 | 1/5 |
+| RULEX | Rule_Agent | 0.050 | 83.9% | 7/34 | 0/5 |
+| SUSTAIN | Clustering_Agent | 0.033 | 93.1% | 6/37 | 0/5 |
+
+**Key finding:** The crux pipeline is operational for the first time. 24 parseable crux specs (was 0 across all prior runs). 1 crux-directed experiment (GCM run: crux_004 → rule_plus_exception_1exc/high_noise). Debate now causally affects experiment selection.
+
+---
+
 *This log is maintained manually. Update it at the end of each session.*
