@@ -233,6 +233,26 @@ Kandasamy, Schneider & Póczos (2019) make this connection explicit for experime
 
 For our system, Thompson sampling offers a principled upgrade path: rather than selecting `argmax(EIG)`, sample experiments proportional to EIG scores (or sample the ground-truth model from the posterior and select the best experiment for that model). This requires no architectural changes — only replacing the `argmax` in `select_from_pool()` with a softmax sample — but addresses the greedy repetition problem identified in validation. The approach is grounded in established theory (Russo & Van Roy, 2018; Kandasamy et al., 2019) rather than an ad-hoc diversity bonus.
 
+### 4.6 Bayesian adversarial collaboration and the crux-EIG convergence
+
+Corcoran, Hohwy & Friston (2023) argue that adversarial collaboration and Bayesian optimal experimental design should be unified: both seek experiments that maximally discriminate between competing theories, one through qualitative identification of "crux" disagreements and the other through quantitative information gain. Our M9 validation provides an empirical test of this prediction: when LLM agents identify theoretical cruxes and propose discriminating experiments, those experiments largely overlap with what Bayesian EIG already selects. Of 24 parseable crux-directed experiment proposals, most referenced structures already in the EIG frontier. Only 1 of 15 experiments was uniquely crux-directed, suggesting the unique value of semantic experiment design lies at the margins — pointing to experiments that EIG undervalues.
+
+This convergence has a precursor. Ouyang, Tessler, Ly & Goodman (2018) analyzed the classic Medin & Schaffer (1978) 5-4 categorization study and found that the intuitively designed category structure happened to place competing models near maximal EIG divergence. Expert intuition converged with computational optimality — though the authors present this as a fortunate case, not the general rule. Myung & Pitt (2009) argue that expert intuition is generally *unreliable* for model discrimination as models become more complex. Valentin et al. (2024) extend this with neural mutual information estimation, showing computational optimal design outperforms intuition-based design.
+
+Our finding bridges these results: LLM agents' semantic crux reasoning converges with EIG not because of domain expertise per se, but because the constrained structure registry is small enough that both approaches identify the same discriminating candidates. Whether this convergence holds in richer design spaces — where expert knowledge about model mechanisms might reveal discriminating conditions that EIG's Monte Carlo search misses — is an open empirical question.
+
+### 4.7 Overconfident posteriors and the limits of tempering
+
+Oelrich, Ding, Magnusson, Vehtari & Villani (2020) identify conditions under which Bayesian model probabilities become overconfident: when compared models give "very different approximations of the data-generating process." This precisely describes the SUSTAIN case: stepwise learning curves are qualitatively different from GCM's gradual curves, producing likelihood ratios so extreme that even aggressive tempering (tau=0.005) cannot prevent rapid concentration.
+
+Our likelihood tempering is a form of the power posterior (Grünwald, 2012; Bissiri, Holmes & Walker, 2016). Several principled alternatives exist for choosing the tempering rate: SafeBayes learns the learning rate adaptively from data (Grünwald, 2012); the c-posterior calibrates tempering via distributional tolerance (Miller & Dunson, 2019); Wu & Martin (2023) compare selection methods and find generalized posterior calibration outperforms others. Stacking (Yao, Vehtari, Simpson & Gelman, 2018) abandons posterior model probabilities entirely in favor of weights calibrated to predictive accuracy. Navarro, Pitt & Myung's (2004) "landscaping" technique could pre-assess which experimental conditions produce distinguishable vs. overlapping predictions, allowing the framework to focus BOED on conditions where models are harder to distinguish.
+
+### 4.8 LLM format compliance and the specification gap
+
+M9's crux parsing achieved 23% format compliance despite explicit menus and format examples. This is consistent with the broader literature on LLM instruction following. Tam et al. (2024) demonstrate that format restrictions actively *degrade* reasoning performance — the model doesn't fail to parse the format, but format constraints interfere with the generation process. The IFEval benchmark (Zhou et al., 2023) shows no model exceeds 80% on verifiable format constraints. Schall & de Melo (2025) find that instruction-tuned models drop 17% accuracy under constrained decoding because they are trained to paraphrase helpfully, which conflicts with rigid format adherence.
+
+For LLM-in-the-loop scientific systems, this has a design implication: reliable structured output requires constrained decoding (token-level enforcement) or deterministic post-processing (fuzzy matching), not prompt engineering alone. Our mixture distribution design is robust to low compliance because it works with even 1 parseable crux per run — a pattern of graceful degradation that should guide other LLM→computation pipelines.
+
 ---
 
 ## 5. Results
@@ -265,6 +285,8 @@ Bernardo, J. M., & Smith, A. F. M. (1994). *Bayesian Theory*. New York: Wiley.
 
 Blohm, G., Peters, B., Haefner, R., Isik, L., Kriegeskorte, N., Lieberman, J. S., Ponce, C. R., Roig, G., & Peters, M. A. K. (2024). Generative adversarial collaborations: A practical guide for conference organizers and participating scientists. *arXiv:2402.12604*.
 
+Bissiri, P. G., Holmes, C. C., & Walker, S. G. (2016). A general framework for updating belief distributions. *Journal of the Royal Statistical Society: Series B*, 78(5), 1103–1130.
+
 Cavagnaro, D. R., Myung, J. I., Pitt, M. A., & Kujala, J. V. (2010). Adaptive design optimization: A mutual information-based approach to model discrimination in cognitive science. *Neural Computation*, 22(4), 887–905.
 
 Cavagnaro, D. R., Pitt, M. A., & Myung, J. I. (2011). Model discrimination through adaptive experimentation. *Psychonomic Bulletin & Review*, 18(1), 204–210.
@@ -273,11 +295,15 @@ Chapelle, O., & Li, L. (2011). An empirical evaluation of Thompson sampling. *Ad
 
 Clark, C. J., & Tetlock, P. E. (2022). Adversarial collaboration: The next science reform. In C. L. Frisby, R. E. Redding, W. T. O'Donohue, & S. O. Lilienfeld (Eds.), *Political Bias in Psychology* (pp. 905–927). Springer.
 
+Corcoran, A. W., Hohwy, J., & Friston, K. J. (2023). Accelerating scientific progress through Bayesian adversarial collaboration. *Neuron*, 111(22), 3505–3516.
+
 Cowan, N., Belletier, C., Doherty, J. M., Jaroslawska, A. J., Rhodes, S., Forsberg, A., Naveh-Benjamin, M., Barrouillet, P., Camos, V., & Logie, R. H. (2020). How do scientific views change? Notes from an extended adversarial collaboration. *Perspectives on Psychological Science*, 15(4), 1011–1025.
 
 Du, Y., Li, S., Torralba, A., Tenenbaum, J. B., & Mordatch, I. (2023). Improving factuality and reasoning in language models through multiagent debate. *ICML 2024*.
 
 Foster, A., Ivanova, D. R., Malik, I., & Rainforth, T. (2021). Deep adaptive design: Amortizing sequential Bayesian experimental design. *Proceedings of the 38th International Conference on Machine Learning*, 3384–3395.
+
+Grünwald, P. (2012). The safe Bayesian: Learning the learning rate via the mixability gap. *Algorithmic Learning Theory (ALT 2012)*, LNCS 7568, 169–183.
 
 Huan, X., & Marzouk, Y. M. (2016). Sequential Bayesian optimal experimental design via variational inference. *arXiv:1604.08320*.
 
@@ -299,11 +325,19 @@ Medin, D. L., & Schaffer, M. M. (1978). Context theory of classification learnin
 
 Mellers, B., Hertwig, R., & Kahneman, D. (2001). Do frequency representations eliminate conjunction effects? An exercise in adversarial collaboration. *Psychological Science*, 12(4), 269–275.
 
+Miller, J. W., & Dunson, D. B. (2019). Robust Bayesian inference via coarsening. *Journal of the American Statistical Association*, 114(527), 1113–1125.
+
 Myung, J. I., & Pitt, M. A. (2009). Optimal experimental design for model discrimination. *Psychological Review*, 116(3), 499–518.
+
+Navarro, D. J., Pitt, M. A., & Myung, I. J. (2004). Assessing the distinguishability of models and the informativeness of data. *Cognitive Psychology*, 49(1), 47–84.
 
 Nosofsky, R. M. (1986). Attention, similarity, and the identification-categorization relationship. *Journal of Experimental Psychology: General*, 115(1), 39–57.
 
 Nosofsky, R. M., Palmeri, T. J., & McKinley, S. C. (1994). Rule-plus-exception model of classification learning. *Psychological Review*, 101(1), 53–79.
+
+Oelrich, O., Ding, S., Magnusson, M., Vehtari, A., & Villani, M. (2020). When are Bayesian model probabilities overconfident? *arXiv:2003.04026*.
+
+Ouyang, L., Tessler, M. H., Ly, D., & Goodman, N. D. (2018). webppl-oed: A practical optimal experiment design system. *Proceedings of the 40th Annual Conference of the Cognitive Science Society*.
 
 Peters, B., Blohm, G., Haefner, R., Isik, L., Kriegeskorte, N., Lieberman, J. S., Ponce, C. R., Roig, G., & Peters, M. A. K. (2025). Generative adversarial collaborations: A new model of scientific discourse. *Trends in Cognitive Sciences*, 29(1), 1–4.
 
@@ -315,8 +349,20 @@ Russo, D. J., & Van Roy, B. (2018). Learning to optimize via information-directe
 
 Pitt, M. A., Myung, I. J., & Zhang, S. (2002). Toward a method of selecting among computational models of cognition. *Psychological Review*, 109(3), 472–491.
 
+Schall, J. D., & de Melo, G. (2025). The hidden cost of structure: How constrained decoding affects language model performance. *Proceedings of RANLP 2025*.
+
 Shepard, R. N., Hovland, C. I., & Jenkins, H. M. (1961). Learning and memorization of classifications. *Psychological Monographs*, 75(13), 1–42.
+
+Tam, Z. R., Wu, C., et al. (2024). Let me speak freely? A study on the impact of format restrictions on performance of large language models. *Proceedings of EMNLP 2024 Industry Track*.
 
 Thompson, W. R. (1933). On the likelihood that one unknown probability exceeds another in view of the evidence of two samples. *Biometrika*, 25(3/4), 285–294.
 
+Valentin, S., Kleinegesse, S., Bramley, N. R., Series, P., Gutmann, M. U., & Lucas, C. G. (2024). Designing optimal behavioral experiments using machine learning. *eLife*, 13, e86224.
+
 Wagenmakers, E.-J., Ratcliff, R., Gomez, P., & Iverson, G. J. (2004). Assessing model mimicry using the parametric bootstrap. *Journal of Mathematical Psychology*, 48(1), 28–50.
+
+Wu, P.-S., & Martin, R. (2023). A comparison of learning rate selection methods in generalized Bayesian inference. *Bayesian Analysis*, 18(1), 105–132.
+
+Yao, Y., Vehtari, A., Simpson, D., & Gelman, A. (2018). Using stacking to average Bayesian predictive distributions. *Bayesian Analysis*, 13(3), 917–1003.
+
+Zhou, J., et al. (2023). Instruction-following evaluation for large language models. *arXiv:2311.07911*.

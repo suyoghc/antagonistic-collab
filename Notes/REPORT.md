@@ -471,7 +471,7 @@ M9 fixes the crux-to-experiment pipeline (D37) and validates with 3 ground truth
 
 **Debate causally affects experiment selection.** In the GCM run, crux `crux_004` proposed `rule_plus_exception_1exc/high_noise` as a discriminating experiment. The mixture distribution selected this experiment on cycle 3 — the first time a debate-identified theoretical disagreement directly determined which experiment ran. This is qualitatively different from M8's novel structure path (where Thompson randomly sampled debate-proposed structures): here the selection was specifically directed by a crux about rule-exception tradeoffs.
 
-**Crux-directed selection rate is low but non-zero.** Only 1 of 15 total experiments was crux-directed (6.7% vs the 30% theoretical maximum). This is because crux-matching requires both the structure and condition to match pool entries exactly, and most accepted cruxes reference structures or conditions that are already represented in the standard EIG pool. The mixture distribution guarantees selection when a match exists, but most cruxes don't produce unique matches.
+**Crux-directed selection rate is low but non-zero.** Only 1 of 15 total experiments was crux-directed (6.7% vs the 30% theoretical maximum). This is because crux-matching requires both the structure and condition to match pool entries exactly, and most accepted cruxes reference structures or conditions that are already represented in the standard EIG pool. The mixture distribution guarantees selection when a match exists, but most cruxes don't produce unique matches. This convergence between semantic (crux) and computational (EIG) experiment selection is consistent with the theoretical prediction of Corcoran, Hohwy & Friston (2023), who argue that adversarial collaboration and Bayesian optimal design should be unified because both target the same discriminating experiments. Ouyang et al. (2018) found a similar pattern in the classic Medin & Schaffer (1978) categorization study: the intuitively designed 5-4 structure happened to place competing models near maximal EIG divergence.
 
 **Correctness is preserved.** All 3 ground truths correctly identified with strong gaps (74.7–93.1%), comparable to or better than M8 Thompson results (which had gaps of 74–94% depending on the run). The crux-directed experiment in the GCM run did not degrade convergence.
 
@@ -499,7 +499,7 @@ Learning curves break the tie because the models predict qualitatively different
 
 The most fundamental bottleneck was translating between LLM reasoning and computational specification. Agents produced scientifically sophisticated experiment designs ("non-linearly-separable categories with family resemblance structure, 3 conditions, 120 subjects") that the computational backend could not execute. The backend needed `{"stimuli": np.array, "labels": np.array}`.
 
-The solution was a constrained menu (structure registry + condition effects) that preserves agent choice while ensuring executability. This is likely a general challenge for LLM-in-the-loop scientific systems: the translation layer between natural language and formal specification must be designed explicitly.
+The solution was a constrained menu (structure registry + condition effects) that preserves agent choice while ensuring executability. This is a general challenge for LLM-in-the-loop scientific systems: the translation layer between natural language and formal specification must be designed explicitly. M9's crux parsing failure (23% format compliance despite explicit menus) further illustrates the gap. Tam et al. (2024) demonstrate that format restrictions actively degrade LLM reasoning performance — the model doesn't fail to understand the format, but format constraints interfere with generation. The IFEval benchmark (Zhou et al. 2023) shows no model exceeds 80% on verifiable format constraints. Robust pipelines should assume majority non-compliance and design mechanisms (mixture distributions, fuzzy matching, constrained decoding) that degrade gracefully.
 
 ### 4.4 What debate does and doesn't do
 
@@ -523,7 +523,7 @@ Pre-M5, the debate was entirely epiphenomenal to RMSE — replication variance w
 
 ### 4.5 Posterior collapse: diagnosis and treatment
 
-M6 validation revealed that the Bayesian posterior collapses to certainty after 1–2 experiments, leaving remaining cycles with EIG≈0. M7 addressed this with likelihood tempering (tau=0.005, prediction clip [0.05, 0.95]), achieving gradual convergence: GCM entropy drops 0.64→0.00 over 5 cycles instead of collapsing on cycle 0.
+M6 validation revealed that the Bayesian posterior collapses to certainty after 1–2 experiments, leaving remaining cycles with EIG≈0. Oelrich et al. (2020) identify this as a general phenomenon: posterior model probabilities become overconfident when "the compared models give very different approximations" — exactly our situation with SUSTAIN's stepwise curves vs. GCM's gradual curves. M7 addressed this with likelihood tempering (tau=0.005, prediction clip [0.05, 0.95]), a form of the power posterior (Grünwald 2012; Bissiri, Holmes & Walker 2016; Miller & Dunson 2019), achieving gradual convergence: GCM entropy drops 0.64→0.00 over 5 cycles instead of collapsing on cycle 0.
 
 However, tempering exposed a second problem: greedy EIG selection repeats the same experiment when the posterior concentrates even slightly. M8's Thompson sampling addresses this by sampling proportional to EIG scores, producing 4× structural diversity.
 
@@ -531,7 +531,7 @@ The combined M7+M8+M9 solution (tempering + Thompson + crux-directed mixture) ke
 
 ### 4.6 Limitations
 
-1. **Residual posterior concentration.** M7 tempering (tau=0.005) prevents immediate collapse but the posterior still concentrates within 3–5 cycles. Combined with Thompson sampling (M8), later cycles are informative and structurally diverse, but the system still converges faster than may be ideal for extended runs. Deeper solutions include sequential BOED framed as POMDP (Huan & Marzouk 2016) or deep adaptive design (Foster et al. 2021).
+1. **Residual posterior concentration.** M7 tempering (tau=0.005) prevents immediate collapse but the posterior still concentrates within 3–5 cycles, consistent with Oelrich et al.'s (2020) analysis of overconfident posteriors when models give categorically different predictions. Combined with Thompson sampling (M8), later cycles are informative and structurally diverse, but the system still converges faster than may be ideal for extended runs. Deeper solutions include adaptive learning rates (Grünwald 2012; Wu & Martin 2023), stacking instead of posterior probabilities (Yao et al. 2018), coarsened posteriors (Miller & Dunson 2019), or sequential BOED framed as POMDP (Huan & Marzouk 2016).
 
 2. **Growing but still modest debate impact.** Post-M5, replication variance is non-zero but small (std≈0.018). Post-M9, debate causally affects experiment selection via crux-directed mixture (1/15 experiments in validation). The Bayesian machinery still dominates, but the debate→selection causal path is now operational.
 
@@ -547,7 +547,7 @@ The combined M7+M8+M9 solution (tempering + Thompson + crux-directed mixture) ke
 
 ### 4.7 Future directions
 
-1. **Higher crux-directed selection rates** — M9 establishes the crux→experiment causal path (1/15 experiments in validation). Higher rates require either a larger crux_weight or fuzzy matching that maps cruxes to nearby pool entries when exact structure/condition matches don't exist.
+1. **Higher crux-directed selection rates** — M9 establishes the crux→experiment causal path (1/15 experiments in validation). Higher rates require either a larger crux_weight, fuzzy matching that maps cruxes to nearby pool entries, or constrained decoding (Tam et al. 2024) to guarantee format compliance. The convergence between crux-directed and EIG-driven selection (Corcoran et al. 2023) suggests the unique value of cruxes may be at the margins — pointing to experiments that EIG undervalues.
 2. **Claim-responsive debate** — agents should explicitly address their prior claims ("I previously predicted X, which was falsified; I now revise to Y") rather than repeating generic talking points
 3. **Longer runs (10+ cycles)** — assess whether Thompson sampling's structural diversity compounds over many cycles, whether novel structures eventually outperform registry structures, and whether the claim ledger produces cumulative reasoning at longer horizons
 4. **Non-myopic experiment selection** — full Myopic Posterior Sampling (Kandasamy et al. 2019) or deep adaptive design (Foster et al. 2021) could replace the current simplified Thompson implementation
@@ -564,19 +564,30 @@ Antagonistic collaboration via LLM debate can successfully identify the correct 
 
 ## References
 
+- Bissiri, P. G., Holmes, C. C., & Walker, S. G. (2016). A general framework for updating belief distributions. *Journal of the Royal Statistical Society: Series B, 78*(5), 1103–1130.
 - Cavagnaro, D. R., Myung, J. I., Pitt, M. A., & Kujala, J. V. (2010). Adaptive design optimization: A mutual information-based approach to model discrimination in cognitive science. *Neural Computation, 22*(4), 887–905.
 - Chapelle, O., & Li, L. (2011). An empirical evaluation of Thompson sampling. *Advances in Neural Information Processing Systems, 24*.
+- Corcoran, A. W., Hohwy, J., & Friston, K. J. (2023). Accelerating scientific progress through Bayesian adversarial collaboration. *Neuron, 111*(22), 3505–3516.
 - Foster, A., Ivanova, D. R., Malik, I., & Rainforth, T. (2021). Deep adaptive design: Amortizing sequential Bayesian experimental design. *Proceedings of the 38th ICML*, 3384–3395.
+- Grünwald, P. (2012). The safe Bayesian: Learning the learning rate via the mixability gap. *Algorithmic Learning Theory (ALT 2012)*, LNCS 7568, 169–183.
 - Huan, X., & Marzouk, Y. M. (2016). Sequential Bayesian optimal experimental design via variational inference. *arXiv:1604.08320*.
 - Kandasamy, K., Schneider, J., & Póczos, B. (2019). Myopic posterior sampling for adaptive goal oriented design of experiments. *Proceedings of the 36th ICML*, 3222–3232.
 - Kim, W., Pitt, M. A., Lu, Z.-L., Steyvers, M., & Myung, J. I. (2017). A hierarchical adaptive approach to optimal experimental design. *Neural Computation, 26*(11), 2465–2492.
 - Love, B. C., Medin, D. L., & Gureckis, T. M. (2004). SUSTAIN: A network model of category learning. *Psychological Review, 111*(2), 309–332.
 - Medin, D. L., & Schaffer, M. M. (1978). Context theory of classification learning. *Psychological Review, 85*(3), 207–238.
 - Mellers, B., Hertwig, R., & Kahneman, D. (2001). Do frequency representations eliminate conjunction effects? An exercise in adversarial collaboration. *Psychological Science, 12*(4), 269–275.
+- Miller, J. W., & Dunson, D. B. (2019). Robust Bayesian inference via coarsening. *Journal of the American Statistical Association, 114*(527), 1113–1125.
+- Navarro, D. J., Pitt, M. A., & Myung, I. J. (2004). Assessing the distinguishability of models and the informativeness of data. *Cognitive Psychology, 49*(1), 47–84.
 - Nosofsky, R. M. (1986). Attention, similarity, and the identification–categorization relationship. *Journal of Experimental Psychology: General, 115*(1), 39–57.
 - Nosofsky, R. M. (1991). Tests of an exemplar model for relating perceptual classification and recognition memory. *Journal of Experimental Psychology: Human Perception and Performance, 17*(1), 3–27.
 - Nosofsky, R. M., Palmeri, T. J., & McKinley, S. C. (1994). Rule-plus-exception model of classification learning. *Psychological Review, 101*(1), 53–79.
+- Oelrich, O., Ding, S., Magnusson, M., Vehtari, A., & Villani, M. (2020). When are Bayesian model probabilities overconfident? *arXiv:2003.04026*.
+- Ouyang, L., Tessler, M. H., Ly, D., & Goodman, N. D. (2018). webppl-oed: A practical optimal experiment design system. *Proceedings of the 40th Annual Conference of the Cognitive Science Society*.
 - Rainforth, T., Foster, A., Ivanova, D. R., & Smith, F. B. (2024). Modern Bayesian experimental design. *Statistical Science, 39*(1), 100–114.
 - Russo, D. J., & Van Roy, B. (2018). Learning to optimize via information-directed sampling. *Operations Research, 66*(1), 230–252.
 - Shepard, R. N., Hovland, C. I., & Jenkins, H. M. (1961). Learning and memorization of classifications. *Psychological Monographs: General and Applied, 75*(13), 1–42.
+- Tam, Z. R., Wu, C., et al. (2024). Let me speak freely? A study on the impact of format restrictions on performance of large language models. *Proceedings of EMNLP 2024 Industry Track*.
 - Thompson, W. R. (1933). On the likelihood that one unknown probability exceeds another in view of the evidence of two samples. *Biometrika, 25*(3/4), 285–294.
+- Wu, P.-S., & Martin, R. (2023). A comparison of learning rate selection methods in generalized Bayesian inference. *Bayesian Analysis, 18*(1), 105–132.
+- Yao, Y., Vehtari, A., Simpson, D., & Gelman, A. (2018). Using stacking to average Bayesian predictive distributions. *Bayesian Analysis, 13*(3), 917–1003.
+- Zhou, J., et al. (2023). Instruction-following evaluation for large language models. *arXiv:2311.07911*.

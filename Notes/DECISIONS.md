@@ -845,4 +845,6 @@ Pattern covered `debate_cycle_*.json` but not `.md` transcripts.
 
 Key outcome: Before M9, 0 crux boost specs were parsed across all runs (100+ cruxes proposed). After M9, 24 parseable specs across 3 runs. 1 crux-directed experiment (GCM run: `rule_plus_exception_1exc/high_noise` from `crux_004`). Debate now causally affects experiment selection — the crux pipeline is operational for the first time.
 
+**Literature context:** The convergence between crux-directed and EIG-driven selection was predicted by Corcoran, Hohwy & Friston (2023, *Neuron*) who argue adversarial collaboration and Bayesian optimal design should be unified. Low format compliance (23%) is consistent with Tam et al. (EMNLP 2024) showing format restrictions degrade LLM reasoning, and Zhou et al. (2023) IFEval showing <80% compliance for all models.
+
 **Status:** Done.
