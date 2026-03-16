@@ -1263,7 +1263,7 @@ Three validation runs: 3 ground truths × 5 cycles, GPT-4o via Princeton, crux_w
 
 ### On the debate ablation (M13)
 
-**36. Debate is epiphenomenal for model identification on synthetic benchmarks.** The M13 3×2 ablation (No-Debate / Debate-No-Arbiter / Debate+Arbiter × Thompson / Greedy, 17/18 runs) shows no-debate achieves the best average RMSE (0.055) and gap (87.6%) while running 3-4× faster than debate conditions. All 17 successful conditions identified the correct winner regardless of debate level. The computational pipeline (EIG selection + model-computed predictions + Bayesian posterior) is causally sufficient. (Phase 19, M13)
+**36. Debate is epiphenomenal for model identification on synthetic benchmarks.** The M13 3×2 ablation (No-Debate / Debate-No-Arbiter / Debate+Arbiter × Thompson / Greedy, 18/18 runs) shows no-debate achieves the best average RMSE (0.055) and gap (87.6%) while running 3-4× faster than debate conditions. All 18 conditions identified the correct winner regardless of debate level. The computational pipeline (EIG selection + model-computed predictions + Bayesian posterior) is causally sufficient. (Phase 19, M13)
 
 **37. Debate without structured arbitration actively degrades performance.** Debate-no-arbiter had the worst average RMSE (0.078) and gap (82.4%) — worse than both no-debate and debate+arbiter. Two mechanisms: (a) LLM-proposed param_overrides introduce noise into model predictions that default params avoid, and (b) interpretation and critique phases produce text that is disconnected from the scoring pipeline — debate output doesn't feed back into EIG computation or posterior updates. Adding debate without closing the feedback loop is strictly worse than not debating. (Phase 19, M13)
 

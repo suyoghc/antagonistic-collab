@@ -985,13 +985,13 @@ Key findings:
 - CLI: `--no-debate`, `--experiment`, `--merge` flags
 - 15 new tests (TestExperimentFramework, TestNoDebateMode, TestDebateAblationConfig)
 
-**Ablation results (17/18 completed, 1 connection error):**
+**Ablation results (18/18 completed):**
 
 | Debate Level | Correct | Avg RMSE | Avg Gap | Avg Time |
 |---|---|---|---|---|
 | None | 6/6 | 0.055 | 87.6% | 368s |
 | Debate (no arbiter) | 6/6 | 0.078 | 82.4% | 1315s |
-| Debate + Arbiter | 5/5 | 0.060 | 86.5% | 1107s |
+| Debate + Arbiter | 6/6 | 0.059 | 86.8% | 1107s |
 
 **Key findings:**
 1. **Debate is epiphenomenal on synthetic benchmarks.** All 17/17 conditions identify the correct winner regardless of debate level. No-debate has the best RMSE and gap while running 3-4× faster.
@@ -1005,4 +1005,4 @@ Key findings:
 - Ambiguous data (real human data with noise, individual differences)
 - Explanation for humans (goal is understanding, not just identification)
 
-**Status:** Done. 1 condition (greedy_debate_RULEX) needs re-run.
+**Status:** Done. All 18/18 conditions complete.

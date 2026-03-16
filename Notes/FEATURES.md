@@ -455,6 +455,12 @@ bottleneck — crux boost cannot overcome zero EIG. 3/3 correct with 36–68% ga
 (tau=0.005, clip [0.05, 0.95]). Entropy=0.635 after cycle 0 (was 0.000), EIG=0.233
 on cycle 1 (was 0.000). Multi-cycle debate is now load-bearing — experiment
 selection adapts to evolving posterior across cycles.
+**Update (M13, 2026-03-16):** 3×2 debate ablation (18/18 correct) confirms debate
+is epiphenomenal on synthetic benchmarks. No-debate achieves best RMSE (0.055) and
+gap (87.6%) while running 3-4× faster. Debate without arbiter-v0.1 actively hurts
+(0.078); arbiter-v0.1 partially recovers (0.059) but doesn't beat no-debate. Features
+1–4 remain fully sufficient. The debate→computation feedback loop is architecturally
+open — closing it is the key task for making debate non-epiphenomenal.
 
 ---
 

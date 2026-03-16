@@ -773,13 +773,13 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 - Updated Notes/LESSONS_LEARNED.md with lessons 36-40
 - Saved future task directions to memory
 
-**M13 ablation results (17/18 completed):**
+**M13 ablation results (18/18 completed):**
 
 | Debate Level | Correct | Avg RMSE | Avg Gap | Avg Time |
 |---|---|---|---|---|
 | None | 6/6 | 0.055 | 87.6% | 368s |
 | Debate (no arbiter) | 6/6 | 0.078 | 82.4% | 1315s |
-| Debate + Arbiter | 5/5 | 0.060 | 86.5% | 1107s |
+| Debate + Arbiter | 6/6 | 0.059 | 86.8% | 1107s |
 
 **Key findings:**
 - Debate is epiphenomenal on synthetic benchmarks — no-debate has best RMSE/gap while running 3-4× faster

@@ -117,7 +117,7 @@ Notes/                       # Analysis, decisions, lessons learned
 
 ## Key results
 
-Validated across 43 runs (3 ground truths × multiple milestones/modes, 5 cycles each). The correct model's agent wins in 42/43 runs (one M7 RULEX misidentification due to model overlap, resolved in M8):
+Validated across 61 runs (3 ground truths × multiple milestones/modes/ablation conditions, 5 cycles each). The correct model's agent wins in 60/61 runs (one M7 RULEX misidentification due to model overlap, resolved in M8):
 
 | Ground Truth | Mode | Winner | RMSE | Gap |
 |---|---|---|---|---|
@@ -142,10 +142,11 @@ Validated across 43 runs (3 ground truths × multiple milestones/modes, 5 cycles
 - **Debate now affects outcomes**: Post-M5, replication RMSE std=0.018 (was 0.000). Parameter revision persistence closes the debate→prediction feedback loop.
 - **Falsification engine**: 44 claims falsified vs 1 confirmed across M6 runs. Convergence occurs by ruling out wrong theories, not confirming the right one.
 - **Crux selectivity**: 15% acceptance rate with real LLMs (vs 100% in mock). Accepted cruxes map to genuine theoretical fault lines.
-- **Posterior collapse**: Primary architectural bottleneck — EIG≈0 after cycle 0–1, making later cycles uninformative despite crux negotiation.
+- **Posterior collapse**: Primary architectural bottleneck — EIG≈0 after cycle 0–1, making later cycles uninformative despite crux negotiation. Addressed by likelihood tempering (M7) + Thompson sampling (M8).
 - **Winning theories need fewer revisions**: Rule_Agent made 0 revisions and won RULEX by 67.6%. Losing agents revise futilely (Lakatos-compatible).
+- **Debate is epiphenomenal on synthetic benchmarks** (M13): 3×2 ablation (18/18 correct). No-debate achieves best RMSE (0.055) and gap (87.6%) while running 3-4× faster. The computational pipeline is causally sufficient; debate provides interpretive value but doesn't improve identification.
 
-See [Notes/REPORT.md](Notes/REPORT.md) for the full write-up and [Notes/LESSONS_LEARNED.md](Notes/LESSONS_LEARNED.md) for 35 theses on LLM-mediated scientific debate.
+See [Notes/REPORT.md](Notes/REPORT.md) for the full write-up and [Notes/LESSONS_LEARNED.md](Notes/LESSONS_LEARNED.md) for 40 theses on LLM-mediated scientific debate.
 
 ## Current version: arbiter-v0.1
 
