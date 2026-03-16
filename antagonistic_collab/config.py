@@ -116,6 +116,7 @@ def apply_config_defaults(parser, config: dict[str, Any]):
         "critique_rounds": "critique_rounds",
         "hitl_checkpoints": "hitl_checkpoints",
         "output_dir": "output_dir",
+        "no_debate": "no_debate",
     }
 
     defaults = {}

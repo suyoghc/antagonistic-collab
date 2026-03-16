@@ -901,71 +901,102 @@ def run_execution(
     condition = design.get("condition", "baseline")
 
     # Each agent registers predictions BEFORE seeing data
-    # The system runs each agent's model automatically; the LLM provides
-    # reasoning and confidence only.
-    print("\n--- Agents register predictions (model-computed) ---")
-    for agent in protocol.agent_configs:
-        prompt = (
-            f"PHASE: Pre-data Prediction Registration\n\n"
-            f"{context}\n\n"
-            f"The system will automatically run your model ({agent.model_class.name}) "
-            f"on the approved experiment structure to generate quantitative predictions. "
-            f"You do NOT need to write out item-level numbers.\n\n"
-            f"Your job is to provide:\n"
-            f"  1. 'reasoning': Explain WHY your model predicts the pattern it does "
-            f"for this structure and condition. What mechanisms drive the prediction?\n"
-            f"  2. 'confidence': high / medium / low — how confident are you that "
-            f"your model will fit this data well?\n"
-            f"  3. 'param_overrides' (optional): Non-default parameters you want "
-            f"to use (e.g., higher attention weight). If omitted, defaults are used.\n\n"
-            f"Output a JSON block:\n"
-            f'{{"reasoning": "...", '
-            f'"confidence": "high|medium|low", '
-            f'"param_overrides": {{}}}}'
-        )
+    # When _NO_DEBATE, skip LLM calls — compute predictions with default params.
+    if _NO_DEBATE:
+        print("\n--- Agents register predictions (no-debate, model-computed only) ---")
+        for agent in protocol.agent_configs:
+            predicted = protocol.compute_model_predictions(
+                agent, struct_name, condition
+            )
+            params_used = predicted.pop("params_used", agent.default_params)
 
-        print(f"\n  {agent.name} predicts:")
-        response = call_agent(client, agent.system_prompt, prompt)
-        print(response[:400] + "..." if len(response) > 400 else response)
+            protocol.state.register_prediction(
+                experiment_id=exp.experiment_id,
+                agent_name=agent.name,
+                model_name=agent.model_class.name,
+                model_params=params_used,
+                predicted_pattern=predicted,
+            )
 
-        json_block = extract_json(response) or {}
-        llm_reasoning = json_block.get("reasoning", "")
-        llm_confidence = json_block.get("confidence", "medium")
-        llm_param_overrides = json_block.get("param_overrides") or {}
-        # Sanitize: only accept dict of scalar values
-        if not isinstance(llm_param_overrides, dict):
-            llm_param_overrides = {}
+            mean_acc = predicted.get("mean_accuracy")
+            if isinstance(mean_acc, (int, float)):
+                print(f"  {agent.name}: mean_accuracy={mean_acc:.3f}")
+            else:
+                print(f"  {agent.name}: mean_accuracy=N/A")
 
-        # Compute predictions by running the agent's actual model
-        predicted = protocol.compute_model_predictions(
-            agent, struct_name, condition, param_overrides=llm_param_overrides
-        )
-        params_used = predicted.pop("params_used", agent.default_params)
+            messages.append(
+                {
+                    "agent": agent.name,
+                    "phase": "EXECUTION_PREDICT",
+                    "predicted": predicted,
+                }
+            )
+    else:
+        # The system runs each agent's model automatically; the LLM provides
+        # reasoning and confidence only.
+        print("\n--- Agents register predictions (model-computed) ---")
+        for agent in protocol.agent_configs:
+            prompt = (
+                f"PHASE: Pre-data Prediction Registration\n\n"
+                f"{context}\n\n"
+                f"The system will automatically run your model ({agent.model_class.name}) "
+                f"on the approved experiment structure to generate quantitative predictions. "
+                f"You do NOT need to write out item-level numbers.\n\n"
+                f"Your job is to provide:\n"
+                f"  1. 'reasoning': Explain WHY your model predicts the pattern it does "
+                f"for this structure and condition. What mechanisms drive the prediction?\n"
+                f"  2. 'confidence': high / medium / low — how confident are you that "
+                f"your model will fit this data well?\n"
+                f"  3. 'param_overrides' (optional): Non-default parameters you want "
+                f"to use (e.g., higher attention weight). If omitted, defaults are used.\n\n"
+                f"Output a JSON block:\n"
+                f'{{"reasoning": "...", '
+                f'"confidence": "high|medium|low", '
+                f'"param_overrides": {{}}}}'
+            )
 
-        protocol.state.register_prediction(
-            experiment_id=exp.experiment_id,
-            agent_name=agent.name,
-            model_name=agent.model_class.name,
-            model_params=params_used,
-            predicted_pattern=predicted,
-        )
+            print(f"\n  {agent.name} predicts:")
+            response = call_agent(client, agent.system_prompt, prompt)
+            print(response[:400] + "..." if len(response) > 400 else response)
 
-        mean_acc = predicted.get("mean_accuracy")
-        if isinstance(mean_acc, (int, float)):
-            print(f"    Model-computed: mean_accuracy={mean_acc:.3f}")
-        else:
-            print("    Model-computed: mean_accuracy=N/A")
+            json_block = extract_json(response) or {}
+            llm_reasoning = json_block.get("reasoning", "")
+            llm_confidence = json_block.get("confidence", "medium")
+            llm_param_overrides = json_block.get("param_overrides") or {}
+            # Sanitize: only accept dict of scalar values
+            if not isinstance(llm_param_overrides, dict):
+                llm_param_overrides = {}
 
-        messages.append(
-            {
-                "agent": agent.name,
-                "phase": "EXECUTION_PREDICT",
-                "response": response,
-                "llm_reasoning": llm_reasoning,
-                "llm_confidence": llm_confidence,
-                "predicted": predicted,
-            }
-        )
+            # Compute predictions by running the agent's actual model
+            predicted = protocol.compute_model_predictions(
+                agent, struct_name, condition, param_overrides=llm_param_overrides
+            )
+            params_used = predicted.pop("params_used", agent.default_params)
+
+            protocol.state.register_prediction(
+                experiment_id=exp.experiment_id,
+                agent_name=agent.name,
+                model_name=agent.model_class.name,
+                model_params=params_used,
+                predicted_pattern=predicted,
+            )
+
+            mean_acc = predicted.get("mean_accuracy")
+            if isinstance(mean_acc, (int, float)):
+                print(f"    Model-computed: mean_accuracy={mean_acc:.3f}")
+            else:
+                print("    Model-computed: mean_accuracy=N/A")
+
+            messages.append(
+                {
+                    "agent": agent.name,
+                    "phase": "EXECUTION_PREDICT",
+                    "response": response,
+                    "llm_reasoning": llm_reasoning,
+                    "llm_confidence": llm_confidence,
+                    "predicted": predicted,
+                }
+            )
 
     # Run the experiment (synthetic)
     print(f"\n--- Running experiment (synthetic, true_model={true_model}) ---")
@@ -2148,12 +2179,42 @@ def run_cycle(
     Args:
         mode: "full_pool" uses EIG over all candidates + interpretation debate.
               "legacy" (default) uses the original 9-phase flow with LLM proposals.
+
+    When _NO_DEBATE is True (full_pool mode only), skips all LLM phases and
+    runs only the computational pipeline: EIG selection + execution + posterior
+    update. No client needed.
     """
     cycle_start = len(transcript)
 
+    no_debate = _NO_DEBATE
+
     print(f"\n{'#' * 70}")
-    print(f"# CYCLE {protocol.state.cycle} (mode={mode})")
+    print(
+        f"# CYCLE {protocol.state.cycle} (mode={mode}{', no_debate' if no_debate else ''})"
+    )
     print(f"{'#' * 70}")
+
+    if no_debate:
+        # No-debate mode: skip all LLM phases, run only computational pipeline.
+        # Only supported in full_pool mode.
+        assert mode == "full_pool", "no_debate mode requires full_pool mode"
+
+        # Skip state machine to HUMAN_ARBITRATION for EIG selection
+        protocol.skip_to_phase(Phase.HUMAN_ARBITRATION)
+        result = run_full_pool_selection(protocol, transcript)
+        protocol.advance_phase(result)
+
+        # Execution (no-debate variant: skip agent LLM predictions)
+        result = run_execution(protocol, client, transcript, true_model=true_model)
+        protocol.advance_phase(result)
+
+        # Skip interpretation debate, critique, and audit — no LLM
+
+        # Manually increment cycle (normally done by advance_phase on audit result)
+        protocol.state.cycle += 1
+        return
+
+    # --- Standard (debate) flow below ---
 
     # Phase 1: Commitment (only on first cycle)
     if protocol.state.cycle == 0:
@@ -2687,6 +2748,41 @@ def main():
         default=0.3,
         help="Probability of crux-directed selection in Thompson sampling [0,1]. Default 0.3.",
     )
+    parser.add_argument(
+        "--no-claim-responsive",
+        action="store_true",
+        default=False,
+        help="Disable claim-responsive debate.",
+    )
+    parser.add_argument(
+        "--design-space",
+        choices=["base", "richer", "continuous"],
+        default="continuous",
+        help="Design space: base (55), richer (168), continuous (sampled, default).",
+    )
+    parser.add_argument(
+        "--n-continuous-samples",
+        type=int,
+        default=50,
+        help="Structures sampled per cycle in continuous mode (default: 50).",
+    )
+    parser.add_argument(
+        "--no-richer-design-space",
+        action="store_true",
+        default=False,
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--no-debate",
+        action="store_true",
+        default=False,
+        help="Skip all LLM phases; run only computational pipeline (EIG + models + posterior).",
+    )
+    parser.add_argument(
+        "--experiment",
+        default=None,
+        help="Path to YAML experiment config. Overrides all other flags.",
+    )
     # Two-pass parsing: peek at --config first, then apply config defaults
     # before the real parse so CLI flags override config values.
     pre_args, _ = parser.parse_known_args()
@@ -2695,11 +2791,24 @@ def main():
 
     args = parser.parse_args()
 
+    # If --experiment is provided, delegate to experiment runner
+    if args.experiment:
+        from .experiment import run_experiment
+
+        run_experiment(args.experiment)
+        return
+
     # Resolve model default based on backend
     if args.model is None:
         args.model = _DEFAULT_MODELS[args.backend]
 
-    client = _create_client(backend=args.backend)
+    # No-debate mode: no LLM client needed
+    if args.no_debate:
+        client = None
+        args.mode = "full_pool"  # no_debate requires full_pool
+        args.batch = True
+    else:
+        client = _create_client(backend=args.backend)
 
     # Initialize
     state = EpistemicState(domain="Human Categorization")
@@ -2753,6 +2862,9 @@ def main():
     # Backward compat: --no-richer-design-space maps to design_space=base
     if args.no_richer_design_space:
         _DESIGN_SPACE = "base"
+
+    global _NO_DEBATE
+    _NO_DEBATE = args.no_debate
 
     # Auto-generate output directory if not explicitly set
     if args.output_dir == ".":
@@ -2853,6 +2965,7 @@ _CRUX_WEIGHT = 0.3  # Probability of crux-directed selection in Thompson samplin
 _CLAIM_RESPONSIVE = True  # Agents must address falsified claims in interpretation
 _DESIGN_SPACE = "continuous"  # "base", "richer", or "continuous"
 _N_CONTINUOUS_SAMPLES = 50  # Structures sampled per cycle in continuous mode
+_NO_DEBATE = False  # Skip all LLM phases; run only computational pipeline
 
 
 if __name__ == "__main__":

@@ -1,0 +1,35 @@
+name: debate_ablation
+description: "2x2: Thompson/Greedy x Debate/No-Debate across 3 ground truths"
+
+defaults:
+  cycles: 5
+  mode: full_pool
+  design_space: continuous
+  n_continuous_samples: 50
+  backend: princeton
+  model: gpt-4o
+  learning_rate: 0.005
+  arbiter: true
+  crux_weight: 0.3
+  claim_responsive: true
+  selection_strategy: thompson
+  no_debate: false
+
+ground_truths:
+  - GCM
+  - SUSTAIN
+  - RULEX
+
+conditions:
+  thompson_debate:
+    selection_strategy: thompson
+    no_debate: false
+  thompson_no_debate:
+    selection_strategy: thompson
+    no_debate: true
+  greedy_debate:
+    selection_strategy: greedy
+    no_debate: false
+  greedy_no_debate:
+    selection_strategy: greedy
+    no_debate: true

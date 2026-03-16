@@ -111,6 +111,17 @@ def _build_argparser() -> argparse.ArgumentParser:
         default=50,
         help="Number of structures sampled per cycle in continuous mode (default: 50).",
     )
+    parser.add_argument(
+        "--no-debate",
+        action="store_true",
+        default=False,
+        help="Skip all LLM phases; run only computational pipeline (EIG + models + posterior).",
+    )
+    parser.add_argument(
+        "--experiment",
+        default=None,
+        help="Path to YAML experiment config. Overrides all other flags and runs a multi-condition experiment.",
+    )
     # Deprecated alias — kept for backward compatibility
     parser.add_argument(
         "--no-richer-design-space",
@@ -134,6 +145,16 @@ def _entry():
         demo_divergence_mapping()
         demo_epistemic_state()
         demo_full_cycle()
+    elif "--experiment" in sys.argv:
+        # Extract experiment path from argv
+        idx = sys.argv.index("--experiment")
+        if idx + 1 >= len(sys.argv):
+            print("ERROR: --experiment requires a YAML config path")
+            sys.exit(1)
+        yaml_path = sys.argv[idx + 1]
+        from .experiment import run_experiment
+
+        run_experiment(yaml_path)
     else:
         from .runner import main
 

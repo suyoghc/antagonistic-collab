@@ -9005,3 +9005,352 @@ class TestContinuousDesignSpace:
         )
         assert result["structure_name"] == first_name
         assert "item_accuracies" in result
+
+
+# =============================================================================
+# Experiment Framework + No-Debate Mode (Ablation Study)
+# =============================================================================
+
+
+class TestExperimentFramework:
+    """Tests for YAML experiment config loading and condition expansion."""
+
+    def test_load_experiment_parses_yaml(self):
+        """load_experiment returns correct number of conditions (ground_truths x conditions)."""
+        from antagonistic_collab.experiment import load_experiment
+
+        conditions = load_experiment("experiments/debate_ablation.yaml")
+        # 3 ground truths x 4 conditions = 12
+        assert len(conditions) == 12
+
+    def test_load_experiment_inherits_defaults(self):
+        """Condition params come from defaults when not overridden."""
+        from antagonistic_collab.experiment import load_experiment
+
+        conditions = load_experiment("experiments/debate_ablation.yaml")
+        # All conditions should inherit cycles=5 from defaults
+        for cond in conditions:
+            assert cond.cycles == 5
+            assert cond.design_space == "continuous"
+            assert cond.n_continuous_samples == 50
+            assert cond.learning_rate == 0.005
+
+    def test_load_experiment_condition_overrides(self):
+        """Condition-specific params override defaults."""
+        from antagonistic_collab.experiment import load_experiment
+
+        conditions = load_experiment("experiments/debate_ablation.yaml")
+        # Find the greedy_no_debate conditions
+        greedy_nd = [c for c in conditions if "greedy_no_debate" in c.name]
+        assert len(greedy_nd) == 3  # one per ground truth
+        for cond in greedy_nd:
+            assert cond.selection_strategy == "greedy"
+            assert cond.no_debate is True
+
+    def test_experiment_condition_validation(self):
+        """Invalid selection_strategy raises ValueError."""
+        from antagonistic_collab.experiment import ExperimentCondition
+
+        with pytest.raises(ValueError, match="selection_strategy"):
+            ExperimentCondition(
+                name="bad", true_model="GCM", selection_strategy="invalid"
+            )
+
+    def test_load_experiment_rejects_unknown_keys(self):
+        """Misspelled YAML keys raise ValueError instead of being silently dropped."""
+        import tempfile
+
+        from antagonistic_collab.experiment import load_experiment
+
+        yaml_content = """
+name: typo_test
+defaults:
+  cycles: 2
+  selction_strategy: thompson
+ground_truths:
+  - GCM
+conditions:
+  baseline: {}
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            with pytest.raises(ValueError, match="Unknown keys.*selction_strategy"):
+                load_experiment(f.name)
+        os.unlink(f.name)
+
+    def test_experiment_condition_names(self):
+        """Each condition gets a unique name like thompson_debate_GCM."""
+        from antagonistic_collab.experiment import load_experiment
+
+        conditions = load_experiment("experiments/debate_ablation.yaml")
+        names = [c.name for c in conditions]
+        # All unique
+        assert len(names) == len(set(names))
+        # Names contain condition + ground truth
+        assert "thompson_debate_GCM" in names
+        assert "greedy_no_debate_RULEX" in names
+
+    def test_load_experiment_with_tmpfile(self):
+        """load_experiment works with a minimal custom YAML."""
+        import tempfile
+
+        from antagonistic_collab.experiment import load_experiment
+
+        yaml_content = """
+name: test_exp
+description: "minimal test"
+defaults:
+  cycles: 2
+ground_truths:
+  - GCM
+conditions:
+  baseline:
+    selection_strategy: thompson
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            conditions = load_experiment(f.name)
+        os.unlink(f.name)
+        assert len(conditions) == 1
+        assert conditions[0].name == "baseline_GCM"
+        assert conditions[0].cycles == 2
+        assert conditions[0].true_model == "GCM"
+
+
+class TestNoDebateMode:
+    """Tests for _NO_DEBATE global flag and no-debate execution path."""
+
+    def test_no_debate_skips_llm_phases(self):
+        """run_cycle with _NO_DEBATE=True only runs computational phases."""
+        import antagonistic_collab.runner as runner_mod
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(
+            state, agents, meta_agents=runner_mod.create_default_meta_agents()
+        )
+        transcript = []
+
+        # Save and set globals
+        old_batch = runner_mod._BATCH_MODE
+        old_no_debate = getattr(runner_mod, "_NO_DEBATE", False)
+        old_lr = runner_mod._LEARNING_RATE
+        old_design = runner_mod._DESIGN_SPACE
+
+        try:
+            runner_mod._BATCH_MODE = True
+            runner_mod._NO_DEBATE = True
+            runner_mod._LEARNING_RATE = 0.005
+            runner_mod._DESIGN_SPACE = "continuous"
+
+            # client=None should work in no-debate mode (no LLM calls)
+            runner_mod.run_cycle(
+                protocol,
+                client=None,
+                transcript=transcript,
+                true_model="GCM",
+                mode="full_pool",
+            )
+
+            # Verify no LLM phases were called (no COMMITMENT, DIVERGENCE_MAPPING,
+            # INTERPRETATION_DEBATE messages in transcript)
+            phases = {m.get("phase") for m in transcript}
+            assert "COMMITMENT" not in phases
+            assert "DIVERGENCE_MAPPING" not in phases
+            assert "INTERPRETATION_DEBATE" not in phases
+            assert "INTERPRETATION_CRITIQUE" not in phases
+            assert "AUDIT" not in phases
+
+            # Computational phases should be present
+            assert "FULL_POOL_SELECTION" in phases
+            assert "EXECUTION_DATA" in phases
+
+        finally:
+            runner_mod._BATCH_MODE = old_batch
+            runner_mod._NO_DEBATE = old_no_debate
+            runner_mod._LEARNING_RATE = old_lr
+            runner_mod._DESIGN_SPACE = old_design
+
+    def test_no_debate_still_computes_predictions(self):
+        """Model predictions are registered even without LLM."""
+        import antagonistic_collab.runner as runner_mod
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+        transcript = []
+
+        old_batch = runner_mod._BATCH_MODE
+        old_no_debate = getattr(runner_mod, "_NO_DEBATE", False)
+        old_lr = runner_mod._LEARNING_RATE
+        old_design = runner_mod._DESIGN_SPACE
+
+        try:
+            runner_mod._BATCH_MODE = True
+            runner_mod._NO_DEBATE = True
+            runner_mod._LEARNING_RATE = 0.005
+            runner_mod._DESIGN_SPACE = "continuous"
+
+            runner_mod.run_cycle(
+                protocol,
+                client=None,
+                transcript=transcript,
+                true_model="GCM",
+                mode="full_pool",
+            )
+
+            # Predictions should be registered for all agents
+            predictions = state.predictions
+            assert len(predictions) >= len(agents)
+
+        finally:
+            runner_mod._BATCH_MODE = old_batch
+            runner_mod._NO_DEBATE = old_no_debate
+            runner_mod._LEARNING_RATE = old_lr
+            runner_mod._DESIGN_SPACE = old_design
+
+    def test_no_debate_updates_posterior(self):
+        """Bayesian posterior still updates each cycle."""
+        import antagonistic_collab.runner as runner_mod
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+        transcript = []
+
+        old_batch = runner_mod._BATCH_MODE
+        old_no_debate = getattr(runner_mod, "_NO_DEBATE", False)
+        old_lr = runner_mod._LEARNING_RATE
+        old_design = runner_mod._DESIGN_SPACE
+
+        try:
+            runner_mod._BATCH_MODE = True
+            runner_mod._NO_DEBATE = True
+            runner_mod._LEARNING_RATE = 0.005
+            runner_mod._DESIGN_SPACE = "continuous"
+
+            runner_mod.run_cycle(
+                protocol,
+                client=None,
+                transcript=transcript,
+                true_model="GCM",
+                mode="full_pool",
+            )
+
+            # Posterior should exist and be non-uniform
+            assert state.model_posterior is not None
+            assert "log_probs" in state.model_posterior
+
+        finally:
+            runner_mod._BATCH_MODE = old_batch
+            runner_mod._NO_DEBATE = old_no_debate
+            runner_mod._LEARNING_RATE = old_lr
+            runner_mod._DESIGN_SPACE = old_design
+
+    def test_no_debate_produces_winner(self):
+        """After multiple cycles, leaderboard has a winner."""
+        import antagonistic_collab.runner as runner_mod
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+        transcript = []
+
+        old_batch = runner_mod._BATCH_MODE
+        old_no_debate = getattr(runner_mod, "_NO_DEBATE", False)
+        old_lr = runner_mod._LEARNING_RATE
+        old_design = runner_mod._DESIGN_SPACE
+
+        try:
+            runner_mod._BATCH_MODE = True
+            runner_mod._NO_DEBATE = True
+            runner_mod._LEARNING_RATE = 0.005
+            runner_mod._DESIGN_SPACE = "continuous"
+
+            for _ in range(3):
+                runner_mod.run_cycle(
+                    protocol,
+                    client=None,
+                    transcript=transcript,
+                    true_model="GCM",
+                    mode="full_pool",
+                )
+
+            board = state.prediction_leaderboard()
+            assert board  # Non-empty
+            sorted_board = sorted(
+                board.items(), key=lambda x: x[1].get("mean_score", 999)
+            )
+            winner = sorted_board[0][0]
+            assert winner  # Has a name
+
+        finally:
+            runner_mod._BATCH_MODE = old_batch
+            runner_mod._NO_DEBATE = old_no_debate
+            runner_mod._LEARNING_RATE = old_lr
+            runner_mod._DESIGN_SPACE = old_design
+
+    def test_no_debate_null_client_ok(self):
+        """run_cycle works with client=None when no_debate=True."""
+        import antagonistic_collab.runner as runner_mod
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+        transcript = []
+
+        old_batch = runner_mod._BATCH_MODE
+        old_no_debate = getattr(runner_mod, "_NO_DEBATE", False)
+        old_lr = runner_mod._LEARNING_RATE
+        old_design = runner_mod._DESIGN_SPACE
+
+        try:
+            runner_mod._BATCH_MODE = True
+            runner_mod._NO_DEBATE = True
+            runner_mod._LEARNING_RATE = 0.005
+            runner_mod._DESIGN_SPACE = "continuous"
+
+            # Should not raise any exception
+            runner_mod.run_cycle(
+                protocol,
+                client=None,
+                transcript=transcript,
+                true_model="SUSTAIN",
+                mode="full_pool",
+            )
+
+        finally:
+            runner_mod._BATCH_MODE = old_batch
+            runner_mod._NO_DEBATE = old_no_debate
+            runner_mod._LEARNING_RATE = old_lr
+            runner_mod._DESIGN_SPACE = old_design
+
+    def test_no_debate_config_default_false(self):
+        """default_config.yaml has no_debate: false."""
+        from antagonistic_collab.config import load_config
+
+        config = load_config()
+        assert config.get("no_debate") is False
+
+
+class TestDebateAblationConfig:
+    """Tests for the shipped debate_ablation.yaml experiment config."""
+
+    def test_debate_ablation_yaml_valid(self):
+        """The shipped debate_ablation.yaml loads correctly."""
+        from antagonistic_collab.experiment import load_experiment
+
+        conditions = load_experiment("experiments/debate_ablation.yaml")
+        assert len(conditions) > 0
+
+    def test_debate_ablation_yaml_12_conditions(self):
+        """4 conditions x 3 ground truths = 12."""
+        from antagonistic_collab.experiment import load_experiment
+
+        conditions = load_experiment("experiments/debate_ablation.yaml")
+        assert len(conditions) == 12
+        # Verify ground truths covered
+        gts = {c.true_model for c in conditions}
+        assert gts == {"GCM", "SUSTAIN", "RULEX"}

@@ -145,6 +145,11 @@ critique_rounds: 2
 # In batch mode these auto-continue; in interactive mode they prompt.
 hitl_checkpoints: false
 
+# No-debate mode: skip all LLM phases, run only computational pipeline
+# (EIG selection + model predictions + posterior update). Useful for
+# ablation studies comparing debate vs. no-debate performance.
+no_debate: false
+
 # Non-interactive mode: auto-approve proposals, no human input.
 # Required for Della/SLURM and unattended runs.
 batch: false
