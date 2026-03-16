@@ -12,4 +12,5 @@ debate_cycle_*.md
 epistemic_state_cycle_*.json
 .env
 runs/
+Notes/Learnables/
 CLAUDE.md

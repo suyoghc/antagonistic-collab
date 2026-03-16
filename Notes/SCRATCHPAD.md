@@ -18,7 +18,14 @@ M9 live validation passed: 3/3 correct, 24 parseable crux specs (was 0), 1 crux-
 - New cognitive domains (memory retrieval, decision making)
 - AutoRA integration for real data
 - Longer runs (10+ cycles) to test cumulative reasoning
-- WRITEUP.md Results section
+
+### WRITEUP.md status
+- Sections 1–6 + Appendix A + References complete (~592 lines)
+- **Deferred enhancement:** 4 items from LESSONS_LEARNED.md could strengthen the paper:
+  1. Vivid confabulation example (agents interpreting constant 0.550 data) → Section 5.3
+  2. Exact overclaiming numbers (claimed 0.75, actual 0.180) → Section 5.4
+  3. Mock vs live crux acceptance (100% vs 15%) → Section 6.3
+  4. "12 Theses" sharpest formulations (Thesis 1: "Argumentation without discriminating data is empty") → Section 6.1
 
 ---
 

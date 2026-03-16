@@ -649,4 +649,18 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 
 ---
 
+### Session 26 — 2026-03-15 (WRITEUP.md Results & Discussion)
+- Populated Sections 5 (Results, 5.1–5.6) and 6 (Discussion, 6.1–6.4) of WRITEUP.md
+- Restructured Results to match actual measurements (not original evaluation plan stubs)
+- Section 5.3 is the central narrative: progressive strengthening of debate's causal role across M4–M9
+- Section 5.6 honestly accounts for deviations from the evaluation plan
+- Section 6 complements (not duplicates) Sections 4.6–4.8
+- Added two references: Lakatos (1978), Nosofsky (1991)
+- Wove CHATLOG.md and DECISIONS.md material into main text (discovery narratives, design rationale)
+- Created Appendix A: development timeline (Pre-M4 through M9, problem→decision→outcome)
+- Reviewed LESSONS_LEARNED.md; identified 4 potential additions but deferred for now
+- WRITEUP.md now ~592 lines, all sections complete
+
+---
+
 *This log is maintained manually. Update it at the end of each session.*
