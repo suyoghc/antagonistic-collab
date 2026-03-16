@@ -513,7 +513,19 @@ M11 extends the fixed 11-structure × 5-condition registry (55 candidates) with 
 
 **Tests:** 14 new tests (TestRicherDesignSpaces): config/CLI/global plumbing (3), parametric structure validity (4), parametric condition validity (3), pool generation (2), synthetic runner resolution (2). 315 total passing.
 
-**Validation:** Pending live validation.
+**Live validation (2026-03-16, GPT-4o via Princeton):**
+
+| Ground Truth | Winner | Correct? | RMSE | Gap | Param-S | Param-C |
+|---|---|---|---|---|---|---|
+| GCM | Exemplar_Agent | Yes | 0.075 | 75.8% | 5/5 | 3/5 |
+| SUSTAIN | Clustering_Agent | Yes | 0.022 | 95.6% | 5/5 | 1/5 |
+| RULEX | Rule_Agent | Yes | 0.053 | 83.7% | 5/5 | 1/5 |
+
+**EIG exclusively selects parametric structures.** All 15 experiments across 3 runs used parametric linear_separable variants (3D, 6D with varied separation). No base registry structure was selected. This validates the central motivation: intermediate parameter values reveal model differences that fixed extreme values mask. The 3D linear_separable variants (separation 1.5, 2.5) were heavily favored — these fill the gap between the base 2D and 4D entries.
+
+**Interpolated conditions used selectively.** 5/15 experiments used `mild_noise` or `moderate_attention`. The remaining used base conditions (low_attention, high_attention, high_noise). The moderate_attention condition appeared in the highest-EIG candidate (linear_separable_6d/moderate_attention) in the GCM run.
+
+**Correct identification preserved.** 3/3 correct with decisive gaps (76–96%). The richer pool does not degrade accuracy despite the 3× larger search space.
 
 ---
 

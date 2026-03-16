@@ -4,9 +4,9 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ---
 
-## Current status — M11 implementation done, live validation pending
+## Current status — M11 complete and validated
 
-M11 richer design spaces implemented: pool expanded from 55 to 168 candidates via 13 parametric structures and 2 interpolated conditions. 315 tests passing. Live validation pending.
+M11 richer design spaces complete: pool expanded from 55 to 168 candidates via 13 parametric structures and 2 interpolated conditions. 315 tests passing. Live validation: 3/3 correct, EIG strongly prefers parametric structures (15/15 experiments selected parametric linear_separable variants).
 
 ### Open issues
 1. **SUSTAIN converges too fast** — even tau=0.005 can't slow it because predictions are categorically different. Not a bug.

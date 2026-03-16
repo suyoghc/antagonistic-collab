@@ -912,4 +912,14 @@ Key outcome: Agents engage with falsified claims at 80% rate (12/15 theory inter
 - Config: `no_richer_design_space: false`, CLI: `--no-richer-design-space`, global: `_RICHER_DESIGN_SPACE`
 - 14 tests (TestRicherDesignSpaces), 315 total passing
 
-**Status:** Implementation done. Live validation pending.
+**Live validation (2026-03-16):**
+
+| Ground Truth | Winner | Correct? | RMSE | Gap | Param-S | Param-C |
+|---|---|---|---|---|---|---|
+| GCM | Exemplar_Agent | Yes | 0.075 | 75.8% | 5/5 | 3/5 |
+| SUSTAIN | Clustering_Agent | Yes | 0.022 | 95.6% | 5/5 | 1/5 |
+| RULEX | Rule_Agent | Yes | 0.053 | 83.7% | 5/5 | 1/5 |
+
+Key outcome: EIG strongly prefers parametric structures — 15/15 experiments selected parametric linear_separable variants. The expanded pool provides diagnostic intermediate-separation stimuli that the fixed registry lacked. Parametric conditions selected less frequently (5/15), suggesting conditions are less informative than structural variation for model discrimination.
+
+**Status:** Done.

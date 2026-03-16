@@ -699,7 +699,23 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 
 **Commit:** `2a5823b` feat(M11): richer design spaces — parametric structures + interpolated conditions
 
-**Status:** Implementation done. Live validation pending.
+**Live validation results:**
+
+| Ground Truth | Winner | RMSE | Gap | Param-S | Param-C |
+|---|---|---|---|---|---|
+| GCM | Exemplar_Agent | 0.075 | 75.8% | 5/5 | 3/5 |
+| SUSTAIN | Clustering_Agent | 0.022 | 95.6% | 5/5 | 1/5 |
+| RULEX | Rule_Agent | 0.053 | 83.7% | 5/5 | 1/5 |
+
+**Key findings:**
+- EIG strongly prefers parametric structures: 15/15 experiments selected parametric linear_separable variants
+- Intermediate separations provide diagnostic information the fixed registry lacked
+- Parametric conditions selected less frequently (5/15) — conditions less informative than structural variation
+- All 3 ground truths correct with robust discrimination gaps
+
+**Post-validation docs update:** Updated all project documentation (DECISIONS, PLANNING, SCRATCHPAD, CHATLOG, WRITEUP, TASKS, REPORT, LESSONS_LEARNED) with validation results.
+
+**Status:** M11 complete and validated. 315 tests, 3/3 correct, 40 total validation runs across M4–M11.
 
 ---
 

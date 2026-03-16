@@ -121,14 +121,14 @@ models/
 - [x] Live validation: 3/3 correct, 80% FR rate, all three actions observed (revise, explain, abandon)
 - Literature: Shinn et al. (2023) Reflexion, AGM belief revision (Alchourrón et al. 1985)
 
-### M11: Richer design spaces (IN PROGRESS)
+### M11: Richer design spaces (DONE)
 - [x] Config: `no_richer_design_space: false` (default on), CLI: `--no-richer-design-space`
 - [x] 13 parametric structures (7 linear_separable, 6 rule_plus_exception)
 - [x] 2 interpolated conditions (moderate_attention, mild_noise)
 - [x] Pool expansion: 55 → 168 candidates
 - [x] Resolution in `_synthetic_runner()` and `compute_model_predictions()`
 - [x] 14 tests (TestRicherDesignSpaces), 315 total passing
-- [ ] Live validation: 3 ground truths × 5 cycles
+- [x] Live validation: 3/3 correct (GCM 75.8%, SUSTAIN 95.6%, RULEX 83.7% gaps), 15/15 parametric structures selected
 - Literature: Myung & Pitt (2009), Cavagnaro et al. (2010)
 
 ## Key constraints

@@ -1,6 +1,6 @@
 # Tasks
 
-## In Progress: M11 — Richer Design Spaces
+## Completed: M11 — Richer Design Spaces (DONE)
 
 ### M11 Tasks
 - [x] **Config + CLI** — `no_richer_design_space: false` in default_config.yaml, `--no-richer-design-space` CLI flag, `_RICHER_DESIGN_SPACE` module global, wired through config.py key_map
@@ -10,10 +10,25 @@
 - [x] **Resolution** — `_synthetic_runner()` and `compute_model_predictions()` both resolve parametric structures and conditions via merged lookups
 - [x] **14 new tests** (TestRicherDesignSpaces): config/CLI/global (3), structure validity (4), condition validity (3), pool generation (2), synthetic runner resolution (2). 315 total passing
 - [x] **Documentation** — D39 in DECISIONS.md, REPORT.md 2.2/3.25/4.7/5 updated, PLANNING.md M11 milestone, this file
-- [ ] **Live validation** — Pending: 3 ground truths × 5 cycles with richer=true
+- [x] **Live validation** — 3/3 correct. 15/15 experiments used parametric structures. EIG strongly prefers parametric linear_separable variants.
+
+### M11 Validation Results (richer=true, GPT-4o, 2026-03-16)
+
+| Ground Truth | Winner | Correct? | RMSE | Gap | Param-S | Param-C | FR% |
+|---|---|---|---|---|---|---|---|
+| GCM | Exemplar_Agent | Yes | 0.075 | 75.8% | 5/5 | 3/5 | 80% |
+| SUSTAIN | Clustering_Agent | Yes | 0.022 | 95.6% | 5/5 | 1/5 | 73% |
+| RULEX | Rule_Agent | Yes | 0.053 | 83.7% | 5/5 | 1/5 | 80% |
+
+Key findings:
+- **EIG exclusively selects parametric structures.** 15/15 experiments used parametric linear_separable variants (3d, 6d with varied separation). No base registry structure was selected.
+- **Interpolated conditions used selectively.** 5/15 experiments used `mild_noise` or `moderate_attention`. The remaining used base conditions.
+- **Correct identification preserved.** 3/3 correct with decisive gaps (76–96%). Richer pool does not degrade accuracy.
+- **Parametric structures fill diagnostic gaps.** The 3D linear_separable variants (sep 1.5, 2.5) were heavily favored — these intermediate separations reveal model differences that the base 2D/4D entries miss.
 
 ### M11 Commits
 - `2a5823b` feat(M11): richer design spaces — parametric structures + interpolated conditions
+- `faf2a37` docs: M11 richer design spaces across all project documentation
 
 ### M11 Literature
 - Myung, J. I. & Pitt, M. A. (2009). Optimal experimental design for model discrimination. *Psychological Review, 116*(3), 499–518.
