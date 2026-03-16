@@ -37,7 +37,7 @@ models/
 ### Full-pool mode (`--mode full_pool`)
 1. Commitment (cycle 0 only)
 2. Divergence mapping
-3. Full-pool Bayesian selection — EIG over all 55+ candidates (no LLM calls)
+3. Full-pool Bayesian selection — EIG over all 168 candidates (55 base + 113 parametric; no LLM calls)
 4. Execution + learning curve comparison
 5. Interpretation debate — structured JSON: interpretation, confounds, hypotheses, novel structures
 6. Interpretation critique — agents challenge each other
@@ -120,6 +120,16 @@ models/
 - [x] 7 tests (TestClaimResponsiveDebate), 343 total passing
 - [x] Live validation: 3/3 correct, 80% FR rate, all three actions observed (revise, explain, abandon)
 - Literature: Shinn et al. (2023) Reflexion, AGM belief revision (Alchourrón et al. 1985)
+
+### M11: Richer design spaces (IN PROGRESS)
+- [x] Config: `no_richer_design_space: false` (default on), CLI: `--no-richer-design-space`
+- [x] 13 parametric structures (7 linear_separable, 6 rule_plus_exception)
+- [x] 2 interpolated conditions (moderate_attention, mild_noise)
+- [x] Pool expansion: 55 → 168 candidates
+- [x] Resolution in `_synthetic_runner()` and `compute_model_predictions()`
+- [x] 14 tests (TestRicherDesignSpaces), 315 total passing
+- [ ] Live validation: 3 ground truths × 5 cycles
+- Literature: Myung & Pitt (2009), Cavagnaro et al. (2010)
 
 ## Key constraints
 

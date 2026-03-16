@@ -1,7 +1,7 @@
 # Antagonistic Collaboration via LLM Debate: Can AI Agents Resolve Scientific Disputes?
 
-**Phase: M10 — Claim-Responsive Debate (updated)**
-**Date: 2026-03-15** (originally 2026-03-14; updated through M10 validation results)
+**Phase: M11 — Richer Design Spaces (updated)**
+**Date: 2026-03-16** (originally 2026-03-14; updated through M11 implementation)
 
 ---
 
@@ -59,15 +59,21 @@ All three models implement `predict(stimulus, training_items, training_labels) �
 
 ### 2.2 Category structures and conditions
 
-The experiment space consists of **11 category structures** × **5 experimental conditions** = 55 candidate experiments.
+The base experiment space consists of **11 category structures** × **5 experimental conditions** = 55 candidate experiments. With richer design spaces enabled (M11, default), the pool expands to **24 structures** × **7 conditions** = 168 candidates.
 
-**Structures** (from STRUCTURE_REGISTRY):
+**Base structures** (from STRUCTURE_REGISTRY, 11):
 - Shepard Types I–VI (Shepard, Hovland & Jenkins 1961) — canonical structures varying from single-dimension rules (Type I) to all-exceptions parity problems (Type VI)
 - Medin & Schaffer (1978) five-four structure — 9 items with complex category boundary
 - Rule-plus-exception structures (1 and 2 exceptions per category)
 - Linear separable structures (2D and 4D Gaussian clusters)
 
-**Conditions** (from CONDITION_EFFECTS): baseline, low_attention, high_attention, fast_presentation, high_noise. Each condition maps to model-specific parameter perturbations (e.g., low_attention: GCM c=1.5, SUSTAIN r=3.0, RULEX p_single=0.3).
+**Parametric structures** (from PARAMETRIC_STRUCTURES, 13; M11):
+- Linear separable variants: 7 structures varying separation (1.0, 1.5, 2.5, 3.0) and dimensionality (2D, 3D, 4D, 6D). Intermediate separation reveals model differences that extreme values mask.
+- Rule-plus-exception variants: 6 structures varying dimensionality (3D, 5D, 6D) and exception count (1, 2, 3). More exceptions test SUSTAIN cluster recruitment; more dimensions test attention allocation.
+
+**Base conditions** (from CONDITION_EFFECTS, 5): baseline, low_attention, high_attention, fast_presentation, high_noise. Each condition maps to model-specific parameter perturbations (e.g., low_attention: GCM c=1.5, SUSTAIN r=3.0, RULEX p_single=0.3).
+
+**Interpolated conditions** (from PARAMETRIC_CONDITIONS, 2; M11): moderate_attention (midpoint of low/high), mild_noise (between baseline and high_noise). These fill gaps in the condition space where model predictions may differ diagnostically.
 
 ### 2.3 Debate protocol
 
@@ -493,6 +499,22 @@ M10 adds a claim-responsive directive to the interpretation prompt (D38): when a
 
 **JSON compliance is high.** 80% falsified_response compliance vs 23% crux format compliance (M9). The difference reflects task complexity: crux format requires matching exact structure/condition pairs from a 55-entry registry; falsified_response requires free-text reasoning within a simple schema that aligns with what the agent is already doing.
 
+### 3.25 M11: Richer design spaces — parametric structures and interpolated conditions
+
+M11 extends the fixed 11-structure × 5-condition registry (55 candidates) with parametrically generated structures and interpolated conditions (168 candidates total). The motivation is from the optimal experimental design literature: EIG performs best when the design space is continuous rather than discrete, allowing the search to find diagnostic sweet spots between fixed options (Myung & Pitt 2009; Cavagnaro et al. 2010).
+
+**Parametric structures (13 new):** Linear separable variants span separation {1.0, 1.5, 2.5, 3.0} × dimensionality {2D, 3D, 4D, 6D} (7 structures). Rule-plus-exception variants span dimensionality {3D, 5D, 6D} × exceptions {1, 2, 3} (6 structures). Each is generated with a deterministic seed for reproducibility. All pass `validate_novel_structure()`.
+
+**Interpolated conditions (2 new):** `moderate_attention` (midpoint between low and high attention parameters for all models) and `mild_noise` (between baseline and high_noise). These fill gaps where diagnostic model differences may emerge at intermediate parameter values.
+
+**Design rationale:** The parametric structures target the two generator families with continuous parameters (`linear_separable` and `rule_plus_exception`). Shepard types are fixed 3-binary-dimension structures and cannot be meaningfully parameterized. The interpolated conditions target the two most diagnostically relevant dimensions (attention and noise) based on M4–M9 results showing these conditions produce the largest inter-model divergence.
+
+**Config:** `no_richer_design_space: false` (default on). CLI: `--no-richer-design-space`. `generate_full_candidate_pool(richer=True|False)`. All existing code paths (`_synthetic_runner`, `compute_model_predictions`) resolve parametric entries automatically.
+
+**Tests:** 14 new tests (TestRicherDesignSpaces): config/CLI/global plumbing (3), parametric structure validity (4), parametric condition validity (3), pool generation (2), synthetic runner resolution (2). 315 total passing.
+
+**Validation:** Pending live validation.
+
 ---
 
 ## 4. Discussion
@@ -566,17 +588,18 @@ The combined M7+M8+M9 solution (tempering + Thompson + crux-directed mixture) ke
 ### 4.7 Future directions
 
 1. **Higher crux-directed selection rates** — M9 establishes the crux→experiment causal path (1/15 experiments in validation). Higher rates require either a larger crux_weight, fuzzy matching that maps cruxes to nearby pool entries, or constrained decoding (Tam et al. 2024) to guarantee format compliance. The convergence between crux-directed and EIG-driven selection (Corcoran et al. 2023) suggests the unique value of cruxes may be at the margins — pointing to experiments that EIG undervalues.
-2. **Claim-responsive debate (M10 — DONE)** — agents now receive explicit directives listing their falsified claims and must address each one (revise, explain, or abandon) via a `"falsified_response"` JSON field. Inspired by Shinn et al.'s Reflexion (NeurIPS 2023). Config: `no_claim_responsive` (default false), CLI: `--no-claim-responsive`. 7 tests, 343 total passing. Live validation: 3/3 correct, 80% falsified_response rate (100% when applicable), "explain" dominates over "revise" and "abandon" (Lakatos-compatible auxiliary hypothesis shielding)
-3. **Longer runs (10+ cycles)** — assess whether Thompson sampling's structural diversity compounds over many cycles, whether novel structures eventually outperform registry structures, and whether the claim ledger produces cumulative reasoning at longer horizons
-4. **Non-myopic experiment selection** — full Myopic Posterior Sampling (Kandasamy et al. 2019) or deep adaptive design (Foster et al. 2021) could replace the current simplified Thompson implementation
-5. **Cross-domain generalization** — apply the framework to other multi-model disputes in cognitive science (memory models, decision-making theories)
-6. **Real data integration** — AutoRA + Prolific for closing the loop with human participants
+2. **Claim-responsive debate (M10 — DONE)** — agents now receive explicit directives listing their falsified claims and must address each one (revise, explain, or abandon) via a `"falsified_response"` JSON field. Inspired by Shinn et al.'s Reflexion (NeurIPS 2023). Live validation: 3/3 correct, 80% FR rate (100% when applicable), "explain" dominates (Lakatos-compatible)
+3. **Richer design spaces (M11 — DONE)** — extends the fixed 55-candidate pool to 168 candidates via parametric structures (13) and interpolated conditions (2). EIG now searches a more continuous design space (Myung & Pitt 2009; Cavagnaro et al. 2010). Config: `no_richer_design_space` (default false). 14 tests, 315 total. Validation pending.
+4. **Longer runs (10+ cycles)** — assess whether Thompson sampling's structural diversity compounds over many cycles, whether novel structures eventually outperform registry structures, and whether the claim ledger produces cumulative reasoning at longer horizons
+5. **Non-myopic experiment selection** — full Myopic Posterior Sampling (Kandasamy et al. 2019) or deep adaptive design (Foster et al. 2021) could replace the current simplified Thompson implementation
+6. **Cross-domain generalization** — apply the framework to other multi-model disputes in cognitive science (memory models, decision-making theories)
+7. **Real data integration** — AutoRA + Prolific for closing the loop with human participants
 
 ---
 
 ## 5. Conclusion
 
-Antagonistic collaboration via LLM debate can successfully identify the correct model from competing theories. The mechanism of convergence is primarily Bayesian computation, but successive milestones have progressively strengthened debate's causal role. M5's feedback loop closures create non-zero replication variance through parameter revision persistence. M6's ARBITER integration adds role-specialized meta-agents, crux-based negotiation, conflict maps, and pre-registration output, enriching debate quality while preserving correct convergence (3/3 ground truths, 36–68% gaps). M7's likelihood tempering (tau=0.005) resolves the posterior collapse bottleneck, achieving gradual convergence where later cycles are genuinely informative (EIG>0 through cycle 4). M8's Thompson sampling replaces greedy experiment selection with principled exploration: 12 unique structures (6 novel) vs greedy's 3 (0 novel). M9's crux-directed Thompson sampling fixes the broken crux-to-experiment pipeline (0 parseable crux specs across all prior runs → 24 across 3 validation runs) and establishes the first semantically directed path from debate to experiment selection: accepted cruxes bias the mixture distribution toward experiments that resolve specific theoretical disagreements. In the GCM validation run, crux `crux_004` directly selected `rule_plus_exception_1exc/high_noise` — the first time a debate-identified theoretical fault line determined which experiment ran. The system operates as a falsification engine: 44 claims falsified vs 1 confirmed across M6 runs. The optimal architecture separates computation (experiment selection via tempered EIG + crux-directed Thompson sampling, posterior update) from language (interpretation, hypothesis generation, crux identification, novel structure design), connecting them through validated feedback paths (parameter persistence, claim verification, novel structure registration, crux-directed selection). M10's claim-responsive debate addresses one of these limitations: agents with falsified claims now must explicitly acknowledge, revise, or explain each failure (80% compliance, 100% when applicable). The dominant response is "explain" — attributing falsification to confounds and boundary conditions — reproducing Lakatos's auxiliary hypothesis shielding without being programmed to do so. This closes the ignoring gap (agents no longer pretend falsification didn't happen) but not the calibration gap (overclaiming persists at 3–5×). The framework demonstrates both the promise and the current boundaries of LLMs in the scientific method: they identify genuine theoretical fault lines, propose novel experiments, produce human-readable mechanistic narratives, and — when directed — engage with disconfirming evidence through structured scientific reasoning. They cannot yet learn cumulatively without external scaffolding, nor calibrate their quantitative expectations to match their computational models.
+Antagonistic collaboration via LLM debate can successfully identify the correct model from competing theories. The mechanism of convergence is primarily Bayesian computation, but successive milestones have progressively strengthened debate's causal role. M5's feedback loop closures create non-zero replication variance through parameter revision persistence. M6's ARBITER integration adds role-specialized meta-agents, crux-based negotiation, conflict maps, and pre-registration output, enriching debate quality while preserving correct convergence (3/3 ground truths, 36–68% gaps). M7's likelihood tempering (tau=0.005) resolves the posterior collapse bottleneck, achieving gradual convergence where later cycles are genuinely informative (EIG>0 through cycle 4). M8's Thompson sampling replaces greedy experiment selection with principled exploration: 12 unique structures (6 novel) vs greedy's 3 (0 novel). M9's crux-directed Thompson sampling fixes the broken crux-to-experiment pipeline (0 parseable crux specs across all prior runs → 24 across 3 validation runs) and establishes the first semantically directed path from debate to experiment selection: accepted cruxes bias the mixture distribution toward experiments that resolve specific theoretical disagreements. In the GCM validation run, crux `crux_004` directly selected `rule_plus_exception_1exc/high_noise` — the first time a debate-identified theoretical fault line determined which experiment ran. The system operates as a falsification engine: 44 claims falsified vs 1 confirmed across M6 runs. The optimal architecture separates computation (experiment selection via tempered EIG + crux-directed Thompson sampling, posterior update) from language (interpretation, hypothesis generation, crux identification, novel structure design), connecting them through validated feedback paths (parameter persistence, claim verification, novel structure registration, crux-directed selection). M10's claim-responsive debate addresses one of these limitations: agents with falsified claims now must explicitly acknowledge, revise, or explain each failure (80% compliance, 100% when applicable). The dominant response is "explain" — attributing falsification to confounds and boundary conditions — reproducing Lakatos's auxiliary hypothesis shielding without being programmed to do so. This closes the ignoring gap (agents no longer pretend falsification didn't happen) but not the calibration gap (overclaiming persists at 3–5×). M11's richer design spaces extend the candidate pool from 55 to 168 by adding parametric structures and interpolated conditions, giving EIG a more continuous search space to find diagnostic sweet spots (Myung & Pitt 2009; Cavagnaro et al. 2010). The framework demonstrates both the promise and the current boundaries of LLMs in the scientific method: they identify genuine theoretical fault lines, propose novel experiments, produce human-readable mechanistic narratives, and — when directed — engage with disconfirming evidence through structured scientific reasoning. They cannot yet learn cumulatively without external scaffolding, nor calibrate their quantitative expectations to match their computational models.
 
 ---
 

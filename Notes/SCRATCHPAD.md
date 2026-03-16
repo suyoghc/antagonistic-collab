@@ -4,20 +4,20 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ---
 
-## Current status — M10 complete
+## Current status — M11 implementation done, live validation pending
 
-M10 claim-responsive debate validated: 3/3 correct, 80% falsified_response rate. Agents engage with falsified claims via revise/explain/abandon actions. "Explain" dominates (Lakatos-compatible). Overclaiming persists but agents now confront failures.
+M11 richer design spaces implemented: pool expanded from 55 to 168 candidates via 13 parametric structures and 2 interpolated conditions. 315 tests passing. Live validation pending.
 
 ### Open issues
 1. **SUSTAIN converges too fast** — even tau=0.005 can't slow it because predictions are categorically different. Not a bug.
-2. **Low crux-directed rate** — 1/15 experiments (6.7% vs 30% theoretical). Most cruxes reference structures already in the EIG frontier. Consider fuzzy matching or higher crux_weight for future work.
+2. **Low crux-directed rate** — 1/15 experiments (6.7% vs 30% theoretical). Most cruxes reference structures already in the EIG frontier. Richer pool may help by giving cruxes more matching candidates.
 3. **Low format compliance** — 24/105 cruxes parsed (23%). Agents prefer semantic expressiveness over structured format.
 
 ### Possible next steps
-- Claim-responsive debate: agents should address prior falsified claims
 - New cognitive domains (memory retrieval, decision making)
 - AutoRA integration for real data
 - Longer runs (10+ cycles) to test cumulative reasoning
+- Continuous parameterization (fully generative design space, not discrete expansion)
 
 ### WRITEUP.md status
 - Sections 1–6 + Appendix A + References complete (~592 lines)

@@ -883,3 +883,33 @@ Key outcome: Before M9, 0 crux boost specs were parsed across all runs (100+ cru
 Key outcome: Agents engage with falsified claims at 80% rate (12/15 theory interpretations include structured `falsified_response` fields; 3 missing are cycle-0 where no claims yet exist). All three response actions observed: revise (adjusting parameters), explain (attributing to confounds), abandon (1 instance). "Explain" dominates — consistent with Lakatos's auxiliary hypothesis shielding. Overclaiming persists (claimed 0.65–0.85, actual 0.10–0.50) but agents now confront their failures rather than ignoring them.
 
 **Status:** Done.
+
+---
+
+## D39: Richer design spaces — parametric structures + interpolated conditions — 2026-03-16
+
+**Problem:** The fixed 11-structure × 5-condition registry (55 candidates) constrains EIG to a discrete search space. Optimal experimental design performs best with continuous or near-continuous design spaces (Myung & Pitt 2009; Cavagnaro et al. 2010). Intermediate parameter values (e.g., cluster separation=1.5 between the existing 2.0 entries, or moderate attention between low and high) may reveal model differences that extreme fixed values mask.
+
+**Decision:** Add 13 parametric structures and 2 interpolated conditions, expanding the pool from 55 to 168 candidates. Parametric structures are generated at import time using the same `linear_separable()` and `rule_plus_exception()` generators already used for the base registry, with different parameter combinations. Interpolated conditions are hand-specified midpoints of existing condition parameters.
+
+**Structures added:**
+- `linear_separable_{2,3,4,6}d_sep{1.0,1.5,2.5,3.0}` — 7 variants filling in separation × dimensionality gaps
+- `rule_plus_exception_{3,5,6}d_{1,2,3}exc` — 6 variants filling in dimensionality × exception count gaps
+
+**Conditions added:**
+- `moderate_attention` — midpoint of low_attention (c=1.5) and high_attention (c=6.0): GCM c=3.5, SUSTAIN r=7.5, RULEX p_single=0.5
+- `mild_noise` — between baseline and high_noise: GCM c=3.0, SUSTAIN η=0.07/r=7.0, RULEX tol=0.15
+
+**Alternatives considered:**
+1. **Continuous parameterization** (sample random parameters per cycle) — More principled for OED but breaks reproducibility and makes debugging harder. Deferred.
+2. **Only expand structures, not conditions** — Conditions affect all models through parameter overrides; interpolated conditions provide cheap diagnostic information.
+3. **Larger expansion** (50+ parametric structures) — Diminishing returns. EIG computation scales linearly with pool size; 168 is 3× larger, keeping selection under 1 minute.
+
+**Implementation:**
+- `PARAMETRIC_STRUCTURES` and `PARAMETRIC_CONDITIONS` dicts in `debate_protocol.py` (generated at import time)
+- `generate_full_candidate_pool(richer=True|False)` in `bayesian_selection.py`
+- `_synthetic_runner()` and `compute_model_predictions()` resolve parametric entries via merged lookups
+- Config: `no_richer_design_space: false`, CLI: `--no-richer-design-space`, global: `_RICHER_DESIGN_SPACE`
+- 14 tests (TestRicherDesignSpaces), 315 total passing
+
+**Status:** Implementation done. Live validation pending.

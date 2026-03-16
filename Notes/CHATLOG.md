@@ -684,4 +684,23 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 
 ---
 
+### Session 28 — 2026-03-16 (M11: Richer Design Spaces)
+- Implemented richer design spaces: extends the fixed 55-candidate pool to 168 via parametric structures and interpolated conditions
+- Motivation: optimal experimental design performs best with continuous design spaces (Myung & Pitt 2009; Cavagnaro et al. 2010). Intermediate parameter values reveal model differences that extreme fixed values mask.
+- 13 parametric structures: 7 linear_separable variants (sep ∈ {1.0,1.5,2.5,3.0}, dims ∈ {2,3,4,6}), 6 rule_plus_exception variants (dims ∈ {3,5,6}, exc ∈ {1,2,3})
+- 2 interpolated conditions: moderate_attention (midpoint low/high), mild_noise (between baseline/high_noise)
+- Config: `no_richer_design_space: false` (default on), CLI: `--no-richer-design-space`
+- `generate_full_candidate_pool(richer=True|False)` in bayesian_selection.py
+- `_synthetic_runner()` and `compute_model_predictions()` resolve parametric entries via merged lookups
+- 14 new tests (TestRicherDesignSpaces), 315 total passing
+- Updated 4 existing tests that assumed 55-candidate pool size to pass `richer=False`
+- D39 in DECISIONS.md
+- Updated all docs: REPORT.md 2.2/3.25/4.7/5, PLANNING.md M11, TASKS.md M11, SCRATCHPAD.md
+
+**Commit:** `2a5823b` feat(M11): richer design spaces — parametric structures + interpolated conditions
+
+**Status:** Implementation done. Live validation pending.
+
+---
+
 *This log is maintained manually. Update it at the end of each session.*

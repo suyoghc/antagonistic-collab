@@ -1,5 +1,26 @@
 # Tasks
 
+## In Progress: M11 — Richer Design Spaces
+
+### M11 Tasks
+- [x] **Config + CLI** — `no_richer_design_space: false` in default_config.yaml, `--no-richer-design-space` CLI flag, `_RICHER_DESIGN_SPACE` module global, wired through config.py key_map
+- [x] **Parametric structures** — 13 new structures: 7 linear_separable variants (separation × dimensionality), 6 rule_plus_exception variants (dimensionality × exception count). All generated at import time with deterministic seeds, pass `validate_novel_structure()`
+- [x] **Interpolated conditions** — 2 new conditions: `moderate_attention` (midpoint low/high), `mild_noise` (between baseline/high_noise)
+- [x] **Pool generation** — `generate_full_candidate_pool(richer=True|False)` includes parametric entries when enabled. Pool expands from 55 to 168 candidates
+- [x] **Resolution** — `_synthetic_runner()` and `compute_model_predictions()` both resolve parametric structures and conditions via merged lookups
+- [x] **14 new tests** (TestRicherDesignSpaces): config/CLI/global (3), structure validity (4), condition validity (3), pool generation (2), synthetic runner resolution (2). 315 total passing
+- [x] **Documentation** — D39 in DECISIONS.md, REPORT.md 2.2/3.25/4.7/5 updated, PLANNING.md M11 milestone, this file
+- [ ] **Live validation** — Pending: 3 ground truths × 5 cycles with richer=true
+
+### M11 Commits
+- `2a5823b` feat(M11): richer design spaces — parametric structures + interpolated conditions
+
+### M11 Literature
+- Myung, J. I. & Pitt, M. A. (2009). Optimal experimental design for model discrimination. *Psychological Review, 116*(3), 499–518.
+- Cavagnaro, D. R., Myung, J. I., Pitt, M. A., & Kujala, J. V. (2010). Adaptive design optimization: A mutual information-based approach to model discrimination in cognitive science. *Neural Computation, 22*(4), 887–905.
+
+---
+
 ## Completed: M10 — Claim-Responsive Debate (DONE)
 
 ### M10 Tasks
