@@ -13,9 +13,13 @@ dependencies = [
     "numpy>=1.24",
     "scipy>=1.10",
     "anthropic>=0.30",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
+princeton = [
+    "openai>=1.0",
+]
 autora = [
     "autora",
     "autora[experimentalist-falsification]",
