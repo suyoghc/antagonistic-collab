@@ -1242,6 +1242,12 @@ def run_full_pool_selection(
                 f"(weight={_CRUX_WEIGHT:.1f}, ids={crux_ids})"
             )
 
+    # Claim-directed selection: boost experiments matching testable claims
+    claim_specs = claims_to_boost_specs(protocol.state)
+    if claim_specs:
+        print(f"  Claim-directed: {len(claim_specs)} testable claims targeting pool candidates")
+    boost_specs = boost_specs + claim_specs
+
     best_idx, eig_scores = select_from_pool(
         protocol,
         posterior,
@@ -1950,6 +1956,46 @@ def cruxes_to_boost_specs(state: EpistemicState) -> list[dict]:
                 "crux_id": crux.id,
             }
         )
+    return specs
+
+
+def claims_to_boost_specs(state: EpistemicState) -> list[dict]:
+    """Convert untested testable claims into boost specs for EIG selection.
+
+    Filters claims to those that are untested, testable, and have valid
+    structure/condition fields. Validates against the full pool universe
+    (STRUCTURE_REGISTRY + PARAMETRIC_STRUCTURES + sampled/temporary structures).
+    Deduplicates by (structure, condition).
+    Returns list of {"structure": ..., "condition": ...} — same shape as crux specs.
+    """
+    from .debate_protocol import (
+        STRUCTURE_REGISTRY,
+        CONDITION_EFFECTS,
+        PARAMETRIC_STRUCTURES,
+        PARAMETRIC_CONDITIONS,
+    )
+
+    valid_structures = set(STRUCTURE_REGISTRY.keys()) | set(PARAMETRIC_STRUCTURES.keys())
+    valid_conditions = set(CONDITION_EFFECTS.keys()) | set(PARAMETRIC_CONDITIONS.keys())
+
+    seen = set()
+    specs = []
+    for claim in state.get_active_claims():
+        if not claim.testable:
+            continue
+        if not claim.structure or not claim.condition:
+            continue
+        if claim.structure not in valid_structures:
+            continue
+        if claim.condition not in valid_conditions:
+            continue
+
+        key = (claim.structure, claim.condition)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        specs.append({"structure": claim.structure, "condition": claim.condition})
     return specs
 
 

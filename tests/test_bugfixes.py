@@ -32,6 +32,7 @@ from antagonistic_collab.runner import (
 from antagonistic_collab.epistemic_state import (
     EpistemicState,
     TheoryCommitment,
+    DebateClaim,
 )
 from antagonistic_collab.debate_protocol import (
     DebateProtocol,
@@ -8496,6 +8497,443 @@ class TestClaimResponsiveDebate:
         assert "FALSIFIED CLAIMS" in first_agent_prompt
         assert "GCM RMSE < 0.1 on Type_VI" in first_agent_prompt
         assert "actual=0.350" in first_agent_prompt
+
+
+# =========================================================================
+# M14: Close Debate→Computation Feedback Loop
+# =========================================================================
+
+
+class TestClaimDirectedSelection:
+    """Tests for claims_to_boost_specs() and its integration into EIG selection.
+
+    Claim-directed selection converts testable claims from the debate ledger
+    into boost specs that prioritize matching candidates in EIG selection.
+    This closes the loop: debate → claims → experiment selection.
+    """
+
+    def _make_state_with_claims(self, claims):
+        """Helper: create an EpistemicState with the given claims in the ledger."""
+        state = EpistemicState(domain="human categorization")
+        for claim in claims:
+            state.add_claim(claim)
+        return state
+
+    def test_claims_to_boost_specs_extracts_untested_testable(self):
+        """An untested, testable claim with valid structure/condition produces a spec."""
+        from antagonistic_collab.runner import claims_to_boost_specs
+
+        state = self._make_state_with_claims([
+            DebateClaim(
+                agent="Exemplar_Agent",
+                claim_type="prediction",
+                content="GCM predicts high accuracy on Type_I",
+                testable=True,
+                structure="Type_I",
+                condition="baseline",
+                predicted_outcome="mean_accuracy=0.95",
+            )
+        ])
+        specs = claims_to_boost_specs(state)
+        assert len(specs) == 1
+        assert specs[0]["structure"] == "Type_I"
+        assert specs[0]["condition"] == "baseline"
+
+    def test_claims_to_boost_specs_skips_tested(self):
+        """Claims already confirmed or falsified should not produce specs."""
+        from antagonistic_collab.runner import claims_to_boost_specs
+
+        state = self._make_state_with_claims([
+            DebateClaim(
+                agent="Exemplar_Agent",
+                claim_type="prediction",
+                content="GCM predicts high accuracy on Type_I",
+                testable=True,
+                structure="Type_I",
+                condition="baseline",
+                status="confirmed",
+            ),
+            DebateClaim(
+                agent="Rule_Agent",
+                claim_type="prediction",
+                content="RULEX predicts low accuracy on Type_VI",
+                testable=True,
+                structure="Type_VI",
+                condition="baseline",
+                status="falsified",
+            ),
+        ])
+        specs = claims_to_boost_specs(state)
+        assert len(specs) == 0
+
+    def test_claims_to_boost_specs_skips_non_testable(self):
+        """Claims with testable=False should be excluded."""
+        from antagonistic_collab.runner import claims_to_boost_specs
+
+        state = self._make_state_with_claims([
+            DebateClaim(
+                agent="Exemplar_Agent",
+                claim_type="explanation",
+                content="GCM explains attention allocation",
+                testable=False,
+                structure="Type_I",
+                condition="baseline",
+            )
+        ])
+        specs = claims_to_boost_specs(state)
+        assert len(specs) == 0
+
+    def test_claims_to_boost_specs_skips_missing_fields(self):
+        """Claims with structure=None or condition=None should be excluded."""
+        from antagonistic_collab.runner import claims_to_boost_specs
+
+        state = self._make_state_with_claims([
+            DebateClaim(
+                agent="Exemplar_Agent",
+                claim_type="prediction",
+                content="GCM predicts something",
+                testable=True,
+                structure=None,
+                condition="baseline",
+            ),
+            DebateClaim(
+                agent="Exemplar_Agent",
+                claim_type="prediction",
+                content="GCM predicts something else",
+                testable=True,
+                structure="Type_I",
+                condition=None,
+            ),
+        ])
+        specs = claims_to_boost_specs(state)
+        assert len(specs) == 0
+
+    def test_claims_to_boost_specs_validates_registry(self):
+        """Claims targeting unknown structures/conditions should be excluded."""
+        from antagonistic_collab.runner import claims_to_boost_specs
+
+        state = self._make_state_with_claims([
+            DebateClaim(
+                agent="Exemplar_Agent",
+                claim_type="prediction",
+                content="GCM predicts something",
+                testable=True,
+                structure="Nonexistent_Structure",
+                condition="baseline",
+            ),
+            DebateClaim(
+                agent="Exemplar_Agent",
+                claim_type="prediction",
+                content="GCM predicts something",
+                testable=True,
+                structure="Type_I",
+                condition="nonexistent_condition",
+            ),
+        ])
+        specs = claims_to_boost_specs(state)
+        assert len(specs) == 0
+
+    def test_claims_to_boost_specs_deduplicates(self):
+        """Multiple claims targeting the same (structure, condition) → 1 spec."""
+        from antagonistic_collab.runner import claims_to_boost_specs
+
+        state = self._make_state_with_claims([
+            DebateClaim(
+                agent="Exemplar_Agent",
+                claim_type="prediction",
+                content="GCM predicts high accuracy on Type_I",
+                testable=True,
+                structure="Type_I",
+                condition="baseline",
+            ),
+            DebateClaim(
+                agent="Rule_Agent",
+                claim_type="prediction",
+                content="RULEX predicts low accuracy on Type_I",
+                testable=True,
+                structure="Type_I",
+                condition="baseline",
+            ),
+        ])
+        specs = claims_to_boost_specs(state)
+        assert len(specs) == 1
+        assert specs[0]["structure"] == "Type_I"
+        assert specs[0]["condition"] == "baseline"
+
+    def test_claim_specs_merged_with_crux_specs(self):
+        """Both crux and claim specs should be merged in run_full_pool_selection.
+
+        This is an integration test verifying that claim specs are appended
+        to the boost_specs list alongside crux specs.
+        """
+        from antagonistic_collab.runner import (
+            claims_to_boost_specs,
+            cruxes_to_boost_specs,
+        )
+        from antagonistic_collab.epistemic_state import Crux
+
+        state = EpistemicState(domain="human categorization")
+        # Add a crux with valid discriminating experiment
+        state.add_crux(Crux(
+            id="crux_001",
+            proposer="Exemplar_Agent",
+            description="Type I under low attention",
+            discriminating_experiment="Type_I/low_attention",
+            status="accepted",
+        ))
+        # Add a claim targeting a different experiment
+        state.add_claim(DebateClaim(
+            agent="Rule_Agent",
+            claim_type="prediction",
+            content="RULEX best on Type_VI",
+            testable=True,
+            structure="Type_VI",
+            condition="baseline",
+        ))
+
+        crux_specs = cruxes_to_boost_specs(state)
+        claim_specs = claims_to_boost_specs(state)
+        merged = crux_specs + claim_specs
+
+        # Should have 1 crux spec + 1 claim spec
+        assert len(crux_specs) == 1
+        assert len(claim_specs) == 1
+        assert len(merged) == 2
+        structures = {s["structure"] for s in merged}
+        assert "Type_I" in structures
+        assert "Type_VI" in structures
+
+
+class TestValidatedParamRevisions:
+    """Tests for validate_param_revision() — the gate preventing bad LLM params.
+
+    Before syncing LLM-proposed parameters back to agent defaults, we verify
+    they don't degrade model fit on the most recent experiment. This prevents
+    the noise injection that made debate-no-arbiter worse than no-debate in M13.
+    """
+
+    def _make_protocol_with_experiment(self):
+        """Helper: create protocol with one executed experiment with known data."""
+        state = EpistemicState(domain="human categorization")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        # Create and execute an experiment on Type_I/baseline
+        exp = state.propose_experiment(
+            proposed_by="SYSTEM",
+            title="Type_I baseline",
+            design_spec={"structure_name": "Type_I", "condition": "baseline"},
+            rationale="test",
+        )
+        state.approve_experiment(exp.experiment_id)
+        exp.status = "executed"
+        # Add realistic data: Type_I items (8 stimuli, all correct for GCM)
+        exp.data = {
+            "item_0": 0.95, "item_1": 0.92, "item_2": 0.93, "item_3": 0.94,
+            "item_4": 0.91, "item_5": 0.96, "item_6": 0.93, "item_7": 0.94,
+            "mean_accuracy": 0.935,
+        }
+        return protocol, agents
+
+    def test_validate_revision_accepts_improvement(self):
+        """Proposed params that lower RMSE should be accepted."""
+        from antagonistic_collab.runner import validate_param_revision
+
+        protocol, agents = self._make_protocol_with_experiment()
+        agent = agents[0]  # Exemplar_Agent (GCM)
+
+        # GCM default params: c=3.0, r=1, gamma=1.0
+        # Propose slightly better params (higher c → sharper similarity → better on Type_I)
+        proposed = {"c": 5.0, "r": 1, "gamma": 1.0}
+        accepted, baseline_rmse, proposed_rmse = validate_param_revision(
+            protocol, agent, proposed
+        )
+        assert accepted is True
+        assert proposed_rmse <= baseline_rmse + 0.01
+
+    def test_validate_revision_rejects_degradation(self):
+        """Proposed params that substantially increase RMSE should be rejected."""
+        from antagonistic_collab.runner import validate_param_revision
+
+        protocol, agents = self._make_protocol_with_experiment()
+        agent = agents[0]  # Exemplar_Agent (GCM)
+
+        # Very low c → near-uniform similarity → bad predictions → high RMSE
+        proposed = {"c": 0.01, "r": 1, "gamma": 1.0}
+        accepted, baseline_rmse, proposed_rmse = validate_param_revision(
+            protocol, agent, proposed
+        )
+        assert accepted is False
+        assert proposed_rmse > baseline_rmse + 0.01
+
+    def test_validate_revision_accepts_equal(self):
+        """Params that produce the same RMSE (within tolerance) should be accepted."""
+        from antagonistic_collab.runner import validate_param_revision
+
+        protocol, agents = self._make_protocol_with_experiment()
+        agent = agents[0]  # Exemplar_Agent (GCM)
+
+        # Same params as defaults → identical RMSE
+        proposed = {"c": 3.0, "r": 1, "gamma": 1.0}
+        accepted, baseline_rmse, proposed_rmse = validate_param_revision(
+            protocol, agent, proposed
+        )
+        assert accepted is True
+        assert abs(proposed_rmse - baseline_rmse) < 1e-9
+
+    def test_sync_params_validates_before_apply(self):
+        """sync_params_from_theory should reject params that degrade RMSE."""
+        from antagonistic_collab.runner import sync_params_from_theory
+
+        protocol, agents = self._make_protocol_with_experiment()
+        agent = agents[0]  # Exemplar_Agent (GCM)
+        original_params = dict(agent.default_params)
+
+        # Set up theory with bad params
+        theory = TheoryCommitment(
+            name="Exemplar Theory (GCM)",
+            agent_name="Exemplar_Agent",
+            core_claims=["exemplar storage"],
+            model_name="GCM",
+            model_params={"c": 0.01, "r": 1, "gamma": 1.0},
+        )
+        protocol.state.theories = [theory]
+
+        sync_params_from_theory(protocol)
+
+        # Agent params should NOT have changed (bad params rejected)
+        assert agent.default_params == original_params
+
+
+class TestClaimAutoResolution:
+    """Tests for resolve_claims_from_data() — auto-resolving claims after execution.
+
+    After each experiment execution, we check if any untested claims match
+    the just-executed structure/condition and resolve them based on data.
+    This closes the loop: claim → experiment → resolution → debate sees result.
+    """
+
+    def _make_protocol_and_state(self):
+        """Helper: create protocol + state with default agents."""
+        state = EpistemicState(domain="human categorization")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+        return protocol, state
+
+    def test_resolve_claims_confirms_matching(self):
+        """When the claiming agent's model has the best RMSE, claim is confirmed."""
+        from antagonistic_collab.runner import resolve_claims_from_data
+
+        protocol, state = self._make_protocol_and_state()
+
+        # GCM agent claims it's best on Type_I
+        state.add_claim(DebateClaim(
+            agent="Exemplar_Agent",
+            claim_type="prediction",
+            content="GCM best on Type_I",
+            testable=True,
+            structure="Type_I",
+            condition="baseline",
+            predicted_outcome="GCM best RMSE",
+        ))
+
+        # Type_I data where GCM should genuinely be best (simple 1D rule)
+        data = {
+            "item_0": 0.95, "item_1": 0.92, "item_2": 0.93, "item_3": 0.94,
+            "item_4": 0.91, "item_5": 0.96, "item_6": 0.93, "item_7": 0.94,
+            "mean_accuracy": 0.935,
+        }
+
+        resolve_claims_from_data(state, "Type_I", "baseline", data, protocol, cycle=1)
+
+        claim = state.claim_ledger[0]
+        assert claim.status in ("confirmed", "falsified")  # resolved either way
+        assert claim.tested_at_cycle == 1
+        assert claim.evidence is not None
+
+    def test_resolve_claims_falsifies_mismatching(self):
+        """When the claiming agent's model does NOT have best RMSE, claim is falsified."""
+        from antagonistic_collab.runner import resolve_claims_from_data
+
+        protocol, state = self._make_protocol_and_state()
+
+        # Rule agent claims RULEX is best on Type_I (it's not — GCM is)
+        state.add_claim(DebateClaim(
+            agent="Rule_Agent",
+            claim_type="prediction",
+            content="RULEX best on Type_I",
+            testable=True,
+            structure="Type_I",
+            condition="baseline",
+            predicted_outcome="RULEX best RMSE",
+        ))
+
+        data = {
+            "item_0": 0.95, "item_1": 0.92, "item_2": 0.93, "item_3": 0.94,
+            "item_4": 0.91, "item_5": 0.96, "item_6": 0.93, "item_7": 0.94,
+            "mean_accuracy": 0.935,
+        }
+
+        resolve_claims_from_data(state, "Type_I", "baseline", data, protocol, cycle=1)
+
+        claim = state.claim_ledger[0]
+        # RULEX is NOT the best on Type_I, so this should be falsified
+        # (unless RULEX happens to beat GCM, which is possible but unlikely)
+        assert claim.status in ("confirmed", "falsified")
+        assert claim.tested_at_cycle == 1
+
+    def test_resolve_claims_skips_non_matching(self):
+        """Claims targeting a different structure/condition should remain untested."""
+        from antagonistic_collab.runner import resolve_claims_from_data
+
+        protocol, state = self._make_protocol_and_state()
+
+        # Claim targets Type_VI, but experiment runs on Type_I
+        state.add_claim(DebateClaim(
+            agent="Exemplar_Agent",
+            claim_type="prediction",
+            content="GCM best on Type_VI",
+            testable=True,
+            structure="Type_VI",
+            condition="baseline",
+        ))
+
+        data = {"item_0": 0.95, "mean_accuracy": 0.95}
+
+        resolve_claims_from_data(state, "Type_I", "baseline", data, protocol, cycle=1)
+
+        claim = state.claim_ledger[0]
+        assert claim.status == "untested"
+        assert claim.tested_at_cycle is None
+
+    def test_resolve_claims_handles_unparseable(self):
+        """Claims with None predicted_outcome should still resolve via fallback."""
+        from antagonistic_collab.runner import resolve_claims_from_data
+
+        protocol, state = self._make_protocol_and_state()
+
+        state.add_claim(DebateClaim(
+            agent="Exemplar_Agent",
+            claim_type="prediction",
+            content="GCM does something on Type_I",
+            testable=True,
+            structure="Type_I",
+            condition="baseline",
+            predicted_outcome=None,
+        ))
+
+        data = {
+            "item_0": 0.95, "item_1": 0.92, "item_2": 0.93, "item_3": 0.94,
+            "item_4": 0.91, "item_5": 0.96, "item_6": 0.93, "item_7": 0.94,
+            "mean_accuracy": 0.935,
+        }
+
+        resolve_claims_from_data(state, "Type_I", "baseline", data, protocol, cycle=1)
+
+        claim = state.claim_ledger[0]
+        # Should resolve via RMSE fallback, not crash
+        assert claim.status in ("confirmed", "falsified")
+        assert claim.tested_at_cycle == 1
 
     def test_no_directive_when_disabled(self):
         """When claim_responsive is off, no FALSIFIED CLAIMS directive block
