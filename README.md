@@ -10,7 +10,7 @@ Current approaches to automated science (e.g., [AutoRA](https://autoresearch.git
 
 This framework operationalizes that process with a **dual-layer architecture**:
 
-- **Computational layer**: Bayesian expected information gain (EIG) selects experiments from 55+ candidates; executable models generate quantitative predictions; learning curves provide a second evidence channel
+- **Computational layer**: Bayesian expected information gain (EIG) selects experiments from ~427 candidates (continuous sampling from parameter ranges); executable models generate quantitative predictions; learning curves provide a second evidence channel
 - **Semantic layer**: LLM agents interpret results, identify confounds, propose novel structures, and revise theories in natural language
 
 ## Current domain: Human categorization
@@ -18,7 +18,7 @@ This framework operationalizes that process with a **dual-layer architecture**:
 The prototype uses category learning as a testbed because it has:
 
 - **Deep, contested model landscape**: Exemplar models (GCM), rule-based models (RULEX), clustering models (SUSTAIN) — debated for 40+ years
-- **Rich experimental design space**: 11 category structures × 5 experimental conditions = 55 candidate experiments
+- **Rich experimental design space**: 11 base structures + 50 sampled per cycle × 7 conditions ≈ 427 candidate experiments
 - **Known critical experiments**: Shepard types, Medin & Schaffer's 5-4 structure — benchmarks for evaluating whether the system produces scientifically sensible proposals
 
 ## Architecture
@@ -30,7 +30,7 @@ The framework supports two operating modes:
 Cycle N:
   1. Commitment (cycle 0 only)
   2. Divergence mapping
-  3. Bayesian EIG selection — searches all 55+ candidates (no LLM calls)
+  3. Bayesian EIG selection — searches all ~427 candidates (no LLM calls)
   4. Execution — item-level scoring + learning curve comparison
   5. Interpretation debate — agents interpret results, propose hypotheses
   6. Interpretation critique — agents challenge each other
@@ -88,6 +88,8 @@ Full 9-phase debate protocol. You act as the human moderator, approving or editi
 --selection METHOD      bayesian (EIG) or heuristic (diversity penalty)
 --backend BACKEND       anthropic (default) or princeton (Azure OpenAI via Portkey)
 --model MODEL_ID        LLM model string (default: claude-sonnet-4-20250514)
+--design-space MODE     base (55), richer (168), or continuous (sampled, default)
+--n-continuous-samples  Structures sampled per cycle in continuous mode (default: 50)
 --critique-rounds N     Adversarial critique rounds per cycle (default: 2)
 --output-dir DIR        Where to save transcripts and state
 ```
@@ -109,13 +111,13 @@ antagonistic_collab/
     ├── rulex.py              # RULEX (Nosofsky, Palmeri & McKinley, 1994)
     └── category_structures.py  # 11 structures: Shepard I-VI, 5-4, etc.
 tests/
-    └── test_bugfixes.py     # 287 tests
+    └── test_bugfixes.py     # 331 tests
 Notes/                       # Analysis, decisions, lessons learned
 ```
 
 ## Key results
 
-Validated across 6 runs (3 ground truths × 2 modes, 5 cycles each) + 9 cross-LLM runs + 4 M5 replication runs + 3 M6 ARBITER live runs. The correct model's agent wins in every condition:
+Validated across 43 runs (3 ground truths × multiple milestones/modes, 5 cycles each). The correct model's agent wins in 42/43 runs (one M7 RULEX misidentification due to model overlap, resolved in M8):
 
 | Ground Truth | Mode | Winner | RMSE | Gap |
 |---|---|---|---|---|
@@ -143,18 +145,21 @@ Validated across 6 runs (3 ground truths × 2 modes, 5 cycles each) + 9 cross-LL
 - **Posterior collapse**: Primary architectural bottleneck — EIG≈0 after cycle 0–1, making later cycles uninformative despite crux negotiation.
 - **Winning theories need fewer revisions**: Rule_Agent made 0 revisions and won RULEX by 67.6%. Losing agents revise futilely (Lakatos-compatible).
 
-See [Notes/REPORT.md](Notes/REPORT.md) for the full write-up and [Notes/LESSONS_LEARNED.md](Notes/LESSONS_LEARNED.md) for 16 theses on LLM-mediated scientific debate.
+See [Notes/REPORT.md](Notes/REPORT.md) for the full write-up and [Notes/LESSONS_LEARNED.md](Notes/LESSONS_LEARNED.md) for 35 theses on LLM-mediated scientific debate.
 
 ## What's next
 
 - [x] ~~Close debate feedback loops~~ — parameter revision persistence, structured claim ledger, critique-as-falsification, debate-informed EIG weighting (M5, done)
 - [x] ~~Compare LLM backbones~~ — Claude Sonnet/Opus vs GPT-4o: correct model wins in 9/9 runs, framework is LLM-agnostic (M4, done)
 - [x] ~~ARBITER integration~~ — role-specialized meta-agents, crux negotiation, conflict maps, pre-registration output, HITL checkpoints (M6, done — 3/3 correct, 36–68% gaps)
-- [ ] Address posterior collapse — tempering, entropy-based re-exploration, or crux-driven experiment overrides
+- [x] ~~Address posterior collapse~~ — likelihood tempering (M7), Thompson sampling (M8), crux-directed selection (M9)
+- [x] ~~Claim-responsive debate~~ — agents must address falsified claims (M10, 80% FR rate)
+- [x] ~~Richer design spaces~~ — parametric structures + interpolated conditions (M11, superseded by M12)
+- [x] ~~Continuous design space~~ — fresh samples each cycle from parameter ranges (M12, 15/15 sampled selected, 0% overlap)
+- [ ] Ablation study: EIG-only (no debate) vs full system — measure debate's causal contribution
 - [ ] Additional cognitive domains — memory retrieval, associative learning, decision making
 - [ ] AutoRA integration — real data collection via Prolific
-- [ ] Longer runs (10+ cycles) — test whether novel structures and claim ledger produce cumulative scientific reasoning
-- [ ] Claim-responsive debate — agents should address prior falsified claims explicitly
+- [ ] Longer runs (10+ cycles) — test cumulative reasoning at longer horizons
 
 ## Key references
 

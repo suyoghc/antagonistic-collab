@@ -719,4 +719,41 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 
 ---
 
+### 2026-03-16 (session 2): M12 — Continuous Design Space Parameterization
+
+**What was done:**
+- Implemented M12: continuous design space parameterization
+  - `_sample_continuous_structures(n_samples, seed)`: draws from continuous parameter ranges (~60% LS, ~40% RPE)
+  - Cycle-dependent seeds (42 + cycle × 1000) for cross-cycle diversity
+  - Config: tri-state `design_space` (base/richer/continuous) replaces boolean `no_richer_design_space`
+  - CLI: `--design-space {base,richer,continuous}`, `--n-continuous-samples 50`
+  - `--no-richer-design-space` kept as deprecated alias → `design_space: base`
+  - `protocol.sampled_structures` dict + 4 merge point updates
+  - 16 new tests (TestContinuousDesignSpace), 331 total passing
+- Fixed attention_weights dimension mismatch bug: 8D structures crashed with 3D default weights
+- Ran live validation: 3/3 correct (GCM 76.8%, SUSTAIN 95.8%, RULEX 87.4%)
+- Updated all docs with M12 results and architectural analysis
+
+**Commits:**
+- `acc3438` feat(M12): continuous design space parameterization
+- `6c2fe62` fix: attention_weights dimension mismatch on high-dimensional structures
+
+**Key findings:**
+- 15/15 sampled structures selected, 0/15 from base registry or agent proposals
+- 0% cycle overlap — different cycles explore genuinely different parameter regions
+- All linear_separable — separation sweet spot at 0.68–2.13, dimensionality 4–8D
+- Performance comparable or improved vs M11 (gaps 77–96% vs 76–96%)
+- Debate provides interpretive value (80% FR rate) but is epiphenomenal for experiment selection
+
+**Key discussion: the role of debate**
+- Computational layer (EIG + continuous sampling + Bayesian update) drives identification with zero LLM calls
+- Debate provides: mechanistic interpretation (genuine value), claim engagement (80% FR), crux negotiation (contribution unclear)
+- Debate does NOT: influence experiment selection (0/15 from proposals), prevent adversarial collapse (posterior concentrates)
+- Open question: does debate improve identification on harder problems (real data, model misspecification)?
+- Proposed ablation: EIG-only vs full system to measure debate's causal contribution
+
+**Status:** M12 complete and validated. 331 tests, 3/3 correct, 43 total validation runs across M4–M12.
+
+---
+
 *This log is maintained manually. Update it at the end of each session.*

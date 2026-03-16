@@ -259,7 +259,7 @@ For LLM-in-the-loop scientific systems, this has a design implication: reliable 
 
 ### 5.1 Model identification accuracy
 
-The framework's primary objective is to correctly identify the ground-truth model from among three competitors. Across 40 validation runs spanning milestones M4–M11 — encompassing legacy and full-pool modes, three ground truths (GCM, SUSTAIN, RULEX), three LLM backbones (GPT-4o, Claude Sonnet, Claude Opus), two selection strategies (greedy, Thompson), and crux-directed experiment selection — the correct model was identified in 39 of 40 runs.
+The framework's primary objective is to correctly identify the ground-truth model from among three competitors. Across 43 validation runs spanning milestones M4–M12 — encompassing legacy and full-pool modes, three ground truths (GCM, SUSTAIN, RULEX), three LLM backbones (GPT-4o, Claude Sonnet, Claude Opus), two selection strategies (greedy, Thompson), and crux-directed experiment selection — the correct model was identified in 39 of 40 runs.
 
 **Table 1. Model identification across milestones.**
 
@@ -275,6 +275,7 @@ The framework's primary objective is to correctly identify the ground-truth mode
 | M9 | full_pool (crux-directed) | 3 | 3/3 | 75–93% | Crux pipeline operational |
 | M10 | full_pool (claim-responsive) | 3 | 3/3 | 52–97% | 80% FR rate |
 | M11 | full_pool (richer design) | 3 | 3/3 | 76–96% | 15/15 parametric structures |
+| M12 | full_pool (continuous) | 3 | 3/3 | 77–96% | 15/15 sampled, 0% cycle overlap |
 | Cross-LLM | full_pool | 9 | 9/9 | — | GPT-4o, Sonnet, Opus |
 
 The single misidentification occurred in M7, where RULEX ground truth was identified as GCM. This reflects genuine model overlap rather than a system failure: GCM approximates rule-like behavior by concentrating attention weights on the diagnostic dimension (Nosofsky, 1991), and the structures selected by greedy EIG in this run (linear_separable_4d, nonlinear_complex_5d) fell in regions where the two models' predictions were nearly indistinguishable. The posterior oscillated across cycles — RULEX led on cycles 0 and 2, GCM on cycles 1, 3, and 4 — producing only an 8.2% RMSE gap. M8 resolved the misidentification through a bugfix to the curve scoring mechanism and the addition of Thompson sampling, which selected more diverse structures that exposed the models' differing learning dynamics.

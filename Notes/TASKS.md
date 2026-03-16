@@ -1,5 +1,37 @@
 # Tasks
 
+## Completed: M12 — Continuous Design Space Parameterization (DONE)
+
+### M12 Tasks
+- [x] **Config + CLI** — `design_space: continuous` in default_config.yaml, `--design-space {base,richer,continuous}` CLI flag, `--n-continuous-samples`, `_DESIGN_SPACE` and `_N_CONTINUOUS_SAMPLES` module globals, `--no-richer-design-space` kept as deprecated alias
+- [x] **Sampling function** — `_sample_continuous_structures(n_samples, seed)`: ~60% linear_separable (dims 2-8, sep 0.5-4.0), ~40% rule_plus_exception (dims 3-8, exc 1-4). Deterministic per seed, cycle-dependent seeds (42 + cycle × 1000)
+- [x] **Pool generation** — `generate_full_candidate_pool(design_space=, n_continuous_samples=, continuous_seed=)` replaces `richer=True|False`. Three modes: base (55), richer (168), continuous (~427)
+- [x] **Resolution** — `protocol.sampled_structures` attr + 4 merge points in debate_protocol.py. All code paths resolve sampled structures
+- [x] **Bug fix** — attention_weights dimension mismatch on high-dimensional structures (shapes (8,) vs (3,))
+- [x] **16 new tests** (TestContinuousDesignSpace), 331 total passing
+- [x] **Documentation** — D40 in DECISIONS.md, REPORT.md 2.2/3.26/4.7/5 updated, all docs updated
+- [x] **Live validation** — 3/3 correct. 15/15 sampled structures selected. 0% cycle overlap. Gaps 77–96%
+
+### M12 Validation Results (continuous, GPT-4o, 2026-03-16)
+
+| Ground Truth | Winner | Correct? | RMSE | Gap | Sampled/5 | Cycle Overlap | FR% |
+|---|---|---|---|---|---|---|---|
+| GCM | Exemplar_Agent | Yes | 0.092 | 76.8% | 5/5 | 0–2% | 80% |
+| SUSTAIN | Clustering_Agent | Yes | 0.022 | 95.8% | 5/5 | 0–2% | 80% |
+| RULEX | Rule_Agent | Yes | 0.048 | 87.4% | 5/5 | 0–2% | 80% |
+
+Key findings:
+- **EIG exclusively selects sampled structures.** 15/15 experiments used freshly sampled linear_separable variants. Zero base registry or RPE structures selected.
+- **Zero cycle overlap.** Different cycles explore genuinely different parameter regions — the core M12 behavioral difference from M11.
+- **Diagnostic sweet spot.** EIG converges on separation 0.68–2.13 and dimensionality 4–8D — intermediate difficulty where models disagree most.
+- **Debate is interpretive, not directive.** 0/15 experiments from agent proposals. Debate provides narratives and claim engagement (80% FR) but doesn't influence selection.
+
+### M12 Commits
+- `acc3438` feat(M12): continuous design space parameterization
+- `6c2fe62` fix: attention_weights dimension mismatch on high-dimensional structures
+
+---
+
 ## Completed: M11 — Richer Design Spaces (DONE)
 
 ### M11 Tasks

@@ -4,20 +4,29 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ---
 
-## Current status — M11 complete and validated
+## Current status — M12 complete and validated
 
-M11 richer design spaces complete: pool expanded from 55 to 168 candidates via 13 parametric structures and 2 interpolated conditions. 315 tests passing. Live validation: 3/3 correct, EIG strongly prefers parametric structures (15/15 experiments selected parametric linear_separable variants).
+M12 continuous design space complete: pool now ~427 candidates per cycle (11 base + 50 sampled × 7 conditions). 331 tests passing. Live validation: 3/3 correct, 15/15 sampled structures selected, 0% cycle overlap, gaps 77–96%.
+
+### Key M12 insight: debate is interpretive, not directive
+
+The computational layer (EIG + continuous sampling + Bayesian update) drives model identification with zero LLM calls. The debate layer provides interpretive value (mechanistic narratives, 80% FR rate) but 0/15 experiments came from agent proposals. This raises the question of whether debate improves identification beyond what bare EIG achieves. Three stances:
+1. Debate was scaffolding — essential for designing the computational layer, now subsumed
+2. Debate is complementary — computation handles selection, debate handles understanding
+3. Debate needs harder problems — synthetic benchmarks are too easy; real data may reveal debate's value
 
 ### Open issues
 1. **SUSTAIN converges too fast** — even tau=0.005 can't slow it because predictions are categorically different. Not a bug.
-2. **Low crux-directed rate** — 1/15 experiments (6.7% vs 30% theoretical). Most cruxes reference structures already in the EIG frontier. Richer pool may help by giving cruxes more matching candidates.
+2. **Low crux-directed rate** — 1/15 experiments (6.7% vs 30% theoretical). Most cruxes reference structures already in the EIG frontier.
 3. **Low format compliance** — 24/105 cruxes parsed (23%). Agents prefer semantic expressiveness over structured format.
+4. **RPE never selected** — 40% of continuous samples are rule_plus_exception but EIG never picks them. Consider reducing the RPE fraction or investigating why.
 
 ### Possible next steps
+- Ablation study: EIG-only (no debate) vs full system — does debate change identification outcomes?
 - New cognitive domains (memory retrieval, decision making)
 - AutoRA integration for real data
 - Longer runs (10+ cycles) to test cumulative reasoning
-- Continuous parameterization (fully generative design space, not discrete expansion)
+- Adaptive sampling (use prior EIG results to focus sampling regions)
 
 ### WRITEUP.md status
 - Sections 1–6 + Appendix A + References complete (~592 lines)

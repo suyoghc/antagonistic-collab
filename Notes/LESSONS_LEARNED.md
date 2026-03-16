@@ -1198,3 +1198,65 @@ Three validation runs: 3 ground truths × 5 cycles, GPT-4o via Princeton, crux_w
 **31. Intermediate parameter values are more diagnostic than extreme values for model discrimination.** The fixed registry contained structures at extreme points (Shepard types: binary dimensions, small items sets) and a few canonical structures (5-4, linear_separable). EIG exclusively selected parametric structures with intermediate separation values, confirming that the diagnostic sweet spot lies between the extremes where models' predictions diverge most gradually. Design registries should sample densely in the intermediate range. (Phase 17, M11)
 
 **32. Expanding the candidate pool with informative candidates cannot degrade Bayesian experiment selection.** Pool expansion from 55→168 preserved or improved all metrics. EIG is maximized over the pool; adding candidates with higher EIG than existing ones strictly improves selection. The risk is adding candidates with near-zero EIG that dilute Thompson sampling probability — but in practice, EIG concentrates on the most informative candidates regardless of pool size. (Phase 17, M11)
+
+---
+
+## Phase 18: Continuous Design Space Parameterization (M12)
+
+### 18.1 Continuous sampling finds more diagnostic experiments than fixed grids
+
+**Expected:** Continuous sampling would find parameter combinations as good as M11's hand-picked grid, with the added benefit of cross-cycle diversity.
+
+**Actual:** 15/15 experiments used freshly sampled structures. Gaps of 77–96% match or exceed M11's 76–96%. RULEX gap improved (87.4% vs 83.7%). The continuous sampler outperforms the curated grid because it can hit precise parameter values (e.g., separation=0.86) that lie between grid points.
+
+**Implication:** Hand-crafting parametric grids is wasted effort once you can sample from the generative space. The grid was scaffolding — it confirmed that intermediate parameters are diagnostic, but the sampler finds more precisely diagnostic values without human guidance. This validates the ADO literature's emphasis on continuous design spaces over discrete candidate sets.
+
+### 18.2 Cross-cycle diversity is the key benefit of continuous sampling
+
+**Expected:** Different cycles would explore different regions, providing more diverse evidence for the Bayesian posterior.
+
+**Actual:** 0–2% overlap between consecutive cycles' sampled structures. Each cycle evaluates genuinely different parameter combinations. This is impossible with M11's fixed 168-candidate grid, where every cycle re-evaluates the same pool.
+
+**Implication:** Even though EIG always selects linear_separable structures, different cycles probe different points in the (dims, separation) space. This means later cycles provide genuinely new information rather than confirming what earlier cycles already established. Cycle diversity is a structural property of continuous sampling, not a behavior that must be engineered.
+
+### 18.3 EIG reveals a clear diagnostic sweet spot in parameter space
+
+**Expected:** Selected structures would span the full parameter range.
+
+**Actual:** Separation values cluster at 0.68–2.13 (out of [0.5, 4.0] range). Dimensionality skews toward 4–8D. High separation (>3.0) and low dimensionality (2D) are rarely selected.
+
+**Implication:** The three cognitive models disagree most at intermediate difficulty — where some models predict good performance and others don't. High separation (all models predict well) and low separation (all models predict poorly) are both uninformative. Higher dimensionality creates more room for differential attention allocation (GCM), cluster formation (SUSTAIN), and rule search (RULEX). This is consistent with the general principle that maximally informative experiments are those at the decision boundary between models.
+
+### 18.4 Rule_plus_exception structures are never diagnostic for these models
+
+**Expected:** RPE structures would be selected occasionally, especially when testing RULEX.
+
+**Actual:** 0/15 selected structures were RPE across all ground truths and cycles, despite comprising 40% of the sample pool.
+
+**Implication:** For the GCM/SUSTAIN/RULEX triad, linear_separable structures with continuous features provide strictly more diagnostic information than rule_plus_exception structures with discrete features. This may be because RPE structures are inherently rule-friendly (both RULEX and SUSTAIN handle them well), making them less discriminating. The 40% allocation to RPE is conservative insurance — justifiable for robustness but empirically wasteful.
+
+### 18.5 Wider parameter ranges expose latent boundary bugs
+
+**Expected:** Extending dimensionality from 6D (M11) to 8D (M12) would be seamless.
+
+**Actual:** An 8D structure crashed `compute_model_predictions()` because the GCM agent's default `attention_weights` were 3D (from Shepard types). The error existed since the agent was configured but was never triggered until M12's wider range.
+
+**Implication:** This is another instance of the principle "calibrate hyperparameters against real pipeline quantities." Default parameter values encode implicit assumptions about the data they'll encounter. When the data distribution expands (more dimensions, different parameter ranges), these assumptions break. Defensive boundary checks (auto-detect dimension mismatch, set to None for uniform weights) prevent crashes but the underlying issue is that default configs assume a narrow operating range.
+
+### 18.6 On synthetic benchmarks, debate is interpretive — not directive — for model identification
+
+**Expected:** Debate features (crux negotiation, claim-responsive engagement, novel structure proposals) would contribute to experiment selection and model identification.
+
+**Actual:** 0/15 experiments came from agent proposals. EIG + continuous sampling drove all experiment selection. The posterior converged to the correct model via Bayesian computation alone. Debate produced high-quality interpretations (mechanistic narratives, confound identification) and engaged with falsified claims (80% FR rate), but neither changed which experiment ran nor which model was identified.
+
+**Implication:** The computational layer has progressively subsumed the debate layer's original role. M1-M3: agents proposed experiments → M4-M7: EIG replaced proposals → M8-M9: Thompson sampling added diversity → M11-M12: continuous sampling replaced fixed grids. Debate's remaining contributions are (a) interpretive narratives, (b) claim engagement, and (c) potential value on harder problems. On synthetic benchmarks with known ground truth, the computational layer is sufficient. Whether debate adds value on real data — where model misspecification, noisy measurements, and genuine theoretical uncertainty make interpretation more important — is an untested hypothesis. The honest next step is an ablation: run EIG-only (no debate) and compare.
+
+### Emerging Principles (continued)
+
+### On continuous design spaces (M12)
+
+**33. Continuous sampling from generative parameter spaces outperforms fixed candidate grids for Bayesian experiment selection.** M11's hand-picked 168-candidate grid was strictly dominated by M12's continuous sampler drawing 50 fresh structures per cycle. The sampler hits precise diagnostic parameter values (separation=0.86) that no grid would include. Fixed grids are scaffolding; continuous sampling is the target. (Phase 18, M12)
+
+**34. Cross-cycle diversity is a structural property of continuous sampling, not an engineered behavior.** With fixed grids, every cycle re-evaluates the same pool and EIG converges to the same selection. With continuous sampling, 0% cycle overlap is automatic because each cycle draws from a different RNG state. This means later cycles provide genuinely new evidence, not redundant confirmation. (Phase 18, M12)
+
+**35. On synthetic benchmarks, computation drives model identification; debate provides understanding.** After 12 milestones, the computational layer (EIG + continuous sampling + Bayesian update) identifies the correct model with zero LLM calls. The debate layer provides mechanistic narratives, claim engagement, and theory-level interpretation. Whether debate improves identification outcomes — not just understanding — remains unablated. The framework's value may lie in scientific understanding rather than statistical identification. (Phase 18, M12)

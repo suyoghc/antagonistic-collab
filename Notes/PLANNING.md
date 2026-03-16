@@ -37,7 +37,7 @@ models/
 ### Full-pool mode (`--mode full_pool`)
 1. Commitment (cycle 0 only)
 2. Divergence mapping
-3. Full-pool Bayesian selection — EIG over all 168 candidates (55 base + 113 parametric; no LLM calls)
+3. Full-pool Bayesian selection — EIG over ~427 candidates (11 base + 50 sampled × 7 conditions; no LLM calls)
 4. Execution + learning curve comparison
 5. Interpretation debate — structured JSON: interpretation, confounds, hypotheses, novel structures
 6. Interpretation critique — agents challenge each other
@@ -121,7 +121,7 @@ models/
 - [x] Live validation: 3/3 correct, 80% FR rate, all three actions observed (revise, explain, abandon)
 - Literature: Shinn et al. (2023) Reflexion, AGM belief revision (Alchourrón et al. 1985)
 
-### M11: Richer design spaces (DONE)
+### M11: Richer design spaces (DONE — superseded by M12)
 - [x] Config: `no_richer_design_space: false` (default on), CLI: `--no-richer-design-space`
 - [x] 13 parametric structures (7 linear_separable, 6 rule_plus_exception)
 - [x] 2 interpolated conditions (moderate_attention, mild_noise)
@@ -130,6 +130,16 @@ models/
 - [x] 14 tests (TestRicherDesignSpaces), 315 total passing
 - [x] Live validation: 3/3 correct (GCM 75.8%, SUSTAIN 95.6%, RULEX 83.7% gaps), 15/15 parametric structures selected
 - Literature: Myung & Pitt (2009), Cavagnaro et al. (2010)
+
+### M12: Continuous design space parameterization (DONE)
+- [x] Config: `design_space: continuous` (default), CLI: `--design-space {base,richer,continuous}`, `--n-continuous-samples 50`
+- [x] `_sample_continuous_structures()`: ~60% linear_separable (dims 2-8, sep 0.5-4.0), ~40% RPE (dims 3-8, exc 1-4)
+- [x] Cycle-dependent seeds (42 + cycle × 1000) for cross-cycle diversity
+- [x] Pool: ~427 candidates per cycle (11 base + 50 sampled × 7 conditions)
+- [x] Bug fix: attention_weights dimension mismatch on 8D structures
+- [x] 16 tests (TestContinuousDesignSpace), 331 total passing
+- [x] Live validation: 3/3 correct (GCM 76.8%, SUSTAIN 95.8%, RULEX 87.4% gaps), 15/15 sampled, 0% cycle overlap
+- Key finding: debate is interpretive (80% FR rate) but epiphenomenal for experiment selection on synthetic benchmarks
 
 ## Key constraints
 

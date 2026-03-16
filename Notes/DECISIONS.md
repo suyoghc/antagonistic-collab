@@ -922,4 +922,44 @@ Key outcome: Agents engage with falsified claims at 80% rate (12/15 theory inter
 
 Key outcome: EIG strongly prefers parametric structures — 15/15 experiments selected parametric linear_separable variants. The expanded pool provides diagnostic intermediate-separation stimuli that the fixed registry lacked. Parametric conditions selected less frequently (5/15), suggesting conditions are less informative than structural variation for model discrimination.
 
+**Status:** Done. Superseded by M12 continuous parameterization.
+
+---
+
+## D40: Continuous design space parameterization — 2026-03-16
+
+**Problem:** M11's fixed parametric grid (168 candidates) expanded the pool but structures were still the same every cycle. EIG exclusively selected linear_separable variants with intermediate parameters, suggesting the diagnostic sweet spot is a continuous region, not a fixed set of points. The same 168 candidates are re-evaluated every cycle — no exploration of new parameter regions.
+
+**Decision:** Replace the fixed grid with continuous sampling from parameter ranges. Each cycle draws 50 fresh structures via `_sample_continuous_structures()`: ~60% linear_separable (n_dims ∈ {2,...,8}, separation ∈ Uniform(0.5, 4.0)), ~40% rule_plus_exception (n_dims ∈ {3,...,8}, n_exceptions ∈ {1,...,4}). Seeds are cycle-dependent (42 + cycle × 1000). Config: tri-state `design_space` (base/richer/continuous) replaces boolean `no_richer_design_space`.
+
+**Alternatives considered:**
+1. **Keep M11's fixed grid with more points** — Diminishing returns; more points in a fixed grid don't explore new regions across cycles.
+2. **Adaptive sampling based on prior EIG results** — More sophisticated but premature; simple uniform sampling already outperforms the fixed grid.
+3. **Only linear_separable** (since RPE is never selected) — RPE serves as exploration insurance for edge cases where rule structures might be diagnostic.
+
+**Implementation:**
+- `_sample_continuous_structures(n_samples, seed)` in `debate_protocol.py`
+- `generate_full_candidate_pool(design_space=, n_continuous_samples=, continuous_seed=)` in `bayesian_selection.py`
+- `protocol.sampled_structures` dict + 4 resolution merge points
+- Config: `design_space: continuous`, `n_continuous_samples: 50`
+- CLI: `--design-space {base,richer,continuous}`, `--n-continuous-samples`
+- `--no-richer-design-space` kept as deprecated alias → `design_space: base`
+- 16 new tests (TestContinuousDesignSpace), 331 total passing
+- Bug fix: attention_weights dimension mismatch on high-dimensional structures
+
+**Live validation (2026-03-16):**
+
+| Ground Truth | Winner | Correct? | RMSE | Gap | Sampled/5 | Cycle Overlap |
+|---|---|---|---|---|---|---|
+| GCM | Exemplar_Agent | Yes | 0.092 | 76.8% | 5/5 | 0–2% |
+| SUSTAIN | Clustering_Agent | Yes | 0.022 | 95.8% | 5/5 | 0–2% |
+| RULEX | Rule_Agent | Yes | 0.048 | 87.4% | 5/5 | 0–2% |
+
+Key findings:
+1. **15/15 sampled structures selected** — EIG exclusively prefers continuous samples over fixed registry
+2. **0% cycle overlap** — different cycles explore genuinely different parameter regions
+3. **All linear_separable** — separation sweet spot at 0.68–2.13, dimensionality 4–8D
+4. **RULEX gap improved** (87.4% vs M11's 83.7%) — continuous sampling finds more diagnostic experiments
+5. **Debate layer is interpretive, not directive** — 0/15 experiments from agent proposals; debate provides mechanistic narratives (80% FR rate) but doesn't influence experiment selection
+
 **Status:** Done.
