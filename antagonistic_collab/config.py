@@ -111,6 +111,8 @@ def apply_config_defaults(parser, config: dict[str, Any]):
         "no_arbiter": "no_arbiter",
         "no_claim_responsive": "no_claim_responsive",
         "no_richer_design_space": "no_richer_design_space",
+        "design_space": "design_space",
+        "n_continuous_samples": "n_continuous_samples",
         "critique_rounds": "critique_rounds",
         "hitl_checkpoints": "hitl_checkpoints",
         "output_dir": "output_dir",

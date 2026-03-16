@@ -1177,7 +1177,11 @@ def run_full_pool_selection(
     extra = getattr(protocol, "temporary_structures", None) or {}
 
     pool = generate_full_candidate_pool(
-        protocol, extra_structures=extra or None, richer=_RICHER_DESIGN_SPACE
+        protocol,
+        extra_structures=extra or None,
+        design_space=_DESIGN_SPACE,
+        n_continuous_samples=_N_CONTINUOUS_SAMPLES,
+        continuous_seed=42 + protocol.state.cycle * 1000,
     )
     print(f"  Evaluating {len(pool)} candidates...")
 
@@ -2743,8 +2747,12 @@ def main():
     global _CLAIM_RESPONSIVE
     _CLAIM_RESPONSIVE = not args.no_claim_responsive
 
-    global _RICHER_DESIGN_SPACE
-    _RICHER_DESIGN_SPACE = not args.no_richer_design_space
+    global _DESIGN_SPACE, _N_CONTINUOUS_SAMPLES
+    _DESIGN_SPACE = args.design_space
+    _N_CONTINUOUS_SAMPLES = args.n_continuous_samples
+    # Backward compat: --no-richer-design-space maps to design_space=base
+    if args.no_richer_design_space:
+        _DESIGN_SPACE = "base"
 
     # Auto-generate output directory if not explicitly set
     if args.output_dir == ".":
@@ -2843,7 +2851,8 @@ _LEARNING_RATE = (
 _ARBITER = True  # ARBITER features: cruxes, meta-agents, conflict map
 _CRUX_WEIGHT = 0.3  # Probability of crux-directed selection in Thompson sampling
 _CLAIM_RESPONSIVE = True  # Agents must address falsified claims in interpretation
-_RICHER_DESIGN_SPACE = True  # Parametric structures + interpolated conditions
+_DESIGN_SPACE = "continuous"  # "base", "richer", or "continuous"
+_N_CONTINUOUS_SAMPLES = 50  # Structures sampled per cycle in continuous mode
 
 
 if __name__ == "__main__":

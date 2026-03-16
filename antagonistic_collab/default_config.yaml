@@ -93,18 +93,18 @@ no_arbiter: false
 #   1.0 — always pick a crux-matching experiment when cruxes exist
 crux_weight: 0.3
 
-# Richer design spaces.
-# When enabled, extends the fixed 11-structure × 5-condition registry (55
-# candidates) with parametrically generated structures and interpolated
-# conditions (~160+ candidates). This gives EIG a more continuous search
-# space to find diagnostic sweet spots.
-#
-# Parametric structures vary separation, dimensionality, and exception count
-# of existing generators. Interpolated conditions fill gaps between the
-# discrete attention and noise levels.
-#
-# Set no_richer_design_space: true to use only the original 55 candidates.
-no_richer_design_space: false
+# Design space mode (M12).
+#   base       — Original 11-structure × 5-condition registry (55 candidates).
+#   richer     — + parametric structures + interpolated conditions (~168
+#                candidates). Fixed grid from M11.
+#   continuous — STRUCTURE_REGISTRY + freshly sampled structures from
+#                continuous parameter ranges, all 7 conditions. Samples new
+#                structures each cycle, letting EIG discover diagnostic sweet
+#                spots that no fixed grid covers (M12, default).
+design_space: continuous
+
+# Number of structures sampled per cycle in continuous mode.
+n_continuous_samples: 50
 
 # Claim-responsive debate.
 # When enabled, agents with falsified claims receive an explicit directive

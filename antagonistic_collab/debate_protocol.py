@@ -162,6 +162,44 @@ def _build_parametric_structures() -> dict[str, dict]:
 PARAMETRIC_STRUCTURES: dict[str, dict] = _build_parametric_structures()
 
 
+def _sample_continuous_structures(n_samples: int, seed: int) -> dict[str, dict]:
+    """Sample fresh structures from continuous parameter ranges.
+
+    ~60% linear_separable (most diagnostic per M11), ~40% rule_plus_exception.
+    Deterministic given seed. Each sample gets seed + i for reproducibility.
+
+    Parameter ranges:
+        linear_separable: n_dims ∈ {2,...,8}, separation ∈ Uniform(0.5, 4.0)
+        rule_plus_exception: n_dims ∈ {3,...,8}, n_exceptions ∈ {1,2,3,4}
+
+    Names encode parameters: "sampled_ls_{n_dims}d_sep{sep:.2f}",
+    "sampled_rpe_{n_dims}d_{n_exc}exc".
+    """
+    rng = np.random.RandomState(seed)
+    n_ls = int(round(n_samples * 0.6))
+    n_rpe = n_samples - n_ls
+
+    structs: dict[str, dict] = {}
+
+    # Linear separable samples
+    for i in range(n_ls):
+        n_dims = rng.randint(2, 9)  # {2, 3, 4, 5, 6, 7, 8}
+        separation = rng.uniform(0.5, 4.0)
+        s = seed + i
+        name = f"sampled_ls_{n_dims}d_sep{separation:.2f}_{i}"
+        structs[name] = linear_separable(n_dims=n_dims, separation=separation, seed=s)
+
+    # Rule-plus-exception samples
+    for i in range(n_rpe):
+        n_dims = rng.randint(3, 9)  # {3, 4, 5, 6, 7, 8}
+        n_exc = rng.randint(1, 5)  # {1, 2, 3, 4}
+        s = seed + n_ls + i
+        name = f"sampled_rpe_{n_dims}d_{n_exc}exc_{i}"
+        structs[name] = rule_plus_exception(n_dims=n_dims, n_exceptions=n_exc, seed=s)
+
+    return structs
+
+
 def _build_parametric_conditions() -> dict[str, dict[str, dict]]:
     """Generate conditions by interpolating between existing discrete ones.
 
@@ -542,6 +580,7 @@ class DebateProtocol:
         self.current_phase = Phase.COMMITMENT
         self.phase_history: list[PhaseResult] = []
         self.temporary_structures: dict = {}  # novel structures from agents
+        self.sampled_structures: dict = {}  # M12: continuous design space samples
         self.meta_agents: list[MetaAgentConfig] = meta_agents or []
 
     # --- Phase specifications ---
@@ -713,7 +752,11 @@ class DebateProtocol:
         """
         if structures is None:
             # Use all structures from registry + any novel agent-proposed structures
-            structures = {**STRUCTURE_REGISTRY, **self.temporary_structures}
+            structures = {
+                **STRUCTURE_REGISTRY,
+                **self.sampled_structures,
+                **self.temporary_structures,
+            }
 
         results = {}
         for struct_name, struct in structures.items():
@@ -802,6 +845,7 @@ class DebateProtocol:
         all_structures = {
             **STRUCTURE_REGISTRY,
             **PARAMETRIC_STRUCTURES,
+            **self.sampled_structures,
             **self.temporary_structures,
         }
         if structure_name in all_structures:
@@ -901,7 +945,11 @@ class DebateProtocol:
         Returns:
             {agent_name: list[dict]} where each dict has at least "accuracy" and "block".
         """
-        all_structures = {**STRUCTURE_REGISTRY, **self.temporary_structures}
+        all_structures = {
+            **STRUCTURE_REGISTRY,
+            **self.sampled_structures,
+            **self.temporary_structures,
+        }
         if structure_name not in all_structures:
             structure_name = "Type_II"
         struct = all_structures[structure_name]
@@ -1106,6 +1154,7 @@ class DebateProtocol:
         all_structures = {
             **STRUCTURE_REGISTRY,
             **PARAMETRIC_STRUCTURES,
+            **self.sampled_structures,
             **self.temporary_structures,
         }
         if structure_name in all_structures:

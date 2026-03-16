@@ -4192,7 +4192,7 @@ class TestFullPoolSelection:
         state = EpistemicState(domain="test")
         agents = default_agent_configs()
         protocol = DebateProtocol(state, agents)
-        pool = generate_full_candidate_pool(protocol, richer=False)
+        pool = generate_full_candidate_pool(protocol, design_space="base")
         assert len(pool) == 55
         # Each entry is (structure_name, condition)
         for struct, cond in pool:
@@ -4244,7 +4244,11 @@ class TestFullPoolSelection:
         ]
         assert len(approved) == 1
         ds = approved[0].design_spec
-        all_structs = {**STRUCTURE_REGISTRY, **PARAMETRIC_STRUCTURES}
+        all_structs = {
+            **STRUCTURE_REGISTRY,
+            **PARAMETRIC_STRUCTURES,
+            **protocol.sampled_structures,
+        }
         all_conds = {**CONDITION_EFFECTS, **PARAMETRIC_CONDITIONS}
         assert ds["structure_name"] in all_structs
         assert ds["condition"] in all_conds
@@ -4264,7 +4268,7 @@ class TestFullPoolSelection:
             }
         }
         pool = generate_full_candidate_pool(
-            protocol, extra_structures=extra, richer=False
+            protocol, extra_structures=extra, design_space="base"
         )
         # 11 + 1 = 12 structures, × 5 conditions = 60
         assert len(pool) == 60
@@ -4963,7 +4967,7 @@ class TestTemporaryStructures:
             }
         }
         pool = generate_full_candidate_pool(
-            protocol, extra_structures=extra, richer=False
+            protocol, extra_structures=extra, design_space="base"
         )
         novel_entries = [(s, c) for s, c in pool if s == "novel_xor"]
         assert len(novel_entries) == 5  # 5 conditions
@@ -8613,14 +8617,14 @@ class TestRicherDesignSpaces:
     # --- Config / CLI plumbing ---
 
     def test_config_default_is_richer(self):
-        """Default config should have no_richer_design_space: false."""
+        """Default config should have design_space: continuous (supersedes richer)."""
         from antagonistic_collab.config import load_config
 
         config = load_config()
-        assert config.get("no_richer_design_space") is False
+        assert config.get("design_space") == "continuous"
 
     def test_cli_flag_exists(self):
-        """--no-richer-design-space CLI flag should exist."""
+        """--no-richer-design-space CLI flag should still exist (deprecated)."""
         from antagonistic_collab.__main__ import _build_argparser
 
         parser = _build_argparser()
@@ -8629,11 +8633,11 @@ class TestRicherDesignSpaces:
         assert args.no_richer_design_space is False
 
     def test_module_global_exists(self):
-        """runner._RICHER_DESIGN_SPACE should exist as module global."""
+        """runner._DESIGN_SPACE should exist as module global."""
         import antagonistic_collab.runner as runner_mod
 
-        assert hasattr(runner_mod, "_RICHER_DESIGN_SPACE")
-        assert runner_mod._RICHER_DESIGN_SPACE is True
+        assert hasattr(runner_mod, "_DESIGN_SPACE")
+        assert runner_mod._DESIGN_SPACE == "continuous"
 
     # --- Parametric structures ---
 
@@ -8691,25 +8695,25 @@ class TestRicherDesignSpaces:
     # --- Pool generation ---
 
     def test_pool_larger_when_richer(self):
-        """generate_full_candidate_pool with richer=True should be larger."""
+        """generate_full_candidate_pool with design_space='richer' should be larger."""
         state = EpistemicState(domain="test")
         agents = default_agent_configs()
         protocol = DebateProtocol(state, agents)
 
-        base_pool = generate_full_candidate_pool(protocol, richer=False)
-        rich_pool = generate_full_candidate_pool(protocol, richer=True)
+        base_pool = generate_full_candidate_pool(protocol, design_space="base")
+        rich_pool = generate_full_candidate_pool(protocol, design_space="richer")
 
         assert len(rich_pool) > len(base_pool)
         # Base pool: 11 structures × 5 conditions = 55
         assert len(base_pool) == 55
 
     def test_pool_default_includes_richer(self):
-        """Default pool (richer=True) should include parametric candidates."""
+        """Richer pool should include parametric candidates."""
         state = EpistemicState(domain="test")
         agents = default_agent_configs()
         protocol = DebateProtocol(state, agents)
 
-        pool = generate_full_candidate_pool(protocol, richer=True)
+        pool = generate_full_candidate_pool(protocol, design_space="richer")
         struct_names = {s for s, c in pool}
         cond_names = {c for s, c in pool}
 
@@ -8752,4 +8756,252 @@ class TestRicherDesignSpaces:
             cycle=0,
         )
         assert result["condition"] == first_cond
+        assert "item_accuracies" in result
+
+
+# =========================================================================
+# M12: Continuous Design Space Parameterization
+# =========================================================================
+
+
+class TestContinuousDesignSpace:
+    """Tests for continuous design space parameterization (M12).
+
+    Continuous parameterization samples fresh structures each cycle from
+    continuous parameter ranges, letting EIG discover diagnostic sweet spots
+    that no fixed grid covers.
+    """
+
+    # --- Sampling function ---
+
+    def test_sample_continuous_structures_returns_valid(self):
+        """All sampled structures must have stimuli/labels and pass validation."""
+        from antagonistic_collab.debate_protocol import _sample_continuous_structures
+
+        structs = _sample_continuous_structures(n_samples=20, seed=42)
+        assert len(structs) == 20
+
+        for name, struct in structs.items():
+            assert "stimuli" in struct, f"'{name}' missing 'stimuli'"
+            assert "labels" in struct, f"'{name}' missing 'labels'"
+            # Convert for validation
+            spec = {
+                "stimuli": (
+                    struct["stimuli"].tolist()
+                    if hasattr(struct["stimuli"], "tolist")
+                    else struct["stimuli"]
+                ),
+                "labels": (
+                    struct["labels"].tolist()
+                    if hasattr(struct["labels"], "tolist")
+                    else struct["labels"]
+                ),
+            }
+            valid, msg = validate_novel_structure(spec)
+            assert valid, f"Sampled structure '{name}' invalid: {msg}"
+
+    def test_sample_continuous_structures_deterministic(self):
+        """Same seed must produce identical structures."""
+        from antagonistic_collab.debate_protocol import _sample_continuous_structures
+
+        a = _sample_continuous_structures(n_samples=10, seed=123)
+        b = _sample_continuous_structures(n_samples=10, seed=123)
+
+        assert list(a.keys()) == list(b.keys())
+        for name in a:
+            np.testing.assert_array_equal(
+                np.asarray(a[name]["stimuli"]),
+                np.asarray(b[name]["stimuli"]),
+            )
+
+    def test_sample_continuous_structures_different_seeds(self):
+        """Different seeds must produce different structures."""
+        from antagonistic_collab.debate_protocol import _sample_continuous_structures
+
+        a = _sample_continuous_structures(n_samples=10, seed=100)
+        b = _sample_continuous_structures(n_samples=10, seed=200)
+
+        # Names should differ (different parameter draws)
+        assert set(a.keys()) != set(b.keys())
+
+    def test_sample_continuous_structures_names_encode_params(self):
+        """Names must contain dims and separation/exception info."""
+        from antagonistic_collab.debate_protocol import _sample_continuous_structures
+
+        structs = _sample_continuous_structures(n_samples=20, seed=42)
+
+        for name in structs:
+            assert name.startswith("sampled_ls_") or name.startswith("sampled_rpe_"), (
+                f"Unexpected name prefix: {name}"
+            )
+            if name.startswith("sampled_ls_"):
+                assert "d_sep" in name, f"LS name missing sep info: {name}"
+            elif name.startswith("sampled_rpe_"):
+                assert "d_" in name and "exc" in name, (
+                    f"RPE name missing dim/exc info: {name}"
+                )
+
+    def test_sample_continuous_structures_respects_count(self):
+        """Must return exactly n_samples structures."""
+        from antagonistic_collab.debate_protocol import _sample_continuous_structures
+
+        for n in (1, 5, 50, 100):
+            structs = _sample_continuous_structures(n_samples=n, seed=42)
+            assert len(structs) == n, f"Expected {n}, got {len(structs)}"
+
+    # --- Pool generation with continuous mode ---
+
+    def test_pool_continuous_includes_base_registry(self):
+        """Base 11 structures must always be present in continuous pool."""
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        pool = generate_full_candidate_pool(
+            protocol,
+            design_space="continuous",
+            n_continuous_samples=10,
+            continuous_seed=42,
+        )
+        struct_names = {s for s, c in pool}
+
+        for base_name in STRUCTURE_REGISTRY:
+            assert base_name in struct_names, f"Base structure '{base_name}' missing"
+
+    def test_pool_continuous_larger_than_base(self):
+        """Continuous pool must be larger than base pool."""
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        base_pool = generate_full_candidate_pool(protocol, design_space="base")
+        cont_pool = generate_full_candidate_pool(
+            protocol,
+            design_space="continuous",
+            n_continuous_samples=10,
+            continuous_seed=42,
+        )
+
+        assert len(cont_pool) > len(base_pool)
+        assert len(base_pool) == 55  # 11 × 5
+
+    def test_pool_continuous_sampled_stored_on_protocol(self):
+        """protocol.sampled_structures must be populated after continuous pool gen."""
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        generate_full_candidate_pool(
+            protocol,
+            design_space="continuous",
+            n_continuous_samples=15,
+            continuous_seed=42,
+        )
+
+        assert hasattr(protocol, "sampled_structures")
+        assert len(protocol.sampled_structures) == 15
+
+    def test_pool_continuous_includes_parametric_conditions(self):
+        """Continuous mode should include interpolated conditions."""
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        pool = generate_full_candidate_pool(
+            protocol,
+            design_space="continuous",
+            n_continuous_samples=5,
+            continuous_seed=42,
+        )
+        cond_names = {c for s, c in pool}
+
+        parametric_cond_names = set(PARAMETRIC_CONDITIONS.keys())
+        assert cond_names & parametric_cond_names, (
+            "No parametric conditions in continuous pool"
+        )
+
+    # --- Config / CLI plumbing ---
+
+    def test_config_default_is_continuous(self):
+        """Default config should have design_space: continuous."""
+        from antagonistic_collab.config import load_config
+
+        config = load_config()
+        assert config.get("design_space") == "continuous"
+
+    def test_cli_design_space_flag(self):
+        """--design-space flag should parse correctly."""
+        from antagonistic_collab.__main__ import _build_argparser
+
+        parser = _build_argparser()
+
+        # Default
+        args = parser.parse_args([])
+        assert args.design_space == "continuous"
+
+        # Explicit values
+        for mode in ("base", "richer", "continuous"):
+            args = parser.parse_args(["--design-space", mode])
+            assert args.design_space == mode
+
+    def test_cli_deprecated_no_richer_maps_to_base(self):
+        """--no-richer-design-space should still work, mapping to design_space=base."""
+        from antagonistic_collab.__main__ import _build_argparser
+
+        parser = _build_argparser()
+        args = parser.parse_args(["--no-richer-design-space"])
+        assert args.no_richer_design_space is True
+
+    def test_module_globals_exist(self):
+        """runner._DESIGN_SPACE and _N_CONTINUOUS_SAMPLES must exist."""
+        import antagonistic_collab.runner as runner_mod
+
+        assert hasattr(runner_mod, "_DESIGN_SPACE")
+        assert runner_mod._DESIGN_SPACE == "continuous"
+        assert hasattr(runner_mod, "_N_CONTINUOUS_SAMPLES")
+        assert runner_mod._N_CONTINUOUS_SAMPLES == 50
+
+    # --- Backward compatibility ---
+
+    def test_pool_base_mode_matches_original(self):
+        """design_space='base' should produce exactly 55 candidates."""
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        pool = generate_full_candidate_pool(protocol, design_space="base")
+        assert len(pool) == 55
+
+    def test_pool_richer_mode_matches_m11(self):
+        """design_space='richer' should include PARAMETRIC_STRUCTURES."""
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        pool = generate_full_candidate_pool(protocol, design_space="richer")
+        struct_names = {s for s, c in pool}
+        cond_names = {c for s, c in pool}
+
+        assert struct_names & set(PARAMETRIC_STRUCTURES.keys())
+        assert cond_names & set(PARAMETRIC_CONDITIONS.keys())
+        assert len(pool) > 55
+
+    def test_synthetic_runner_handles_sampled_structures(self):
+        """_synthetic_runner must resolve sampled structures by name."""
+        from antagonistic_collab.debate_protocol import _sample_continuous_structures
+
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        sampled = _sample_continuous_structures(n_samples=5, seed=42)
+        protocol.sampled_structures = sampled
+
+        first_name = next(iter(sampled))
+        result = protocol._synthetic_runner(
+            {"structure_name": first_name, "condition": "baseline"},
+            true_model="GCM",
+            cycle=0,
+        )
+        assert result["structure_name"] == first_name
         assert "item_accuracies" in result

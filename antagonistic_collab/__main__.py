@@ -100,10 +100,23 @@ def _build_argparser() -> argparse.ArgumentParser:
         help="Disable claim-responsive debate (agents won't be directed to address falsified claims).",
     )
     parser.add_argument(
+        "--design-space",
+        choices=["base", "richer", "continuous"],
+        default="continuous",
+        help="Design space: base (55), richer (168 fixed grid), continuous (sampled each cycle, default).",
+    )
+    parser.add_argument(
+        "--n-continuous-samples",
+        type=int,
+        default=50,
+        help="Number of structures sampled per cycle in continuous mode (default: 50).",
+    )
+    # Deprecated alias — kept for backward compatibility
+    parser.add_argument(
         "--no-richer-design-space",
         action="store_true",
         default=False,
-        help="Disable richer design spaces (use only the original 55 structure×condition candidates).",
+        help=argparse.SUPPRESS,  # hidden from help; maps to design_space=base
     )
     return parser
 
