@@ -110,6 +110,7 @@ def apply_config_defaults(parser, config: dict[str, Any]):
         "no_tempering": "no_tempering",
         "no_arbiter": "no_arbiter",
         "no_claim_responsive": "no_claim_responsive",
+        "no_richer_design_space": "no_richer_design_space",
         "critique_rounds": "critique_rounds",
         "hitl_checkpoints": "hitl_checkpoints",
         "output_dir": "output_dir",

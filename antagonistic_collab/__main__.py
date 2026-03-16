@@ -99,6 +99,12 @@ def _build_argparser() -> argparse.ArgumentParser:
         default=False,
         help="Disable claim-responsive debate (agents won't be directed to address falsified claims).",
     )
+    parser.add_argument(
+        "--no-richer-design-space",
+        action="store_true",
+        default=False,
+        help="Disable richer design spaces (use only the original 55 structure×condition candidates).",
+    )
     return parser
 
 

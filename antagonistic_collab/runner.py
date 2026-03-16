@@ -1176,7 +1176,9 @@ def run_full_pool_selection(
     # Collect extra structures from prior cycle's novel proposals
     extra = getattr(protocol, "temporary_structures", None) or {}
 
-    pool = generate_full_candidate_pool(protocol, extra_structures=extra or None)
+    pool = generate_full_candidate_pool(
+        protocol, extra_structures=extra or None, richer=_RICHER_DESIGN_SPACE
+    )
     print(f"  Evaluating {len(pool)} candidates...")
 
     # Extract focus pair from posterior and/or claim ledger
@@ -2741,6 +2743,9 @@ def main():
     global _CLAIM_RESPONSIVE
     _CLAIM_RESPONSIVE = not args.no_claim_responsive
 
+    global _RICHER_DESIGN_SPACE
+    _RICHER_DESIGN_SPACE = not args.no_richer_design_space
+
     # Auto-generate output directory if not explicitly set
     if args.output_dir == ".":
         output_dir = auto_output_dir(
@@ -2838,6 +2843,7 @@ _LEARNING_RATE = (
 _ARBITER = True  # ARBITER features: cruxes, meta-agents, conflict map
 _CRUX_WEIGHT = 0.3  # Probability of crux-directed selection in Thompson sampling
 _CLAIM_RESPONSIVE = True  # Agents must address falsified claims in interpretation
+_RICHER_DESIGN_SPACE = True  # Parametric structures + interpolated conditions
 
 
 if __name__ == "__main__":

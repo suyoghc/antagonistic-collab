@@ -40,6 +40,9 @@ from antagonistic_collab.debate_protocol import (
     default_agent_configs,
     STRUCTURE_REGISTRY,
     CONDITION_EFFECTS,
+    PARAMETRIC_STRUCTURES,
+    PARAMETRIC_CONDITIONS,
+    validate_novel_structure,
 )
 from antagonistic_collab.models.sustain import SUSTAIN
 from antagonistic_collab.models.gcm import GCM
@@ -49,6 +52,7 @@ from antagonistic_collab.bayesian_selection import (
     compute_log_likelihood,
     compute_eig,
     select_experiment,
+    generate_full_candidate_pool,
 )
 
 
@@ -4182,13 +4186,13 @@ class TestFullPoolSelection:
     """
 
     def test_generate_full_candidate_pool_returns_55(self):
-        """11 structures × 5 conditions = 55 candidates."""
+        """11 structures × 5 conditions = 55 candidates (base registry only)."""
         from antagonistic_collab.bayesian_selection import generate_full_candidate_pool
 
         state = EpistemicState(domain="test")
         agents = default_agent_configs()
         protocol = DebateProtocol(state, agents)
-        pool = generate_full_candidate_pool(protocol)
+        pool = generate_full_candidate_pool(protocol, richer=False)
         assert len(pool) == 55
         # Each entry is (structure_name, condition)
         for struct, cond in pool:
@@ -4240,8 +4244,10 @@ class TestFullPoolSelection:
         ]
         assert len(approved) == 1
         ds = approved[0].design_spec
-        assert ds["structure_name"] in STRUCTURE_REGISTRY
-        assert ds["condition"] in CONDITION_EFFECTS
+        all_structs = {**STRUCTURE_REGISTRY, **PARAMETRIC_STRUCTURES}
+        all_conds = {**CONDITION_EFFECTS, **PARAMETRIC_CONDITIONS}
+        assert ds["structure_name"] in all_structs
+        assert ds["condition"] in all_conds
 
     def test_full_pool_with_extra_structures(self):
         """Extra structures from novel proposals are included in the pool."""
@@ -4257,7 +4263,9 @@ class TestFullPoolSelection:
                 "labels": [0, 0, 1, 1],
             }
         }
-        pool = generate_full_candidate_pool(protocol, extra_structures=extra)
+        pool = generate_full_candidate_pool(
+            protocol, extra_structures=extra, richer=False
+        )
         # 11 + 1 = 12 structures, × 5 conditions = 60
         assert len(pool) == 60
         custom_entries = [(s, c) for s, c in pool if s == "custom_struct"]
@@ -4954,7 +4962,9 @@ class TestTemporaryStructures:
                 "labels": [0, 1, 1, 0],
             }
         }
-        pool = generate_full_candidate_pool(protocol, extra_structures=extra)
+        pool = generate_full_candidate_pool(
+            protocol, extra_structures=extra, richer=False
+        )
         novel_entries = [(s, c) for s, c in pool if s == "novel_xor"]
         assert len(novel_entries) == 5  # 5 conditions
 
@@ -8585,3 +8595,161 @@ class TestClaimResponsiveDebate:
 
         first_agent_prompt = captured_prompts[0]["prompt"]
         assert "falsified_response" in first_agent_prompt
+
+
+# =========================================================================
+# Richer Design Spaces (M11)
+# =========================================================================
+
+
+class TestRicherDesignSpaces:
+    """Tests for parametric structure generation and interpolated conditions.
+
+    Richer design spaces extend the fixed 11-structure × 5-condition registry
+    (55 candidates) with parametrically generated structures and interpolated
+    conditions, giving EIG a larger and more continuous search space.
+    """
+
+    # --- Config / CLI plumbing ---
+
+    def test_config_default_is_richer(self):
+        """Default config should have no_richer_design_space: false."""
+        from antagonistic_collab.config import load_config
+
+        config = load_config()
+        assert config.get("no_richer_design_space") is False
+
+    def test_cli_flag_exists(self):
+        """--no-richer-design-space CLI flag should exist."""
+        from antagonistic_collab.__main__ import _build_argparser
+
+        parser = _build_argparser()
+        args = parser.parse_args([])
+        assert hasattr(args, "no_richer_design_space")
+        assert args.no_richer_design_space is False
+
+    def test_module_global_exists(self):
+        """runner._RICHER_DESIGN_SPACE should exist as module global."""
+        import antagonistic_collab.runner as runner_mod
+
+        assert hasattr(runner_mod, "_RICHER_DESIGN_SPACE")
+        assert runner_mod._RICHER_DESIGN_SPACE is True
+
+    # --- Parametric structures ---
+
+    def test_parametric_structures_non_empty(self):
+        """PARAMETRIC_STRUCTURES should contain additional structures."""
+        assert len(PARAMETRIC_STRUCTURES) > 0
+
+    def test_parametric_structures_valid(self):
+        """Every parametric structure must pass validate_novel_structure."""
+        for name, struct in PARAMETRIC_STRUCTURES.items():
+            # Convert numpy arrays to lists for validation
+            spec = {
+                "stimuli": (
+                    struct["stimuli"].tolist()
+                    if hasattr(struct["stimuli"], "tolist")
+                    else struct["stimuli"]
+                ),
+                "labels": (
+                    struct["labels"].tolist()
+                    if hasattr(struct["labels"], "tolist")
+                    else struct["labels"]
+                ),
+            }
+            valid, msg = validate_novel_structure(spec)
+            assert valid, f"Parametric structure '{name}' invalid: {msg}"
+
+    def test_parametric_structures_no_overlap_with_registry(self):
+        """Parametric structure names must not collide with STRUCTURE_REGISTRY."""
+        overlap = set(PARAMETRIC_STRUCTURES) & set(STRUCTURE_REGISTRY)
+        assert overlap == set(), f"Name collision: {overlap}"
+
+    def test_parametric_structures_have_required_keys(self):
+        """Each parametric structure must have stimuli, labels, dim_names, name."""
+        for name, struct in PARAMETRIC_STRUCTURES.items():
+            for key in ("stimuli", "labels", "dim_names", "name"):
+                assert key in struct, f"'{name}' missing key '{key}'"
+
+    # --- Parametric conditions ---
+
+    def test_parametric_conditions_non_empty(self):
+        """PARAMETRIC_CONDITIONS should contain additional conditions."""
+        assert len(PARAMETRIC_CONDITIONS) > 0
+
+    def test_parametric_conditions_no_overlap(self):
+        """Parametric condition names must not collide with CONDITION_EFFECTS."""
+        overlap = set(PARAMETRIC_CONDITIONS) & set(CONDITION_EFFECTS)
+        assert overlap == set(), f"Name collision: {overlap}"
+
+    def test_parametric_conditions_have_model_keys(self):
+        """Each condition must have overrides for GCM, SUSTAIN, RULEX."""
+        for name, effects in PARAMETRIC_CONDITIONS.items():
+            for model in ("GCM", "SUSTAIN", "RULEX"):
+                assert model in effects, f"Condition '{name}' missing '{model}'"
+
+    # --- Pool generation ---
+
+    def test_pool_larger_when_richer(self):
+        """generate_full_candidate_pool with richer=True should be larger."""
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        base_pool = generate_full_candidate_pool(protocol, richer=False)
+        rich_pool = generate_full_candidate_pool(protocol, richer=True)
+
+        assert len(rich_pool) > len(base_pool)
+        # Base pool: 11 structures × 5 conditions = 55
+        assert len(base_pool) == 55
+
+    def test_pool_default_includes_richer(self):
+        """Default pool (richer=True) should include parametric candidates."""
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        pool = generate_full_candidate_pool(protocol, richer=True)
+        struct_names = {s for s, c in pool}
+        cond_names = {c for s, c in pool}
+
+        # Must include at least one parametric structure and one parametric condition
+        parametric_struct_names = set(PARAMETRIC_STRUCTURES.keys())
+        parametric_cond_names = set(PARAMETRIC_CONDITIONS.keys())
+
+        assert struct_names & parametric_struct_names, (
+            "No parametric structures in pool"
+        )
+        assert cond_names & parametric_cond_names, "No parametric conditions in pool"
+
+    def test_synthetic_runner_handles_parametric_structures(self):
+        """_synthetic_runner must resolve parametric structures by name."""
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        # Pick the first parametric structure
+        first_name = next(iter(PARAMETRIC_STRUCTURES))
+        result = protocol._synthetic_runner(
+            {"structure_name": first_name, "condition": "baseline"},
+            true_model="GCM",
+            cycle=0,
+        )
+        assert result["structure_name"] == first_name
+        assert "item_accuracies" in result
+
+    def test_synthetic_runner_handles_parametric_conditions(self):
+        """_synthetic_runner must resolve parametric conditions by name."""
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        # Pick the first parametric condition
+        first_cond = next(iter(PARAMETRIC_CONDITIONS))
+        result = protocol._synthetic_runner(
+            {"structure_name": "Type_II", "condition": first_cond},
+            true_model="GCM",
+            cycle=0,
+        )
+        assert result["condition"] == first_cond
+        assert "item_accuracies" in result

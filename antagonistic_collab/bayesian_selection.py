@@ -211,26 +211,45 @@ def compute_eig(
 def generate_full_candidate_pool(
     protocol,
     extra_structures: Optional[dict] = None,
+    richer: bool = True,
 ) -> list[tuple[str, str]]:
     """All structure×condition pairs from STRUCTURE_REGISTRY × CONDITION_EFFECTS.
+
+    When ``richer=True`` (default), also includes parametrically generated
+    structures and interpolated conditions, expanding the pool from 55 to
+    ~160+ candidates. This gives EIG a more continuous design space to find
+    diagnostic sweet spots (Myung & Pitt 2009; Cavagnaro et al. 2010).
 
     Args:
         protocol: DebateProtocol instance (for access to registries).
         extra_structures: Optional dict of additional structures (e.g., from
             novel agent proposals) to include in the pool.
+        richer: If True, include parametric structures and interpolated
+            conditions. Default True.
 
     Returns:
         List of (structure_name, condition) tuples.
     """
-    from .debate_protocol import STRUCTURE_REGISTRY, CONDITION_EFFECTS
+    from .debate_protocol import (
+        STRUCTURE_REGISTRY,
+        CONDITION_EFFECTS,
+        PARAMETRIC_STRUCTURES,
+        PARAMETRIC_CONDITIONS,
+    )
 
     structures = dict(STRUCTURE_REGISTRY)
+    if richer:
+        structures.update(PARAMETRIC_STRUCTURES)
     if extra_structures:
         structures.update(extra_structures)
 
+    conditions = dict(CONDITION_EFFECTS)
+    if richer:
+        conditions.update(PARAMETRIC_CONDITIONS)
+
     pool = []
     for struct_name in structures:
-        for condition in CONDITION_EFFECTS:
+        for condition in conditions:
             pool.append((struct_name, condition))
     return pool
 
@@ -271,9 +290,7 @@ def _select_index(
         ValueError: if strategy is unknown or crux_weight out of range.
     """
     if not (0.0 <= crux_weight <= 1.0):
-        raise ValueError(
-            f"crux_weight must be in [0, 1], got {crux_weight}"
-        )
+        raise ValueError(f"crux_weight must be in [0, 1], got {crux_weight}")
 
     if strategy not in ("greedy", "thompson"):
         raise ValueError(
@@ -385,8 +402,11 @@ def select_from_pool(
                     break
 
     best_idx = _select_index(
-        eig_scores, selection_strategy, seed=seed,
-        crux_indices=crux_indices, crux_weight=crux_weight,
+        eig_scores,
+        selection_strategy,
+        seed=seed,
+        crux_indices=crux_indices,
+        crux_weight=crux_weight,
     )
     return best_idx, eig_scores
 
