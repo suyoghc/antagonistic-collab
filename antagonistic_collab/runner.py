@@ -1275,7 +1275,7 @@ def run_full_pool_selection(
         for spec in boost_specs:
             if spec["structure"] == best_struct and spec["condition"] == best_cond:
                 crux_directed = True
-                crux_match_id = spec["crux_id"]
+                crux_match_id = spec.get("crux_id")
                 break
 
     if crux_directed:
@@ -1990,6 +1990,11 @@ def claims_to_boost_specs(
         valid_structures |= set(getattr(protocol, "temporary_structures", {}).keys())
     valid_conditions = set(CONDITION_EFFECTS.keys()) | set(PARAMETRIC_CONDITIONS.keys())
 
+    # Build sampled structures dict for fuzzy matching
+    sampled_pool = {}
+    if protocol is not None:
+        sampled_pool = getattr(protocol, "sampled_structures", {})
+
     seen = set()
     specs = []
     for claim in state.get_active_claims():
@@ -1997,17 +2002,28 @@ def claims_to_boost_specs(
             continue
         if not claim.structure or not claim.condition:
             continue
-        if claim.structure not in valid_structures:
-            continue
+
+        structure = claim.structure
+        if structure not in valid_structures:
+            # Fuzzy-match sampled structures across cycles by parameters
+            if _FUZZY_STRUCTURE_MATCH and sampled_pool:
+                matched = _fuzzy_match_sampled_structure(structure, sampled_pool)
+                if matched:
+                    print(f"  Fuzzy structure match: {structure} → {matched}")
+                    structure = matched
+                else:
+                    continue
+            else:
+                continue
         if claim.condition not in valid_conditions:
             continue
 
-        key = (claim.structure, claim.condition)
+        key = (structure, claim.condition)
         if key in seen:
             continue
         seen.add(key)
 
-        specs.append({"structure": claim.structure, "condition": claim.condition})
+        specs.append({"structure": structure, "condition": claim.condition})
     return specs
 
 
@@ -2484,6 +2500,65 @@ def _match_condition(text: str, valid_keys: set[str]) -> str | None:
         return lower_map[lower_text]
 
     return None
+
+
+def _parse_sampled_params(name: str) -> dict | None:
+    """Parse encoded parameters from a sampled structure name.
+
+    Names follow the convention from debate_protocol._sample_continuous_structures():
+        sampled_ls_{n_dims}d_sep{separation:.2f}_{index}
+        sampled_rpe_{n_dims}d_{n_exc}exc_{index}
+
+    Returns dict with keys: type, dims, and sep (for ls) or exc (for rpe).
+    Returns None if the name doesn't match a sampled structure pattern.
+    """
+    m = re.match(r"sampled_ls_(\d+)d_sep([\d.]+)_\d+$", name)
+    if m:
+        return {"type": "ls", "dims": int(m.group(1)), "sep": float(m.group(2))}
+    m = re.match(r"sampled_rpe_(\d+)d_(\d+)exc_\d+$", name)
+    if m:
+        return {"type": "rpe", "dims": int(m.group(1)), "exc": int(m.group(2))}
+    return None
+
+
+def _fuzzy_match_sampled_structure(name: str, pool: dict) -> str | None:
+    """Find the closest sampled structure in the pool by encoded parameters.
+
+    When a claim targets a sampled structure from a previous cycle (e.g.,
+    sampled_ls_8d_sep0.99_13), that exact name won't exist in the current
+    cycle's pool. This function parses the parameters and finds the closest
+    match by: (1) same type (ls/rpe), (2) closest dims, (3) closest
+    separation (ls) or n_exceptions (rpe).
+
+    Returns the best matching pool key, or None if no match of the same type.
+    """
+    claim_params = _parse_sampled_params(name)
+    if claim_params is None:
+        return None
+
+    best_key = None
+    best_score = float("inf")
+
+    for pool_key in pool:
+        pool_params = _parse_sampled_params(pool_key)
+        if pool_params is None:
+            continue
+        if pool_params["type"] != claim_params["type"]:
+            continue
+
+        # Score: dims difference (weighted 10x) + parameter difference
+        dims_diff = abs(pool_params["dims"] - claim_params["dims"])
+        if claim_params["type"] == "ls":
+            param_diff = abs(pool_params["sep"] - claim_params["sep"])
+        else:
+            param_diff = abs(pool_params["exc"] - claim_params["exc"])
+
+        score = dims_diff * 10.0 + param_diff
+        if score < best_score:
+            best_score = score
+            best_key = pool_key
+
+    return best_key
 
 
 def parse_claims_from_json(
@@ -3226,6 +3301,7 @@ _DESIGN_SPACE = "continuous"  # "base", "richer", or "continuous"
 _N_CONTINUOUS_SAMPLES = 50  # Structures sampled per cycle in continuous mode
 _NO_DEBATE = False  # Skip all LLM phases; run only computational pipeline
 _NORMALIZE_CLAIMS = True  # Fuzzy-match LLM free-text to registry keys in claims
+_FUZZY_STRUCTURE_MATCH = True  # Parameter-match sampled structures across cycles
 
 
 if __name__ == "__main__":
