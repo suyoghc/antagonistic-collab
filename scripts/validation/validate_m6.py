@@ -20,7 +20,7 @@ import sys
 import numpy as np
 
 # Add project to path
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from antagonistic_collab.epistemic_state import EpistemicState
 from antagonistic_collab.debate_protocol import DebateProtocol, default_agent_configs
