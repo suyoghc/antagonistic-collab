@@ -11,9 +11,15 @@
 - [x] Full test suite: 403/403 passing
 
 ### Open
-- [ ] Live validation: 3 ground truths × 5 cycles, compare RMSE/gap against M12 baseline
-- [ ] Ablation: compare with/without claim-directed selection (set crux_weight=0)
-- [ ] Smoke test: 2-cycle debate with GCM ground truth, verify claim specs appear in EIG output
+- [ ] Re-run live validation with normalization enabled (claim-directed selection should now fire)
+
+### Completed (validation)
+- [x] Smoke test: 2-cycle GCM, all 3 interventions fire (PASS)
+- [x] Live validation: 3/3 correct (GCM 0.076/81%, SUSTAIN 0.063/88%, RULEX 0.226/41%)
+- [x] Ablation (crux_weight=0): 3/3 correct (GCM 0.087/77%, SUSTAIN 0.125/68%, RULEX 0.053/87%)
+- [x] Diagnosis: claim-directed selection never fired (LLM free-text didn't match registry keys)
+- [x] Fix: normalize_claim_fields() fuzzy-matches LLM output to registry keys (13 tests)
+- [x] Param validation gate blocked 6/33 bad revisions (18%) — only intervention with clear causal impact pre-normalization
 
 ---
 
