@@ -1688,6 +1688,8 @@ def run_interpretation_critique(
         if alt_pred and isinstance(alt_pred, dict):
             struct = alt_pred.get("structure", "")
             cond = alt_pred.get("condition", "baseline")
+            if _NORMALIZE_CLAIMS:
+                struct, cond = normalize_claim_fields(struct, cond)
             claimed = alt_pred.get("my_model_predicts")
             if struct and claimed is not None:
                 from .debate_protocol import verify_prediction_claim
@@ -2395,6 +2397,89 @@ def _rmse_fallback_resolution(
 # ---------------------------------------------------------------------------
 
 
+def normalize_claim_fields(
+    structure: str | None, condition: str | None
+) -> tuple[str | None, str | None]:
+    """Fuzzy-match LLM free-text structure/condition to registry keys.
+
+    Handles common LLM outputs:
+    - "high noise" → "high_noise"
+    - "Shepard Type I" → "Type_I"
+    - "Type I category structure" → "Type_I"
+    - "non-linearly separable ... (e.g., Type VI)" → "Type_VI"
+    - Already-valid keys pass through unchanged.
+    - Unrecognizable text stays as-is (don't lose information).
+    """
+    from .debate_protocol import (
+        STRUCTURE_REGISTRY,
+        CONDITION_EFFECTS,
+        PARAMETRIC_STRUCTURES,
+        PARAMETRIC_CONDITIONS,
+    )
+
+    valid_structures = set(STRUCTURE_REGISTRY.keys()) | set(
+        PARAMETRIC_STRUCTURES.keys()
+    )
+    valid_conditions = set(CONDITION_EFFECTS.keys()) | set(PARAMETRIC_CONDITIONS.keys())
+
+    structure = _normalize_to_registry(structure, valid_structures, _match_structure)
+    condition = _normalize_to_registry(condition, valid_conditions, _match_condition)
+    return structure, condition
+
+
+def _normalize_to_registry(
+    value: str | None, valid_keys: set[str], matcher
+) -> str | None:
+    """Try to match a free-text value to a registry key using the matcher function."""
+    if value is None:
+        return None
+    if value in valid_keys:
+        return value
+    result = matcher(value, valid_keys)
+    return result if result is not None else value
+
+
+def _match_structure(text: str, valid_keys: set[str]) -> str | None:
+    """Try to match free-text to a structure registry key."""
+    # Try underscore normalization: "high noise" → "high_noise"
+    underscore = text.strip().replace(" ", "_").replace("-", "_")
+    if underscore in valid_keys:
+        return underscore
+
+    # Extract "Type X" pattern (Roman numerals I-VI) from anywhere in the text
+    roman = {"I": "I", "II": "II", "III": "III", "IV": "IV", "V": "V", "VI": "VI"}
+    type_match = re.search(r"Type\s+(VI|IV|V?I{0,3})\b", text)
+    if type_match:
+        numeral = type_match.group(1)
+        if numeral in roman:
+            candidate = f"Type_{numeral}"
+            if candidate in valid_keys:
+                return candidate
+
+    # Try case-insensitive match
+    lower_map = {k.lower(): k for k in valid_keys}
+    if text.lower() in lower_map:
+        return lower_map[text.lower()]
+
+    return None
+
+
+def _match_condition(text: str, valid_keys: set[str]) -> str | None:
+    """Try to match free-text to a condition registry key."""
+    # Try underscore normalization: "high noise" → "high_noise"
+    underscore = text.strip().replace(" ", "_").replace("-", "_")
+    if underscore in valid_keys:
+        return underscore
+
+    # Try case-insensitive match
+    lower_map = {k.lower(): k for k in valid_keys}
+    lower_text = text.lower().strip().replace(" ", "_").replace("-", "_")
+    if lower_text in lower_map:
+        return lower_map[lower_text]
+
+    return None
+
+
 def parse_claims_from_json(
     json_block: dict, agent_name: str, cycle: int
 ) -> list[DebateClaim]:
@@ -2404,14 +2489,18 @@ def parse_claims_from_json(
     for c in claims_raw:
         if not isinstance(c, dict):
             continue
+        structure = c.get("structure")
+        condition = c.get("condition")
+        if _NORMALIZE_CLAIMS:
+            structure, condition = normalize_claim_fields(structure, condition)
         claims.append(
             DebateClaim(
                 agent=agent_name,
                 claim_type=c.get("claim_type", "prediction"),
                 content=c.get("claim", ""),
                 testable=bool(c.get("testable", False)),
-                structure=c.get("structure"),
-                condition=c.get("condition"),
+                structure=structure,
+                condition=condition,
                 predicted_outcome=c.get("predicted_outcome"),
                 cycle_made=cycle,
             )
@@ -3130,6 +3219,7 @@ _CLAIM_RESPONSIVE = True  # Agents must address falsified claims in interpretati
 _DESIGN_SPACE = "continuous"  # "base", "richer", or "continuous"
 _N_CONTINUOUS_SAMPLES = 50  # Structures sampled per cycle in continuous mode
 _NO_DEBATE = False  # Skip all LLM phases; run only computational pipeline
+_NORMALIZE_CLAIMS = True  # Fuzzy-match LLM free-text to registry keys in claims
 
 
 if __name__ == "__main__":

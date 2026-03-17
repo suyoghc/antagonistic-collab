@@ -8984,6 +8984,151 @@ class TestClaimAutoResolution:
         assert claim.tested_at_cycle == 1
 
 
+class TestClaimFieldNormalization:
+    """Tests for normalize_claim_fields() — fuzzy-matching LLM free-text to registry keys.
+
+    LLMs produce free-text structure/condition names like "high noise" instead of
+    "high_noise", or "Shepard Type I" instead of "Type_I". The normalizer maps
+    these to valid registry keys so claim-directed selection and auto-resolution
+    can match them.
+    """
+
+    def test_exact_match_unchanged(self):
+        """Registry keys pass through unchanged."""
+        from antagonistic_collab.runner import normalize_claim_fields
+
+        s, c = normalize_claim_fields("Type_I", "baseline")
+        assert s == "Type_I"
+        assert c == "baseline"
+
+    def test_whitespace_to_underscore(self):
+        """'high noise' → 'high_noise', 'fast presentation' → 'fast_presentation'."""
+        from antagonistic_collab.runner import normalize_claim_fields
+
+        _, c = normalize_claim_fields("Type_I", "high noise")
+        assert c == "high_noise"
+        _, c = normalize_claim_fields("Type_I", "fast presentation")
+        assert c == "fast_presentation"
+
+    def test_shepard_type_prefix_stripped(self):
+        """'Shepard Type I' → 'Type_I', 'Shepard Type VI' → 'Type_VI'."""
+        from antagonistic_collab.runner import normalize_claim_fields
+
+        s, _ = normalize_claim_fields("Shepard Type I", "baseline")
+        assert s == "Type_I"
+        s, _ = normalize_claim_fields("Shepard Type VI", "baseline")
+        assert s == "Type_VI"
+
+    def test_type_with_spaces(self):
+        """'Type I' → 'Type_I', 'Type II category structure' → 'Type_II'."""
+        from antagonistic_collab.runner import normalize_claim_fields
+
+        s, _ = normalize_claim_fields("Type I", "baseline")
+        assert s == "Type_I"
+        s, _ = normalize_claim_fields("Type II category structure", "baseline")
+        assert s == "Type_II"
+
+    def test_roman_numeral_extraction(self):
+        """Free-text mentioning 'Type VI' anywhere should match Type_VI."""
+        from antagonistic_collab.runner import normalize_claim_fields
+
+        s, _ = normalize_claim_fields(
+            "non-linearly separable category structure with family resemblance (e.g., Type VI)",
+            "baseline",
+        )
+        assert s == "Type_VI"
+
+    def test_sampled_structures_pass_through(self):
+        """Sampled structure names are already valid — pass through."""
+        from antagonistic_collab.runner import normalize_claim_fields
+
+        s, _ = normalize_claim_fields("sampled_ls_8d_sep0.99_13", "baseline")
+        assert s == "sampled_ls_8d_sep0.99_13"
+
+    def test_none_stays_none(self):
+        """None fields stay None."""
+        from antagonistic_collab.runner import normalize_claim_fields
+
+        s, c = normalize_claim_fields(None, None)
+        assert s is None
+        assert c is None
+
+    def test_unrecognizable_stays_unchanged(self):
+        """Truly unrecognizable text stays as-is (don't lose information)."""
+        from antagonistic_collab.runner import normalize_claim_fields
+
+        s, _ = normalize_claim_fields(
+            "multimodal distribution with subgroups", "baseline"
+        )
+        # No registry match — should stay as-is
+        assert s == "multimodal distribution with subgroups"
+
+    def test_condition_low_attention(self):
+        """'low attention' → 'low_attention'."""
+        from antagonistic_collab.runner import normalize_claim_fields
+
+        _, c = normalize_claim_fields("Type_I", "low attention")
+        assert c == "low_attention"
+
+    def test_condition_moderate_attention(self):
+        """'moderate attention' → 'moderate_attention'."""
+        from antagonistic_collab.runner import normalize_claim_fields
+
+        _, c = normalize_claim_fields("Type_I", "moderate attention")
+        assert c == "moderate_attention"
+
+    def test_condition_mild_noise(self):
+        """'mild noise' → 'mild_noise'."""
+        from antagonistic_collab.runner import normalize_claim_fields
+
+        _, c = normalize_claim_fields("Type_I", "mild noise")
+        assert c == "mild_noise"
+
+    def test_normalize_applied_in_parse_claims(self):
+        """parse_claims_from_json should normalize structure/condition fields."""
+        from antagonistic_collab.runner import parse_claims_from_json
+
+        json_block = {
+            "claims": [
+                {
+                    "claim": "GCM best on Type I",
+                    "testable": True,
+                    "structure": "Shepard Type I",
+                    "condition": "high noise",
+                    "predicted_outcome": "mean_accuracy=0.95",
+                }
+            ]
+        }
+        claims = parse_claims_from_json(json_block, "Exemplar_Agent", cycle=0)
+        assert len(claims) == 1
+        assert claims[0].structure == "Type_I"
+        assert claims[0].condition == "high_noise"
+
+    def test_normalize_disabled_by_flag(self):
+        """When _NORMALIZE_CLAIMS is False, no normalization occurs."""
+        import antagonistic_collab.runner as runner_mod
+        from antagonistic_collab.runner import parse_claims_from_json
+
+        original = runner_mod._NORMALIZE_CLAIMS
+        runner_mod._NORMALIZE_CLAIMS = False
+        try:
+            json_block = {
+                "claims": [
+                    {
+                        "claim": "test",
+                        "testable": True,
+                        "structure": "Shepard Type I",
+                        "condition": "high noise",
+                    }
+                ]
+            }
+            claims = parse_claims_from_json(json_block, "Exemplar_Agent", cycle=0)
+            assert claims[0].structure == "Shepard Type I"
+            assert claims[0].condition == "high noise"
+        finally:
+            runner_mod._NORMALIZE_CLAIMS = original
+
+
 class TestClaimResponsiveDebateContinued:
     """Continuation of TestClaimResponsiveDebate tests (split by M14 insertion)."""
 
