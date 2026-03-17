@@ -4,92 +4,85 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ---
 
-## Phase 1a — Mimicry sweep (COMPLETE)
+## M15 Phase 2 — Complete (2026-03-17)
 
-### Result: No true mimicry exists
+### Full 9-run results
 
-Script: `scripts/m15_mimicry_sweep.py`
+| GT | Condition | Winner | Correct? | RMSE | Gap | Recovery |
+|---|---|---|---|---|---|---|
+| GCM | No-debate | Exemplar_Agent | Yes | 0.100 | 74.4% | 0% |
+| GCM | Debate | Exemplar_Agent | Yes | 0.085 | 77.9% | 85.7% |
+| GCM | Arbiter | Exemplar_Agent | Yes | 0.074 | 79.3% | 85.7% |
+| SUSTAIN | No-debate | Clustering_Agent | Yes | 0.057 | 87.7% | 0% |
+| SUSTAIN | Debate | Clustering_Agent | Yes | 0.063 | 85.8% | 0% |
+| SUSTAIN | Arbiter | Clustering_Agent | Yes | 0.108 | 76.1% | 22.8% |
+| RULEX | No-debate | Rule_Agent | Yes | 0.176 | 58.0% | 0% |
+| RULEX | Debate | Rule_Agent | Yes | 0.077 | 80.4% | 60.3% |
+| RULEX | Arbiter | Exemplar_Agent | **No** | 0.393 | 3.2% | 30.9% |
 
-Swept parameter grids for all 3 models across 7 base structures (Shepard I-VI,
-five_four). At every parameter setting tested, each model's predictions remain
-closer to its own ground truth than to any competitor. The models are structurally
-too different for parameter changes to make them indistinguishable.
+### Analysis
 
-Closest mimicry distances (all still far from threshold):
-- GCM → SUSTAIN: c=6.0, RMSE=0.2430 (vs self: 0.0580) — 4× gap
-- SUSTAIN → GCM: r=12.0/eta=0.04, RMSE=0.2438 (vs self: 0.0573) — 4× gap
-- RULEX → SUSTAIN: err_tol=0.05/p_single=0.3, RMSE=0.3258 (vs self: 0.2119) — 1.5× gap
+**Debate without arbiter is the best configuration under misspecification:**
+- GCM: +3.5pp gap, 85.7% param recovery (c: 0.5 → near GT 4.0)
+- RULEX: +22.4pp gap, 60.3% param recovery (strongest effect)
+- SUSTAIN: -1.9pp gap, 0% recovery — neutral (misspecification invisible to agents)
 
-**Implication:** Model identification will always succeed (correct model always
-closest to ground truth). But misspecification narrows the gap, making identification
-fragile. M15 tests whether debate improves identification *quality* (wider gap,
-lower RMSE) not whether it flips the *winner*.
+**Arbiter consistently degrades performance:**
+- GCM: +4.9pp (only case where arbiter helps)
+- SUSTAIN: -11.6pp
+- RULEX: -54.7pp, wrong winner
 
-**Why this is still scientifically meaningful:** In real-world settings with noisy
-data (M17), a narrow gap can easily flip. Demonstrating that debate widens the gap
-via parameter recovery would show debate's value as a robustness mechanism.
+**Why SUSTAIN shows 0% recovery:** SUSTAIN's misspecification (r=3.0, eta=0.15 vs GT
+r=9.01, eta=0.092) doesn't produce enough prediction error to trigger LLM revision
+proposals. The agents need to *see* prediction failures before proposing param changes.
+SUSTAIN still wins easily (87.7% gap even with misspec) because its computational
+advantage on clustering-diagnostic structures is robust to these param changes.
 
----
+**RULEX arbiter failure — root cause (detailed):**
+Experiment selection divergence:
+- No-debate & Debate: selected **rule-plus-exception** (`rpe`) structures (4/5 cycles)
+  — RULEX-diagnostic. Posterior converged to 99.5%.
+- Arbiter: selected only **linearly-separable** (`ls`) structures (5/5 cycles) —
+  non-discriminative. Posterior eroded from 94% → 69%.
 
-## Active: Phase 1b — Competition-based gap sweep
+Mechanism: meta-agents (Integrator, Critic) influenced interpretation debate, changing
+agents' divergence mapping → different EIG landscape → Thompson sampling favored `ls`
+over `rpe`. Crux-directed selection was NOT the cause (0/5 were crux-directed).
 
-### Goal
-Generate synthetic data from each ground-truth model, then score all three models
-against that data with the correct model deliberately misspecified. Measure how much
-misspecification narrows the winner's gap. Select settings where the gap is small
-enough that parameter recovery matters.
+### Bugfix during M15
 
-### Script: extend `scripts/m15_mimicry_sweep.py`
+`runner.py:1278` — `spec["crux_id"]` KeyError when claim-directed boost specs (which
+lack `crux_id`) matched the selected experiment. Fixed to `spec.get("crux_id")`.
+Surfaced during GCM arbiter run.
 
-### Method
-For each ground truth (GCM, SUSTAIN, RULEX):
-1. Generate synthetic data using ground-truth params (via `_synthetic_runner()` logic)
-2. Score all 3 models against that data using LOO
-3. Correct model uses misspecified params; competitors use their own defaults
-4. Compute RMSE and gap (difference between correct model and best competitor)
-5. Sweep misspecification levels to find settings that meaningfully narrow the gap
+### M14→M15 synthesis
 
-### Why debate helps and EIG alone can't
-EIG assumes fixed params — optimizes for model discrimination, not parameter
-estimation. Three debate-specific capabilities address this:
-1. **Parameter revision** — agents propose new values via `sync_params_from_theory()`
-2. **Diagnosis** — agents reason about *why* predictions are wrong
-3. **Directed experimentation** — claim-directed selection tests whether revisions helped
+M14 showed debate was **epiphenomenal** under correct specification — the computational
+pipeline alone identified the correct model in 18/18 conditions. M15 shows debate is
+**causally necessary** under misspecification, but only the *core debate loop*:
 
-This is Pitt & Myung's (2004) point: parameter estimation and model selection must
-happen together. EIG does selection. Debate does estimation.
+- **Debate layer** (agents + interpretation + param revision): adds causal value.
+  LLM agents see prediction failures, diagnose the cause, propose corrections via
+  `sync_params_from_theory()`. This is what EIG alone can't do — EIG does selection,
+  debate does estimation. Pitt & Myung (2004) confirmed empirically.
+- **Arbiter layer** (cruxes + meta-agents): net negative. Meta-agents optimize for
+  argumentative richness, not model discrimination. They distort divergence mapping,
+  degrading experiment selection quality.
 
-### Ground-truth parameters
-- GCM: `c=4.0, r=1, gamma=1.0` (from `_synthetic_runner()`)
-- SUSTAIN: `r=9.01, beta=1.252, d=16.924, eta=0.092`
-- RULEX: `p_single=0.5, p_conj=0.3, error_tolerance=0.1, seed=42`
+The sweet spot: **debate without arbiter.**
 
----
+### Open questions
 
-## Phase 1b — Competition sweep (COMPLETE)
-
-### Result: Misspecification narrows gaps but never flips winner
-
-Generated synthetic data from each ground truth, scored all 3 models with
-the correct model deliberately misspecified. No setting flips the winner.
-
-| Ground Truth | Baseline gap | Worst misspec setting | Narrowed gap |
-|---|---|---|---|
-| GCM | 60.7% | c=0.5 | 27.9% |
-| SUSTAIN | 65.4% | r=3.0, eta=0.15 | 28.5% |
-| RULEX | 81.9% | err_tol=0.25, p_single=0.3 | 15.7% |
-
-RULEX most vulnerable: gap drops from 82% → 16%. Best test case for Phase 2.
-
-### Recommended misspecification levels for Phase 2
-- **GCM**: c=0.5 (broadest similarity, 28% gap)
-- **SUSTAIN**: r=3.0, eta=0.15 (broadest clusters + fast learning, 29% gap)
-- **RULEX**: error_tolerance=0.25, p_single=0.3 (lenient rules + limited search, 16% gap)
-
-### What Phase 2 tests
-Debate vs no-debate at these settings. Debate should widen the gap back toward
-baseline via parameter recovery. No-debate stays stuck with wrong params.
-RULEX is the strongest test case (most room to improve, most degradation).
+1. **Is the arbiter effect robust?** Single run per condition. Need replications to
+   separate signal from Thompson sampling stochasticity.
+2. **Would removing meta-agents but keeping cruxes help?** Current arbiter bundles
+   cruxes + meta-agents. The problem is meta-agent influence on divergence mapping,
+   not crux-directed selection itself.
+3. **Why does arbiter help on GCM but hurt everywhere else?** GCM's misspecification
+   (c=0.5) may interact differently with meta-agent interpretations.
+4. **Can param recovery be triggered on SUSTAIN?** Current misspecification (r=3.0,
+   eta=0.15) is too mild — 0% recovery. Need stronger misspecification or explicit
+   prompting to diagnose param errors.
 
 ---
 

@@ -1,24 +1,27 @@
 # Roadmap
 
-## Latest: M14 — Debate→Computation Feedback Loop (complete)
+## Latest: M15 — Model misspecification (Phase 2 complete)
 
-Closed the loop between LLM debate output and the computational scoring pipeline:
-claim-directed experiment selection, validated parameter revisions, and claim
-auto-resolution. All 3 interventions fire end-to-end (94 fuzzy matches, 12
-claim-directed selections, 7/33 param rejections, 45 claims resolved).
+**First causal demonstration that debate adds value.** Under parameter misspecification,
+the core debate loop (agents interpreting results + proposing param revisions) improves
+identification gap by +3.5pp (GCM) to +22.4pp (RULEX) via 60-86% parameter recovery.
+The arbiter layer (cruxes + meta-agents) is net negative — it distorts experiment
+selection. M14 showed debate was epiphenomenal under correct specification; M15 shows
+it's causally necessary under misspecification.
 
-**Key finding:** Debate adds no value when models are complete, data is synthetic,
-and the design space is enumerable. The computational pipeline alone identifies the
-correct model in all conditions (M13 ablation: 18/18 correct). Next step: test where
-models are *incomplete*.
+See [CURRENT_STATE.md](CURRENT_STATE.md) for full results and analysis.
 
-Full M14 results and earlier milestone details: [Notes/archive/TASKS.md](Notes/archive/TASKS.md)
+### M14 — Debate→Computation Feedback Loop (complete)
+
+Closed the loop between LLM debate output and the computational scoring pipeline.
+Debate adds no value when models are fully specified (M13 ablation: 18/18 correct
+without debate). Full M14 details: [Notes/archive/TASKS.md](Notes/archive/TASKS.md)
 
 ---
 
 ## Future Milestones
 
-### M15 — Model misspecification (in progress)
+### M15 — Model misspecification (Phase 2 complete)
 
 **Scientific question:** Can LLM agents, through debate, identify that their model's
 parameters are wrong and propose corrections — and does this happen better with debate
@@ -64,13 +67,31 @@ Calibrated misspecification settings for Phase 2:
 - SUSTAIN: r=3.0, eta=0.15 (gap narrows to 29%)
 - RULEX: error_tolerance=0.25, p_single=0.3 (gap narrows to 16%)
 
-Phase 2 — Debate vs no-debate comparison (LLM calls):
+Phase 2 — Three-way comparison (complete, `scripts/validation/validate_m15_live.py`):
 - All agents start with gap-calibrated wrong params from Phase 1b
 - Ground truth uses correct params in `_synthetic_runner()`
-- Debate condition: agents propose param revisions via `sync_params_from_theory()`,
-  gated by `validate_param_revision()`
-- No-debate condition: params stay fixed, computational pipeline only
-- Measure: RMSE, gap, number of param revisions accepted, cycles to recovery
+- Three conditions: no-debate (computational only), debate without arbiter,
+  debate with arbiter (cruxes + meta-agents + claim-directed selection)
+- Measure: RMSE, gap, param revisions accepted, param recovery toward GT
+
+**Full 9-run results (GPT-4o, 5 cycles each):**
+
+| GT | No-debate gap | Debate gap | Arbiter gap | Best |
+|---|---|---|---|---|
+| GCM | 74.4% | 77.9% (+3.5pp) | 79.3% (+4.9pp) | Arbiter |
+| SUSTAIN | 87.7% | 85.8% (-1.9pp) | 76.1% (-11.6pp) | No-debate |
+| RULEX | 58.0% | 80.4% (+22.4pp) | 3.2% (-54.7pp, **wrong winner**) | Debate |
+
+**Correct winner: 8/9.** Only arbiter-RULEX fails.
+
+**Key findings:**
+- Debate without arbiter helps on GCM (+3.5pp) and RULEX (+22.4pp) via param recovery
+  (85.7% and 60.3% respectively). Neutral on SUSTAIN (0% recovery — misspecification
+  doesn't produce enough prediction error to trigger revisions).
+- Arbiter consistently degrades gap on SUSTAIN (-11.6pp) and RULEX (-54.7pp). Helps
+  slightly on GCM (+4.9pp). Root cause on RULEX: meta-agents distort divergence mapping,
+  shifting experiment selection toward non-discriminative structures.
+- Plain debate (no meta-agents) is the best overall configuration under misspecification.
 
 **Architecture:** Existing `default_agent_configs()` → patch with bad params.
 Existing `sync_params_from_theory()` + `validate_param_revision()` handle recovery.
@@ -90,7 +111,8 @@ Only `temporary_structures` from agent proposals enter the EIG pool.
 Tests whether debate generates diagnostic experiments that EIG alone can't discover.
 
 ### Conditions where debate may causally matter
-- Model misspecification (models need LLM-proposed param adaptation)
+- Model misspecification — **confirmed (M15).** Debate improves gap by +3.5pp (GCM),
+  +22.4pp (RULEX) via parameter recovery. Neutral when misspecification is invisible (SUSTAIN).
 - Non-enumerated design space (LLM agents propose novel structures)
 - Ambiguous data (real human data with noise, individual differences)
 - Explanation for humans (goal is understanding, not just identification)

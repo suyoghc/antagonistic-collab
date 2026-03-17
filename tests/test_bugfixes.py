@@ -9129,6 +9129,185 @@ class TestClaimFieldNormalization:
             runner_mod._NORMALIZE_CLAIMS = original
 
 
+class TestFuzzySampledStructureMatch:
+    """Tests for _fuzzy_match_sampled_structure() — parameter-based matching for ephemeral structures.
+
+    Sampled structures get regenerated each cycle with different seeds, so
+    'sampled_ls_8d_sep0.99_13' from cycle 0 won't exist in cycle 1's pool.
+    The fuzzy matcher parses the encoded parameters (type, dims, separation/exceptions)
+    and finds the closest match in the current pool.
+    """
+
+    def test_parse_ls_structure_name(self):
+        """Parse 'sampled_ls_8d_sep0.99_13' → (type='ls', dims=8, sep=0.99)."""
+        from antagonistic_collab.runner import _parse_sampled_params
+
+        params = _parse_sampled_params("sampled_ls_8d_sep0.99_13")
+        assert params is not None
+        assert params["type"] == "ls"
+        assert params["dims"] == 8
+        assert abs(params["sep"] - 0.99) < 1e-6
+
+    def test_parse_rpe_structure_name(self):
+        """Parse 'sampled_rpe_5d_2exc_0' → (type='rpe', dims=5, exc=2)."""
+        from antagonistic_collab.runner import _parse_sampled_params
+
+        params = _parse_sampled_params("sampled_rpe_5d_2exc_0")
+        assert params is not None
+        assert params["type"] == "rpe"
+        assert params["dims"] == 5
+        assert params["exc"] == 2
+
+    def test_parse_non_sampled_returns_none(self):
+        """Non-sampled names return None."""
+        from antagonistic_collab.runner import _parse_sampled_params
+
+        assert _parse_sampled_params("Type_I") is None
+        assert _parse_sampled_params("linear_separable") is None
+
+    def test_exact_type_and_dims_match(self):
+        """Match by type and dims when an exact parameter match exists in pool."""
+        from antagonistic_collab.runner import _fuzzy_match_sampled_structure
+
+        pool = {
+            "sampled_ls_8d_sep1.05_0": {},
+            "sampled_ls_3d_sep2.00_1": {},
+            "sampled_rpe_5d_2exc_0": {},
+        }
+        # Claim targets sampled_ls_8d_sep0.99_13 — closest ls 8d is sep1.05
+        match = _fuzzy_match_sampled_structure("sampled_ls_8d_sep0.99_13", pool)
+        assert match == "sampled_ls_8d_sep1.05_0"
+
+    def test_closest_separation_wins(self):
+        """Among same type+dims candidates, closest separation wins."""
+        from antagonistic_collab.runner import _fuzzy_match_sampled_structure
+
+        pool = {
+            "sampled_ls_8d_sep1.00_0": {},
+            "sampled_ls_8d_sep3.50_1": {},
+            "sampled_ls_8d_sep0.80_2": {},
+        }
+        # sep=0.99 → closest is sep=1.00 (diff=0.01), not sep=0.80 (diff=0.19)
+        match = _fuzzy_match_sampled_structure("sampled_ls_8d_sep0.99_13", pool)
+        assert match == "sampled_ls_8d_sep1.00_0"
+
+    def test_closest_exceptions_wins(self):
+        """Among same type+dims RPE candidates, closest n_exceptions wins."""
+        from antagonistic_collab.runner import _fuzzy_match_sampled_structure
+
+        pool = {
+            "sampled_rpe_5d_1exc_0": {},
+            "sampled_rpe_5d_3exc_1": {},
+            "sampled_rpe_5d_2exc_2": {},
+        }
+        # exc=2 → exact match at 2exc
+        match = _fuzzy_match_sampled_structure("sampled_rpe_5d_2exc_0", pool)
+        assert match == "sampled_rpe_5d_2exc_2"
+
+    def test_different_dims_fallback(self):
+        """If no same-dims match, pick closest dims of same type."""
+        from antagonistic_collab.runner import _fuzzy_match_sampled_structure
+
+        pool = {
+            "sampled_ls_6d_sep1.00_0": {},
+            "sampled_ls_3d_sep1.00_1": {},
+        }
+        # Claim has 8d, pool has 6d and 3d → prefer 6d (closer)
+        match = _fuzzy_match_sampled_structure("sampled_ls_8d_sep0.99_13", pool)
+        assert match == "sampled_ls_6d_sep1.00_0"
+
+    def test_no_match_for_wrong_type(self):
+        """An ls claim should not match an rpe pool entry."""
+        from antagonistic_collab.runner import _fuzzy_match_sampled_structure
+
+        pool = {
+            "sampled_rpe_8d_2exc_0": {},
+        }
+        match = _fuzzy_match_sampled_structure("sampled_ls_8d_sep0.99_13", pool)
+        assert match is None
+
+    def test_empty_pool_returns_none(self):
+        """Empty pool → None."""
+        from antagonistic_collab.runner import _fuzzy_match_sampled_structure
+
+        match = _fuzzy_match_sampled_structure("sampled_ls_8d_sep0.99_13", {})
+        assert match is None
+
+    def test_non_sampled_name_returns_none(self):
+        """Non-sampled names should not be fuzzy-matched."""
+        from antagonistic_collab.runner import _fuzzy_match_sampled_structure
+
+        pool = {"sampled_ls_8d_sep1.00_0": {}}
+        match = _fuzzy_match_sampled_structure("Type_I", pool)
+        assert match is None
+
+    def test_integration_claims_to_boost_specs_with_fuzzy(self):
+        """Claims targeting old sampled names should match current pool via fuzzy match."""
+        from antagonistic_collab.runner import claims_to_boost_specs
+        import antagonistic_collab.runner as runner_mod
+
+        original = runner_mod._FUZZY_STRUCTURE_MATCH
+        runner_mod._FUZZY_STRUCTURE_MATCH = True
+        try:
+            state = EpistemicState(domain="human categorization")
+            state.add_claim(
+                DebateClaim(
+                    agent="Exemplar_Agent",
+                    claim_type="prediction",
+                    content="GCM predicts high accuracy",
+                    testable=True,
+                    structure="sampled_ls_8d_sep0.99_13",
+                    condition="baseline",
+                )
+            )
+
+            # Create a mock protocol with different sampled structures
+            agents = default_agent_configs()
+            protocol = DebateProtocol(state, agents)
+            protocol.sampled_structures = {
+                "sampled_ls_8d_sep1.05_0": {},
+                "sampled_ls_3d_sep2.00_1": {},
+            }
+
+            specs = claims_to_boost_specs(state, protocol)
+            assert len(specs) == 1
+            # Should match the closest sampled structure, not the original name
+            assert specs[0]["structure"] == "sampled_ls_8d_sep1.05_0"
+        finally:
+            runner_mod._FUZZY_STRUCTURE_MATCH = original
+
+    def test_fuzzy_disabled_by_flag(self):
+        """When _FUZZY_STRUCTURE_MATCH is False, old sampled names are rejected."""
+        from antagonistic_collab.runner import claims_to_boost_specs
+        import antagonistic_collab.runner as runner_mod
+
+        original = runner_mod._FUZZY_STRUCTURE_MATCH
+        runner_mod._FUZZY_STRUCTURE_MATCH = False
+        try:
+            state = EpistemicState(domain="human categorization")
+            state.add_claim(
+                DebateClaim(
+                    agent="Exemplar_Agent",
+                    claim_type="prediction",
+                    content="GCM predicts high accuracy",
+                    testable=True,
+                    structure="sampled_ls_8d_sep0.99_13",
+                    condition="baseline",
+                )
+            )
+
+            agents = default_agent_configs()
+            protocol = DebateProtocol(state, agents)
+            protocol.sampled_structures = {
+                "sampled_ls_8d_sep1.05_0": {},
+            }
+
+            specs = claims_to_boost_specs(state, protocol)
+            assert len(specs) == 0
+        finally:
+            runner_mod._FUZZY_STRUCTURE_MATCH = original
+
+
 class TestClaimResponsiveDebateContinued:
     """Continuation of TestClaimResponsiveDebate tests (split by M14 insertion)."""
 
