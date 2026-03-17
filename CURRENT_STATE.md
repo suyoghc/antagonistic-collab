@@ -1,6 +1,18 @@
-# Current State (M14)
+# Current State (M15 in progress)
 
-## Scientific conclusion
+## Active work: M15 — Model misspecification
+
+Phase 1 (complete): parameter sweeps established that **no true mimicry exists**
+between models (they're structurally too different), but misspecification substantially
+narrows the winner's gap — from 61-82% baseline down to 16-29%. RULEX is most
+vulnerable (82% → 16% at error_tolerance=0.25, p_single=0.3).
+
+Phase 2 (next): debate vs no-debate at calibrated misspecification levels. Tests
+whether LLM-proposed parameter revisions widen the gap back toward baseline.
+
+Scripts: `scripts/m15_mimicry_sweep.py`
+
+## Scientific conclusion (M14)
 
 The computational pipeline (Bayesian EIG + model predictions + learning curves) is
 **causally sufficient** to identify the correct model on synthetic benchmarks with

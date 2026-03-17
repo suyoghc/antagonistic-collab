@@ -4,37 +4,92 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ---
 
-## Current status — M12 complete and validated
+## Phase 1a — Mimicry sweep (COMPLETE)
 
-M12 continuous design space complete: pool now ~427 candidates per cycle (11 base + 50 sampled × 7 conditions). 331 tests passing. Live validation: 3/3 correct, 15/15 sampled structures selected, 0% cycle overlap, gaps 77–96%.
+### Result: No true mimicry exists
 
-### Key M12 insight: debate is interpretive, not directive
+Script: `scripts/m15_mimicry_sweep.py`
 
-The computational layer (EIG + continuous sampling + Bayesian update) drives model identification with zero LLM calls. The debate layer provides interpretive value (mechanistic narratives, 80% FR rate) but 0/15 experiments came from agent proposals. This raises the question of whether debate improves identification beyond what bare EIG achieves. Three stances:
-1. Debate was scaffolding — essential for designing the computational layer, now subsumed
-2. Debate is complementary — computation handles selection, debate handles understanding
-3. Debate needs harder problems — synthetic benchmarks are too easy; real data may reveal debate's value
+Swept parameter grids for all 3 models across 7 base structures (Shepard I-VI,
+five_four). At every parameter setting tested, each model's predictions remain
+closer to its own ground truth than to any competitor. The models are structurally
+too different for parameter changes to make them indistinguishable.
 
-### Open issues
-1. **SUSTAIN converges too fast** — even tau=0.005 can't slow it because predictions are categorically different. Not a bug.
-2. **Low crux-directed rate** — 1/15 experiments (6.7% vs 30% theoretical). Most cruxes reference structures already in the EIG frontier.
-3. **Low format compliance** — 24/105 cruxes parsed (23%). Agents prefer semantic expressiveness over structured format.
-4. **RPE never selected** — 40% of continuous samples are rule_plus_exception but EIG never picks them. Consider reducing the RPE fraction or investigating why.
+Closest mimicry distances (all still far from threshold):
+- GCM → SUSTAIN: c=6.0, RMSE=0.2430 (vs self: 0.0580) — 4× gap
+- SUSTAIN → GCM: r=12.0/eta=0.04, RMSE=0.2438 (vs self: 0.0573) — 4× gap
+- RULEX → SUSTAIN: err_tol=0.05/p_single=0.3, RMSE=0.3258 (vs self: 0.2119) — 1.5× gap
 
-### Possible next steps
-- Ablation study: EIG-only (no debate) vs full system — does debate change identification outcomes?
-- New cognitive domains (memory retrieval, decision making)
-- AutoRA integration for real data
-- Longer runs (10+ cycles) to test cumulative reasoning
-- Adaptive sampling (use prior EIG results to focus sampling regions)
+**Implication:** Model identification will always succeed (correct model always
+closest to ground truth). But misspecification narrows the gap, making identification
+fragile. M15 tests whether debate improves identification *quality* (wider gap,
+lower RMSE) not whether it flips the *winner*.
 
-### WRITEUP.md status
-- Sections 1–6 + Appendix A + References complete (~592 lines)
-- **Deferred enhancement:** 4 items from LESSONS_LEARNED.md could strengthen the paper:
-  1. Vivid confabulation example (agents interpreting constant 0.550 data) → Section 5.3
-  2. Exact overclaiming numbers (claimed 0.75, actual 0.180) → Section 5.4
-  3. Mock vs live crux acceptance (100% vs 15%) → Section 6.3
-  4. "12 Theses" sharpest formulations (Thesis 1: "Argumentation without discriminating data is empty") → Section 6.1
+**Why this is still scientifically meaningful:** In real-world settings with noisy
+data (M17), a narrow gap can easily flip. Demonstrating that debate widens the gap
+via parameter recovery would show debate's value as a robustness mechanism.
+
+---
+
+## Active: Phase 1b — Competition-based gap sweep
+
+### Goal
+Generate synthetic data from each ground-truth model, then score all three models
+against that data with the correct model deliberately misspecified. Measure how much
+misspecification narrows the winner's gap. Select settings where the gap is small
+enough that parameter recovery matters.
+
+### Script: extend `scripts/m15_mimicry_sweep.py`
+
+### Method
+For each ground truth (GCM, SUSTAIN, RULEX):
+1. Generate synthetic data using ground-truth params (via `_synthetic_runner()` logic)
+2. Score all 3 models against that data using LOO
+3. Correct model uses misspecified params; competitors use their own defaults
+4. Compute RMSE and gap (difference between correct model and best competitor)
+5. Sweep misspecification levels to find settings that meaningfully narrow the gap
+
+### Why debate helps and EIG alone can't
+EIG assumes fixed params — optimizes for model discrimination, not parameter
+estimation. Three debate-specific capabilities address this:
+1. **Parameter revision** — agents propose new values via `sync_params_from_theory()`
+2. **Diagnosis** — agents reason about *why* predictions are wrong
+3. **Directed experimentation** — claim-directed selection tests whether revisions helped
+
+This is Pitt & Myung's (2004) point: parameter estimation and model selection must
+happen together. EIG does selection. Debate does estimation.
+
+### Ground-truth parameters
+- GCM: `c=4.0, r=1, gamma=1.0` (from `_synthetic_runner()`)
+- SUSTAIN: `r=9.01, beta=1.252, d=16.924, eta=0.092`
+- RULEX: `p_single=0.5, p_conj=0.3, error_tolerance=0.1, seed=42`
+
+---
+
+## Phase 1b — Competition sweep (COMPLETE)
+
+### Result: Misspecification narrows gaps but never flips winner
+
+Generated synthetic data from each ground truth, scored all 3 models with
+the correct model deliberately misspecified. No setting flips the winner.
+
+| Ground Truth | Baseline gap | Worst misspec setting | Narrowed gap |
+|---|---|---|---|
+| GCM | 60.7% | c=0.5 | 27.9% |
+| SUSTAIN | 65.4% | r=3.0, eta=0.15 | 28.5% |
+| RULEX | 81.9% | err_tol=0.25, p_single=0.3 | 15.7% |
+
+RULEX most vulnerable: gap drops from 82% → 16%. Best test case for Phase 2.
+
+### Recommended misspecification levels for Phase 2
+- **GCM**: c=0.5 (broadest similarity, 28% gap)
+- **SUSTAIN**: r=3.0, eta=0.15 (broadest clusters + fast learning, 29% gap)
+- **RULEX**: error_tolerance=0.25, p_single=0.3 (lenient rules + limited search, 16% gap)
+
+### What Phase 2 tests
+Debate vs no-debate at these settings. Debate should widen the gap back toward
+baseline via parameter recovery. No-debate stays stuck with wrong params.
+RULEX is the strongest test case (most room to improve, most degradation).
 
 ---
 
@@ -48,3 +103,4 @@ The computational layer (EIG + continuous sampling + Bayesian update) drives mod
 - **EIG greedy optimization** — selects the same structure repeatedly (Phase 13). Thompson sampling (D34) fixes this.
 - **Pairwise curve divergence as posterior evidence** — rewards model distinctiveness, not fit to data. Data-independent bonus distorts posterior. Removed in D35.
 - **Multiplicative EIG boost for cruxes** — 2× multiplier barely shifts Thompson sampling when EIG scores cluster narrowly. Replaced with mixture distribution in D37.
+- **Exact structure name matching for sampled structures** — ephemeral names change every cycle. Fixed with parameter-based fuzzy matching (D42).
