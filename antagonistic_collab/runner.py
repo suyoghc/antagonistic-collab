@@ -1468,7 +1468,7 @@ def run_interpretation_debate(
             f'{{"interpretation": "your analysis of what the results show", '
             f'"confounds_flagged": ["list any confounds or methodological issues"], '
             f'"hypothesis": "what experiment should come next and why", '
-            f'"claims": [{{"claim": "...", "testable": true/false, "structure": "...", "predicted_outcome": "..."}}], '
+            f'"claims": [{{"claim": "...", "testable": true/false, "structure": "...", "condition": "...", "predicted_outcome": "..."}}], '
             f'"novel_structure": null or a structure dict (see example below), '
             f'"revision": null or {{"description": "...", "new_params": {{"c": 4.5}}, "new_predictions": [...]}} '
             f"if you want to revise your theory (new_params are optional model parameter overrides)}}\n\n"
