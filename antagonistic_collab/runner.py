@@ -1243,7 +1243,7 @@ def run_full_pool_selection(
             )
 
     # Claim-directed selection: boost experiments matching testable claims
-    claim_specs = claims_to_boost_specs(protocol.state)
+    claim_specs = claims_to_boost_specs(protocol.state, protocol)
     if claim_specs:
         print(
             f"  Claim-directed: {len(claim_specs)} testable claims targeting pool candidates"
@@ -1963,7 +1963,9 @@ def cruxes_to_boost_specs(state: EpistemicState) -> list[dict]:
     return specs
 
 
-def claims_to_boost_specs(state: EpistemicState) -> list[dict]:
+def claims_to_boost_specs(
+    state: EpistemicState, protocol: DebateProtocol = None
+) -> list[dict]:
     """Convert untested testable claims into boost specs for EIG selection.
 
     Filters claims to those that are untested, testable, and have valid
@@ -1982,6 +1984,10 @@ def claims_to_boost_specs(state: EpistemicState) -> list[dict]:
     valid_structures = set(STRUCTURE_REGISTRY.keys()) | set(
         PARAMETRIC_STRUCTURES.keys()
     )
+    # Include sampled and temporary structures from the protocol
+    if protocol is not None:
+        valid_structures |= set(getattr(protocol, "sampled_structures", {}).keys())
+        valid_structures |= set(getattr(protocol, "temporary_structures", {}).keys())
     valid_conditions = set(CONDITION_EFFECTS.keys()) | set(PARAMETRIC_CONDITIONS.keys())
 
     seen = set()
