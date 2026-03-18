@@ -1179,6 +1179,137 @@ def run_interpretation(
     )
 
 
+def run_structure_proposal(
+    protocol: DebateProtocol,
+    client,
+    transcript: list,
+) -> None:
+    """Open design space: agents propose novel structures via LLM.
+
+    Runs between DIVERGENCE_MAPPING and EIG SELECTION when
+    ``_DESIGN_SPACE == "open"``. Each agent proposes 2-3 structures.
+    Valid proposals are stored in ``protocol.temporary_structures`` and
+    will be crossed with all conditions by ``generate_full_candidate_pool()``.
+
+    On cycle 0, agents get a qualitative model summary + divergence map
+    computed on STRUCTURE_REGISTRY (informational only — registry structures
+    don't enter the EIG pool). On later cycles, they also see the existing
+    pool, EIG scores from last cycle, and results so far.
+    """
+    from .debate_protocol import (
+        STRUCTURE_DESCRIPTIONS,
+        validate_novel_structure,
+    )
+
+    print("\n" + "=" * 70)
+    print("PHASE: STRUCTURE PROPOSAL — Agents design novel experiments (open mode)")
+    print("=" * 70)
+
+    # Build context: divergence map on registry (informational, not in pool)
+    div_map = protocol.compute_divergence_map()
+    div_context = protocol._divergence_context(div_map=div_map)
+
+    # Show existing temporary structures (from prior cycles)
+    existing = getattr(protocol, "temporary_structures", {})
+    existing_block = ""
+    if existing:
+        lines = ["### Existing agent-proposed structures (already in pool):"]
+        for name, spec in existing.items():
+            n_items = len(spec.get("stimuli", []))
+            n_cats = len(set(spec.get("labels", [])))
+            lines.append(f"  - {name}: {n_items} items, {n_cats} categories")
+        lines.append(
+            "\nDo NOT re-propose structures that are already in the pool. "
+            "Instead, propose structures that test different aspects of the models."
+        )
+        existing_block = "\n".join(lines)
+
+    # Reference structures (informational only — not in EIG pool)
+    ref_lines = ["### Reference structures (for context only — NOT in your EIG pool):"]
+    for name, desc in STRUCTURE_DESCRIPTIONS.items():
+        ref_lines.append(f"  - {name}: {desc}")
+    ref_block = "\n".join(ref_lines)
+
+    messages = []
+    n_valid = 0
+    n_invalid = 0
+
+    for agent in protocol.agent_configs:
+        context = protocol.state.summary_for_agent(agent.name)
+        prompt = (
+            f"PHASE: Structure Proposal (Open Design Space)\n\n"
+            f"In this experiment, there are NO pre-registered structures. "
+            f"You must DESIGN novel category structures that will best "
+            f"discriminate between the competing models.\n\n"
+            f"DIVERGENCE MAP (computed on standard structures for reference):\n"
+            f"{div_context}\n\n"
+            f"{ref_block}\n\n"
+            f"{existing_block}\n\n"
+            f"CURRENT STATE:\n{context}\n\n"
+            f"YOUR TASK: Propose 2-3 novel category structures that will best "
+            f"test your theoretical position ({agent.theory_name}). Design "
+            f"structures that specifically exploit weaknesses in competing "
+            f"models or showcase your model's strengths.\n\n"
+            f"CONSTRAINTS:\n"
+            f"  - 4-32 items per structure\n"
+            f"  - ≤8 dimensions per stimulus\n"
+            f"  - ≥2 categories\n"
+            f"  - stimuli must be 2D (list of lists)\n\n"
+            f"You MUST output a JSON block with:\n"
+            f'{{"structures": [\n'
+            f'  {{"name": "descriptive_name", '
+            f'"stimuli": [[dim1, dim2, ...], ...], '
+            f'"labels": [0, 1, ...], '
+            f'"rationale": "why this structure discriminates models"}},\n'
+            f"  ...\n"
+            f"]}}\n\n"
+            f"Be specific and concrete. Each structure should target a "
+            f"different theoretical distinction."
+        )
+
+        print(f"\n--- {agent.name} proposes structures ---")
+        response = call_agent(client, agent.system_prompt, prompt)
+        print(response[:600] + "..." if len(response) > 600 else response)
+
+        json_block = extract_json(response) or {}
+        proposals = json_block.get("structures", [])
+        if not isinstance(proposals, list):
+            proposals = [proposals] if isinstance(proposals, dict) else []
+
+        for proposal in proposals:
+            if not isinstance(proposal, dict):
+                continue
+            name = proposal.get("name", "")
+            if not name:
+                continue
+            is_valid, reason = validate_novel_structure(proposal)
+            if is_valid:
+                protocol.temporary_structures[name] = {
+                    "stimuli": proposal["stimuli"],
+                    "labels": proposal["labels"],
+                }
+                n_valid += 1
+                print(f"    ✓ Registered: {name}")
+            else:
+                n_invalid += 1
+                print(f"    ✗ Rejected '{name}': {reason}")
+
+        messages.append(
+            {
+                "agent": agent.name,
+                "phase": "STRUCTURE_PROPOSAL",
+                "response": response,
+                "parsed_json": json_block,
+            }
+        )
+
+    print(
+        f"\n  Structure proposal complete: {n_valid} valid, {n_invalid} rejected, "
+        f"{len(protocol.temporary_structures)} total in pool"
+    )
+    transcript.extend(messages)
+
+
 def run_full_pool_selection(
     protocol: DebateProtocol,
     transcript: list,
@@ -1214,6 +1345,24 @@ def run_full_pool_selection(
         n_continuous_samples=_N_CONTINUOUS_SAMPLES,
         continuous_seed=42 + protocol.state.cycle * 1000,
     )
+
+    # Open mode fallback: if no agent-proposed structures exist yet (cycle 0),
+    # seed with Type_I + Type_VI so the system has *something* to select from.
+    if not pool and _DESIGN_SPACE == "open":
+        from .debate_protocol import STRUCTURE_REGISTRY
+
+        fallback = {
+            "Type_I": STRUCTURE_REGISTRY["Type_I"],
+            "Type_VI": STRUCTURE_REGISTRY["Type_VI"],
+        }
+        protocol.temporary_structures.update(fallback)
+        pool = generate_full_candidate_pool(
+            protocol,
+            extra_structures=protocol.temporary_structures,
+            design_space="open",
+        )
+        print("  Open mode fallback: seeded with Type_I + Type_VI")
+
     print(f"  Evaluating {len(pool)} candidates...")
 
     # Extract focus pair from posterior and/or claim ledger
@@ -1456,6 +1605,24 @@ def run_interpretation_debate(
                 )
                 falsified_directive = "\n".join(lines) + "\n"
 
+        # Open-mode directive: strongly encourage structure proposals
+        open_mode_directive = ""
+        if _DESIGN_SPACE == "open":
+            existing_names = list(getattr(protocol, "temporary_structures", {}).keys())
+            existing_list = (
+                ", ".join(existing_names) if existing_names else "(none yet)"
+            )
+            open_mode_directive = (
+                "\n\n### OPEN DESIGN SPACE — Structure Proposals Strongly Encouraged\n"
+                "This experiment uses an OPEN design space: only agent-proposed "
+                "structures enter the EIG pool. Based on the results you just "
+                "observed, propose 1-2 IMPROVED structures in `novel_structure` "
+                "that would be more diagnostic. This is your second proposal "
+                "opportunity this cycle (the first was the dedicated structure "
+                "proposal phase).\n"
+                f"Currently in pool: {existing_list}\n"
+            )
+
         prompt = (
             f"PHASE: Interpretation Debate\n\n"
             f"You are interpreting experimental results. Analyze the data and "
@@ -1463,7 +1630,8 @@ def run_interpretation_debate(
             f"RESULTS AND CONTEXT:\n{extended_context}\n"
             f"{conflict_block}"
             f"{claims_block}"
-            f"{falsified_directive}\n"
+            f"{falsified_directive}"
+            f"{open_mode_directive}\n"
             f"You MUST output a JSON block with:\n"
             f'{{"interpretation": "your analysis of what the results show", '
             f'"confounds_flagged": ["list any confounds or methodological issues"], '
@@ -2181,6 +2349,31 @@ def run_audit(protocol: DebateProtocol, client, transcript: list) -> PhaseResult
 
 
 # ---------------------------------------------------------------------------
+# Parameter distance — used for parameter recovery measurement (M15)
+# ---------------------------------------------------------------------------
+
+
+def param_distance(params_a: dict, params_b: dict) -> float:
+    """Normalized Euclidean distance between two param dicts.
+
+    Only compares shared keys. Normalizes each dimension by the magnitude of
+    ``params_b`` (typically ground truth) to make distances comparable across
+    params with different scales.
+
+    Returns ``inf`` when no keys are shared.
+    """
+    shared = set(params_a.keys()) & set(params_b.keys())
+    if not shared:
+        return float("inf")
+    sq_diffs = []
+    for k in shared:
+        a, b = float(params_a[k]), float(params_b[k])
+        scale = max(abs(b), 1e-6)
+        sq_diffs.append(((a - b) / scale) ** 2)
+    return (sum(sq_diffs) / len(sq_diffs)) ** 0.5
+
+
+# ---------------------------------------------------------------------------
 # Parameter sync: close the theory→agent_config feedback loop
 # ---------------------------------------------------------------------------
 
@@ -2658,6 +2851,10 @@ def run_cycle(
     protocol.advance_phase(result)
 
     if mode == "full_pool":
+        # Open design space: agents propose structures before EIG selection
+        if _DESIGN_SPACE == "open":
+            run_structure_proposal(protocol, client, transcript)
+
         # Crux negotiation (ARBITER): identify, negotiate, finalize decisive questions
         if _ARBITER:
             run_crux_identification(protocol, client, cycle=protocol.state.cycle)

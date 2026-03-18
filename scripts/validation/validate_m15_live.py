@@ -36,14 +36,12 @@ from antagonistic_collab.epistemic_state import EpistemicState
 from antagonistic_collab.debate_protocol import (
     DebateProtocol,
     default_agent_configs,
-    PARAMETRIC_CONDITIONS,
-    STRUCTURE_REGISTRY,
-    CONDITION_EFFECTS,
 )
 from antagonistic_collab.runner import (
     run_cycle,
     create_default_meta_agents,
     _create_client,
+    param_distance,
 )
 import antagonistic_collab.runner as runner_mod
 
@@ -358,22 +356,8 @@ def run_condition(client, true_model: str, debate: bool, arbiter: bool = True,
     return analysis
 
 
-def _param_distance(params_a: dict, params_b: dict) -> float:
-    """Normalized Euclidean distance between two param dicts.
-
-    Only compares shared keys. Normalizes each dimension by the GT value
-    to make distances comparable across params with different scales.
-    """
-    shared = set(params_a.keys()) & set(params_b.keys())
-    if not shared:
-        return float("inf")
-    sq_diffs = []
-    for k in shared:
-        a, b = float(params_a[k]), float(params_b[k])
-        # Normalize by GT magnitude (avoid div-by-zero)
-        scale = max(abs(b), 1e-6)
-        sq_diffs.append(((a - b) / scale) ** 2)
-    return (sum(sq_diffs) / len(sq_diffs)) ** 0.5
+# Alias for backward compat — canonical version lives in runner.py
+_param_distance = param_distance
 
 
 def setup_client():

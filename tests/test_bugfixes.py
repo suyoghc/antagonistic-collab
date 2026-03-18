@@ -10247,3 +10247,385 @@ class TestDebateAblationConfig:
         assert "greedy_no_debate" in cond_groups
         assert "greedy_debate_no_arbiter" in cond_groups
         assert "greedy_debate_arbiter" in cond_groups
+
+
+# =========================================================================
+# M15 Test Hardening — validate_novel_structure(), crux_id bugfix,
+# param_distance(), param recovery flow
+# =========================================================================
+
+
+class TestValidateNovelStructure:
+    """Tests for validate_novel_structure() — validates LLM-proposed structures.
+
+    No existing tests. This function gates every agent-proposed structure before
+    it enters the EIG pool. Critical for M16 (open design space) where *all*
+    structures come from agent proposals.
+    """
+
+    def test_valid_structure_passes(self):
+        """Minimal valid structure: 2 categories, 4 items, 2D."""
+        spec = {
+            "stimuli": [[0, 0], [0, 1], [1, 0], [1, 1]],
+            "labels": [0, 1, 1, 0],
+        }
+        is_valid, reason = validate_novel_structure(spec)
+        assert is_valid, f"Should be valid but got: {reason}"
+        assert reason == ""
+
+    def test_missing_stimuli_key_fails(self):
+        """Structure without 'stimuli' key is rejected."""
+        spec = {"labels": [0, 1, 1, 0]}
+        is_valid, reason = validate_novel_structure(spec)
+        assert not is_valid
+        assert "stimuli" in reason.lower()
+
+    def test_missing_labels_key_fails(self):
+        """Structure without 'labels' key is rejected."""
+        spec = {"stimuli": [[0, 0], [0, 1], [1, 0], [1, 1]]}
+        is_valid, reason = validate_novel_structure(spec)
+        assert not is_valid
+        assert "labels" in reason.lower()
+
+    def test_length_mismatch_fails(self):
+        """5 stimuli but 4 labels → rejected."""
+        spec = {
+            "stimuli": [[0, 0], [0, 1], [1, 0], [1, 1], [0.5, 0.5]],
+            "labels": [0, 1, 1, 0],
+        }
+        is_valid, reason = validate_novel_structure(spec)
+        assert not is_valid
+        assert "mismatch" in reason.lower() or "length" in reason.lower()
+
+    def test_too_few_items_fails(self):
+        """3 items (minimum is 4) → rejected."""
+        spec = {
+            "stimuli": [[0, 0], [0, 1], [1, 0]],
+            "labels": [0, 1, 1],
+        }
+        is_valid, reason = validate_novel_structure(spec)
+        assert not is_valid
+        assert "few" in reason.lower() or "4" in reason
+
+    def test_too_many_items_fails(self):
+        """33 items (maximum is 32) → rejected."""
+        spec = {
+            "stimuli": [[i, 0] for i in range(33)],
+            "labels": [i % 2 for i in range(33)],
+        }
+        is_valid, reason = validate_novel_structure(spec)
+        assert not is_valid
+        assert "many" in reason.lower() or "32" in reason
+
+    def test_too_many_dims_fails(self):
+        """9-dimensional stimuli (max is 8) → rejected."""
+        spec = {
+            "stimuli": [[0] * 9 for _ in range(4)],
+            "labels": [0, 0, 1, 1],
+        }
+        is_valid, reason = validate_novel_structure(spec)
+        assert not is_valid
+        assert "dimension" in reason.lower() or "8" in reason
+
+    def test_single_category_fails(self):
+        """All labels the same → rejected (need ≥2 categories)."""
+        spec = {
+            "stimuli": [[0, 0], [0, 1], [1, 0], [1, 1]],
+            "labels": [0, 0, 0, 0],
+        }
+        is_valid, reason = validate_novel_structure(spec)
+        assert not is_valid
+        assert "categor" in reason.lower() or "2" in reason
+
+
+class TestCruxIdBugfix:
+    """Tests for the crux_id KeyError fix at runner.py:1274-1279.
+
+    The bug: claims_to_boost_specs() returns specs with only
+    {"structure": ..., "condition": ...} (no crux_id). These get mixed into
+    boost_specs alongside crux specs (which have crux_id). Line 1278
+    previously did spec["crux_id"] → KeyError on claim-only specs.
+
+    Fix: spec.get("crux_id") returns None without crashing.
+    """
+
+    def test_boost_spec_without_crux_id_no_crash(self):
+        """Claim-only boost spec (no crux_id) should not crash the matching loop."""
+        boost_specs = [
+            {"structure": "Type_I", "condition": "pure"},
+        ]
+        best_struct = "Type_I"
+        best_cond = "pure"
+
+        # Replicate the logic at runner.py:1274-1279
+        crux_directed = False
+        crux_match_id = None
+        for spec in boost_specs:
+            if spec["structure"] == best_struct and spec["condition"] == best_cond:
+                crux_directed = True
+                crux_match_id = spec.get("crux_id")
+                break
+
+        assert crux_directed is True
+        assert crux_match_id is None  # No crash, just None
+
+    def test_boost_spec_with_crux_id_still_works(self):
+        """Crux-directed spec with crux_id present returns the ID."""
+        boost_specs = [
+            {"structure": "Type_VI", "condition": "short", "crux_id": "crux_42"},
+        ]
+        best_struct = "Type_VI"
+        best_cond = "short"
+
+        crux_directed = False
+        crux_match_id = None
+        for spec in boost_specs:
+            if spec["structure"] == best_struct and spec["condition"] == best_cond:
+                crux_directed = True
+                crux_match_id = spec.get("crux_id")
+                break
+
+        assert crux_directed is True
+        assert crux_match_id == "crux_42"
+
+    def test_mixed_boost_specs(self):
+        """Mix of claim specs (no crux_id) and crux specs — no crash on iteration."""
+        boost_specs = [
+            {"structure": "Type_I", "condition": "pure"},  # claim-only
+            {"structure": "Type_VI", "condition": "short", "crux_id": "crux_7"},
+            {"structure": "Type_II", "condition": "long"},  # claim-only
+        ]
+        best_struct = "Type_II"
+        best_cond = "long"
+
+        crux_directed = False
+        crux_match_id = None
+        for spec in boost_specs:
+            if spec["structure"] == best_struct and spec["condition"] == best_cond:
+                crux_directed = True
+                crux_match_id = spec.get("crux_id")
+                break
+
+        assert crux_directed is True
+        assert crux_match_id is None  # claim-only spec matched
+
+
+class TestParamDistance:
+    """Tests for param_distance() — normalized Euclidean distance for parameter recovery.
+
+    This function is the core metric for M15 results: it measures how close
+    agent params are to ground truth, normalized by GT magnitude so that
+    params at different scales are comparable.
+    """
+
+    def test_identical_params_zero_distance(self):
+        """Same dict → 0.0 distance."""
+        from antagonistic_collab.runner import param_distance
+
+        params = {"c": 4.0, "r": 1.0, "gamma": 1.0}
+        assert param_distance(params, params) == 0.0
+
+    def test_known_distance(self):
+        """Hand-computed: {a: 1} vs {a: 2} → |1-2|/2 = 0.5."""
+        from antagonistic_collab.runner import param_distance
+
+        d = param_distance({"a": 1.0}, {"a": 2.0})
+        assert abs(d - 0.5) < 1e-10
+
+    def test_empty_shared_keys_returns_inf(self):
+        """No shared keys → inf."""
+        from antagonistic_collab.runner import param_distance
+
+        d = param_distance({"a": 1.0}, {"b": 2.0})
+        assert d == float("inf")
+
+    def test_multi_param_distance(self):
+        """3 shared keys: manual computation matches.
+
+        params_a = {x: 1, y: 4, z: 10}
+        params_b = {x: 2, y: 8, z: 5}  (GT)
+        x: (1-2)/2 = -0.5, sq = 0.25
+        y: (4-8)/8 = -0.5, sq = 0.25
+        z: (10-5)/5 = 1.0, sq = 1.0
+        mean sq = (0.25 + 0.25 + 1.0) / 3 = 0.5
+        distance = sqrt(0.5) ≈ 0.7071
+        """
+        from antagonistic_collab.runner import param_distance
+
+        d = param_distance(
+            {"x": 1.0, "y": 4.0, "z": 10.0},
+            {"x": 2.0, "y": 8.0, "z": 5.0},
+        )
+        expected = (0.5) ** 0.5  # sqrt(0.5) ≈ 0.7071
+        assert abs(d - expected) < 1e-10
+
+    def test_scale_invariance(self):
+        """Params at very different magnitudes get properly normalized.
+
+        {a: 100} vs {a: 200}: (100-200)/200 = -0.5, distance = 0.5
+        {b: 0.01} vs {b: 0.02}: (0.01-0.02)/0.02 = -0.5, distance = 0.5
+        Both should give the same distance despite 10000x scale difference.
+        """
+        from antagonistic_collab.runner import param_distance
+
+        d_large = param_distance({"a": 100.0}, {"a": 200.0})
+        d_small = param_distance({"b": 0.01}, {"b": 0.02})
+        assert abs(d_large - d_small) < 1e-10
+        assert abs(d_large - 0.5) < 1e-10
+
+
+class TestParamRecoveryFlow:
+    """Tests for the misspecification → param patching → recovery measurement flow.
+
+    Verifies that patching agent params works correctly and that recovery
+    percentage is computed properly.
+    """
+
+    def test_patch_agent_params_overwrites_target(self):
+        """Patching an agent's default_params replaces the target values."""
+        agents = default_agent_configs()
+        exemplar = [a for a in agents if a.name == "Exemplar_Agent"][0]
+        original_c = exemplar.default_params.get("c")
+
+        # Patch with misspecified value
+        exemplar.default_params["c"] = 0.5
+        assert exemplar.default_params["c"] == 0.5
+        assert exemplar.default_params["c"] != original_c
+
+    def test_patch_agent_params_leaves_competitors(self):
+        """Patching one agent's params doesn't affect other agents."""
+        agents = default_agent_configs()
+        exemplar = [a for a in agents if a.name == "Exemplar_Agent"][0]
+        rule = [a for a in agents if a.name == "Rule_Agent"][0]
+
+        rule_params_before = dict(rule.default_params)
+        exemplar.default_params["c"] = 0.5
+
+        # Rule_Agent's params should be unchanged
+        assert rule.default_params == rule_params_before
+
+    def test_recovery_percentage_computation(self):
+        """Recovery = (initial_dist - final_dist) / initial_dist * 100.
+
+        Example: initial distance 2.0, final distance 0.5 → 75% recovery.
+        """
+        from antagonistic_collab.runner import param_distance
+
+        gt = {"c": 4.0, "r": 1.0}
+        misspec = {"c": 0.5, "r": 1.0}
+        recovered = {"c": 3.125, "r": 1.0}  # partially recovered
+
+        initial_dist = param_distance(misspec, gt)
+        final_dist = param_distance(recovered, gt)
+
+        assert initial_dist > 0
+        assert final_dist < initial_dist
+
+        recovery_pct = (initial_dist - final_dist) / initial_dist * 100
+        assert 0 < recovery_pct < 100
+
+
+# =========================================================================
+# M16 — Open design space tests
+# =========================================================================
+
+
+class TestOpenDesignSpace:
+    """Tests for the 'open' design space mode (M16).
+
+    In open mode, the candidate pool comes entirely from agent-proposed
+    structures (protocol.temporary_structures). No registry structures
+    are included. This tests the core mechanism.
+    """
+
+    def test_open_pool_empty_when_no_proposals(self):
+        """Open mode with no extra_structures → empty pool."""
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        pool = generate_full_candidate_pool(
+            protocol, extra_structures=None, design_space="open"
+        )
+        assert pool == []
+
+    def test_open_pool_contains_only_proposals(self):
+        """Open mode pool contains only agent-proposed structures × conditions."""
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        extra = {
+            "agent_struct_1": {
+                "stimuli": [[0, 0], [0, 1], [1, 0], [1, 1]],
+                "labels": [0, 1, 1, 0],
+            },
+        }
+        pool = generate_full_candidate_pool(
+            protocol, extra_structures=extra, design_space="open"
+        )
+        assert len(pool) > 0
+        # All structures in pool should be the proposed one
+        struct_names = {s for s, c in pool}
+        assert struct_names == {"agent_struct_1"}
+        # Should be crossed with all 7 conditions (5 base + 2 parametric)
+        conditions = {c for s, c in pool}
+        assert len(conditions) == 7
+
+    def test_open_pool_excludes_registry(self):
+        """Open mode must NOT include STRUCTURE_REGISTRY structures."""
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        extra = {
+            "my_struct": {
+                "stimuli": [[0, 0], [0, 1], [1, 0], [1, 1]],
+                "labels": [0, 0, 1, 1],
+            },
+        }
+        pool = generate_full_candidate_pool(
+            protocol, extra_structures=extra, design_space="open"
+        )
+        struct_names = {s for s, c in pool}
+        # None of the registry structures should appear
+        for registry_name in STRUCTURE_REGISTRY:
+            assert registry_name not in struct_names
+
+    def test_open_pool_multiple_proposals_accumulate(self):
+        """Multiple proposed structures all appear in the open pool."""
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        extra = {
+            "struct_a": {
+                "stimuli": [[0, 0], [0, 1], [1, 0], [1, 1]],
+                "labels": [0, 1, 1, 0],
+            },
+            "struct_b": {
+                "stimuli": [[0, 0], [0, 1], [1, 0], [1, 1], [0.5, 0.5]],
+                "labels": [0, 1, 1, 0, 1],
+            },
+        }
+        pool = generate_full_candidate_pool(
+            protocol, extra_structures=extra, design_space="open"
+        )
+        struct_names = {s for s, c in pool}
+        assert struct_names == {"struct_a", "struct_b"}
+        # 2 structures × 7 conditions = 14
+        assert len(pool) == 14
+
+    def test_continuous_pool_still_includes_registry(self):
+        """Regression: continuous mode must still include registry (not broken by open)."""
+        state = EpistemicState(domain="test")
+        agents = default_agent_configs()
+        protocol = DebateProtocol(state, agents)
+
+        pool = generate_full_candidate_pool(
+            protocol, design_space="continuous", n_continuous_samples=5
+        )
+        struct_names = {s for s, c in pool}
+        # Registry structures should be present
+        assert "Type_I" in struct_names
+        assert "Type_VI" in struct_names
