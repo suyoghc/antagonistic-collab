@@ -416,7 +416,23 @@ The introduction framed this project around a specific question: can AI agents, 
 
 This pattern suggests a general design principle for hybrid LLM-computation scientific systems: use computation for anything that can be formulated as an optimization problem (experiment selection, posterior update, model fitting), and use language models for anything that requires semantic understanding (interpretation, explanation, hypothesis generation, identifying what questions matter). The boundary is not fixed — crux-directed experiment selection sits precisely at the interface — but the principle provides a useful default. The crux-EIG convergence documented in Section 4.6 adds a subtlety: in constrained design spaces, the semantic and computational approaches identify the same discriminating experiments because the candidate pool is small enough for both to reach the same frontier. The unique contribution of semantic reasoning may emerge primarily in richer design spaces where domain knowledge about model mechanisms could reveal discriminating conditions that Monte Carlo search would miss.
 
-### 6.2 What adversarial collaboration gains from automation
+### 6.2 Every intervention carries an implicit model-type prior
+
+The M16 results reveal a pattern that complicates the architecture thesis: each layer of the system embeds an implicit bias toward certain model types, and these biases are not random noise but systematic priors that favor the structures each component naturally generates.
+
+**The arbiter biases toward similarity-based models.** Crux-directed experiment selection identifies points of model disagreement and steers experiments toward them. Because GCM and SUSTAIN disagree most visibly on continuous, similarity-graded structures — where attention weighting and cluster recruitment produce different prediction gradients — the crux machinery preferentially selects these structures. The result is dramatic: SUSTAIN achieves its best-ever identification gap (96.0%) under the closed_arbiter condition, while RULEX — which requires discrete rule-plus-exception structures to demonstrate its distinctive sudden-learning dynamics — degrades by 22pp. The crux mechanism is not broken; it is partial, in the sense that Navarro (2019) describes: choices that precede the statistical analysis constrain which models can win.
+
+**Open design biases toward rule-based models.** When LLM agents propose experiment structures without a curated registry, they generate semantically rich designs: "exception_heavy_structure," "conjunctive_rule_with_exceptions," "rule_versus_similarity_conflict." These names reveal the bias — the proposals are organized around discrete, nameable structural properties that LLMs can reason about verbally. This favors RULEX, whose diagnostic structures have clear verbal descriptions ("items that follow a rule except for memorized exceptions"), over SUSTAIN, whose diagnostic conditions involve continuous parameter interactions that are harder to articulate. Open design recovers RULEX's gap from a catastrophic -27.5pp (closed_debate) to -3.4pp, while degrading SUSTAIN by -23.6pp.
+
+**The computational pipeline is the only model-agnostic component.** Bayesian EIG with Thompson sampling evaluates all candidates by their expected information gain for discriminating the full model set, without privileging any model type's preferred structures. It achieves 76-88% gap across all three ground truths — never the best for any specific model, but reliably good for all. This is the behavioral signature of a prior that is approximately uniform over model types, in contrast to the peaked priors that debate and arbitration impose.
+
+This finding connects to a broader point in the model selection literature: the design space itself functions as a prior over models (Navarro, Pitt & Myung, 2004; Broomell, Sloman, Blaha & Chelen, 2019). Broomell et al. (2019) argue explicitly that stimulus selection biases model comparison outcomes — a stimulus set chosen to reveal rule-based structure will favor rule models, while stimuli chosen to reveal similarity gradients will favor exemplar models. Kennedy, Simpson & Gelman (2019) make the complementary point that the experiment functions as an implicit prior: the same statistical model can be informative or uninformative depending on the experimental context. Our results provide an empirical demonstration of this principle in the specific context of hybrid LLM-computation systems, where the biases arise not from a human experimenter's choices but from the structural properties of different algorithmic components.
+
+The practical implication is that hybrid scientific systems should be evaluated not just for accuracy but for *fairness across model types*. A system that achieves 96% gap on SUSTAIN but 64% on RULEX is not simply "good at SUSTAIN" — it is systematically biased in a way that could lead to incorrect conclusions if the ground truth happens to be a rule-based process. Peters & Chin-Yee (2025) document an analogous concern for LLMs in scientific summarization: LLMs systematically overgeneralize, producing summaries nearly 5× more likely to contain broader generalizations than the original texts. In our setting, this manifests as LLM agents proposing structures that are "about" discrete, generalizable rules rather than the continuous parameter variations that would better probe similarity-based models.
+
+One potential remedy is explicit diversification: requiring that crux-directed selection maintain coverage across structure types (rule-diagnostic, similarity-diagnostic, clustering-diagnostic), rather than concentrating on the structures where current disagreement is highest. Another is to combine open and closed design: let agents propose structures to supplement, rather than replace, a curated registry that ensures baseline coverage. The M16 results suggest that the registry and agent proposals have complementary biases — one favors similarity models, the other favors rule models — and their union might approximate the model-agnostic coverage that EIG alone provides. Testing this combination is a natural next step.
+
+### 6.3 What adversarial collaboration gains from automation
 
 Section 2.6 argued that three failure modes of human adversarial collaboration — straw-manning, terminology confusion, and lack of record-keeping — are structurally eliminated by the architecture. The results bear this out: across 34 runs, no agent misrepresented a competing model's predictions (the model is callable code, not a verbal description), no terminological dispute arose (all theoretical terms are operationally grounded in model parameters), and the epistemic state tracker maintained a complete record of every prediction, critique, and revision.
 
@@ -426,7 +442,7 @@ What automation loses is the theoretical creativity of human adversarial collabo
 
 The arbiter-v0.1 crux negotiation mechanism partially bridges this gap. With 15% of proposed cruxes accepted by real LLM agents (compared to 100% with deterministic mock agents), the negotiation exhibits genuine selectivity. Accepted cruxes map to theoretical fault lines that cognitive scientists actually disagree about. This is not rubber-stamping — the agents exercise judgment about which disagreements are worth pursuing — though substantial engineering (M6–M9) was required before that judgment could influence experimental outcomes.
 
-### 6.3 Limitations
+### 6.4 Limitations
 
 Several limitations constrain the generality of these results.
 
@@ -446,7 +462,7 @@ Several limitations constrain the generality of these results.
 
 *Single domain.* All results are from category learning with three specific models. Whether the framework generalizes to other multi-model disputes in cognitive science, or to domains beyond cognitive science, is unknown.
 
-### 6.4 Future directions
+### 6.5 Future directions
 
 *Real data integration.* The most important extension is closing the loop with human participants. The framework's computational backend requires only that models produce probability predictions for experimental stimuli — the same interface AutoRA (Musslick et al.) already supports. Integration with Prolific or Firebase for data collection would transform the system from a model identification tool into a genuine automated research assistant. This is the single extension that would most increase the project's scientific value, and it would move the framework from the M-closed to the M-open setting, where the additional information in debate (novel hypotheses, model modification proposals) could become genuinely valuable.
 
@@ -520,6 +536,8 @@ Bernardo, J. M., & Smith, A. F. M. (1994). *Bayesian Theory*. New York: Wiley.
 
 Blohm, G., Peters, B., Haefner, R., Isik, L., Kriegeskorte, N., Lieberman, J. S., Ponce, C. R., Roig, G., & Peters, M. A. K. (2024). Generative adversarial collaborations: A practical guide for conference organizers and participating scientists. *arXiv:2402.12604*.
 
+Broomell, S. B., Sloman, S. J., Blaha, L. M., & Chelen, J. (2019). Interpreting model comparison requires understanding model-stimulus relationships. *Computational Brain & Behavior*, 2, 233–238.
+
 Bissiri, P. G., Holmes, C. C., & Walker, S. G. (2016). A general framework for updating belief distributions. *Journal of the Royal Statistical Society: Series B*, 78(5), 1103–1130.
 
 Cavagnaro, D. R., Myung, J. I., Pitt, M. A., & Kujala, J. V. (2010). Adaptive design optimization: A mutual information-based approach to model discrimination in cognitive science. *Neural Computation*, 22(4), 887–905.
@@ -546,6 +564,8 @@ Kahneman, D. (2003). Experiences of collaborative research. *American Psychologi
 
 Kandasamy, K., Schneider, J., & Póczos, B. (2019). Myopic posterior sampling for adaptive goal oriented design of experiments. *Proceedings of the 36th International Conference on Machine Learning*, 3222–3232.
 
+Kennedy, L., Simpson, D., & Gelman, A. (2019). The experiment is just as important as the likelihood in understanding the prior: A cautionary note on robust cognitive modelling. *Computational Brain & Behavior*, 2, 210–217.
+
 Kim, W., Pitt, M. A., Lu, Z.-L., Steyvers, M., & Myung, J. I. (2017). A hierarchical adaptive approach to optimal experimental design. *Neural Computation*, 26(11), 2465–2492.
 
 Lakatos, I. (1978). *The Methodology of Scientific Research Programmes: Philosophical Papers, Volume 1*. Cambridge University Press.
@@ -566,6 +586,8 @@ Miller, J. W., & Dunson, D. B. (2019). Robust Bayesian inference via coarsening.
 
 Myung, J. I., & Pitt, M. A. (2009). Optimal experimental design for model discrimination. *Psychological Review*, 116(3), 499–518.
 
+Navarro, D. J. (2019). Between the devil and the deep blue sea: Tensions between scientific judgement and statistical model selection. *Computational Brain & Behavior*, 2, 169–180.
+
 Navarro, D. J., Pitt, M. A., & Myung, I. J. (2004). Assessing the distinguishability of models and the informativeness of data. *Cognitive Psychology*, 49(1), 47–84.
 
 Nosofsky, R. M. (1986). Attention, similarity, and the identification-categorization relationship. *Journal of Experimental Psychology: General*, 115(1), 39–57.
@@ -579,6 +601,8 @@ Oelrich, O., Ding, S., Magnusson, M., Vehtari, A., & Villani, M. (2020). When ar
 Ouyang, L., Tessler, M. H., Ly, D., & Goodman, N. D. (2018). webppl-oed: A practical optimal experiment design system. *Proceedings of the 40th Annual Conference of the Cognitive Science Society*.
 
 Peters, B., Blohm, G., Haefner, R., Isik, L., Kriegeskorte, N., Lieberman, J. S., Ponce, C. R., Roig, G., & Peters, M. A. K. (2025). Generative adversarial collaborations: A new model of scientific discourse. *Trends in Cognitive Sciences*, 29(1), 1–4.
+
+Peters, U., & Chin-Yee, B. (2025). Generalization bias in large language model summarization of scientific research. *Royal Society Open Science*, 12(4), 241776.
 
 Pitt, M. A., Kim, W., Navarro, D. J., & Myung, J. I. (2006). Global model analysis by parameter space partitioning. *Psychological Review*, 113(1), 57–83.
 

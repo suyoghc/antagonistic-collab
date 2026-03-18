@@ -6,22 +6,28 @@ pre-registered structures exist. Only agent-proposed structures enter the
 EIG pool. EIG still scores and selects — the question is whether
 debate-proposed structures are more diagnostic than registry structures.
 
-Three conditions per ground truth:
+Five conditions per ground truth:
   - closed_no_debate: computation only, full registry (_DESIGN_SPACE="continuous",
     _NO_DEBATE=True) — M14 baseline
   - closed_debate: standard debate, full registry (_DESIGN_SPACE="continuous",
     _NO_DEBATE=False, _ARBITER=False)
+  - closed_arbiter: debate + arbiter (cruxes, meta-agents, claim-directed
+    selection), full registry (_DESIGN_SPACE="continuous", _ARBITER=True)
   - open_debate: agents propose all structures, EIG scores only those
     (_DESIGN_SPACE="open", _NO_DEBATE=False, _ARBITER=False)
+  - open_arbiter: agents propose structures + arbiter guides proposals via
+    cruxes (_DESIGN_SPACE="open", _NO_DEBATE=False, _ARBITER=True)
 
 No-debate open is logically impossible (no agents = no structures).
 
 Usage:
-    python scripts/validation/validate_m16_live.py                  # all 9 runs
-    python scripts/validation/validate_m16_live.py GCM              # one GT, 3 conditions
-    python scripts/validation/validate_m16_live.py --open-only      # 3 runs (open condition)
+    python scripts/validation/validate_m16_live.py                  # all 15 runs
+    python scripts/validation/validate_m16_live.py GCM              # one GT, 5 conditions
+    python scripts/validation/validate_m16_live.py --open-only      # 3 runs (open no-arbiter)
     python scripts/validation/validate_m16_live.py --closed-only    # 3 runs (closed no-debate)
     python scripts/validation/validate_m16_live.py --debate-only    # 3 runs (closed debate)
+    python scripts/validation/validate_m16_live.py --arbiter-only   # 6 runs (both arbiter conditions)
+    python scripts/validation/validate_m16_live.py --new-only       # 6 runs (new arbiter conditions only)
 """
 
 import json
@@ -41,6 +47,7 @@ from antagonistic_collab.debate_protocol import (
 from antagonistic_collab.runner import (
     run_cycle,
     _create_client,
+    create_default_meta_agents,
 )
 import antagonistic_collab.runner as runner_mod
 
@@ -60,20 +67,26 @@ EXPECTED_WINNER = {
 
 
 def run_condition(
-    client, true_model: str, design_space: str, debate: bool, n_cycles: int = 5
+    client,
+    true_model: str,
+    design_space: str,
+    debate: bool,
+    arbiter: bool = False,
+    n_cycles: int = 5,
 ):
     """Run one condition.
 
     Args:
         design_space: "continuous" (registry) or "open" (agent-proposed only).
         debate: If False, skip all LLM phases (computational pipeline only).
+        arbiter: If True, enable cruxes, meta-agents, and claim-directed selection.
     """
     if not debate:
         condition_label = "closed_no_debate"
     elif design_space == "open":
-        condition_label = "open_debate"
+        condition_label = "open_arbiter" if arbiter else "open_debate"
     else:
-        condition_label = "closed_debate"
+        condition_label = "closed_arbiter" if arbiter else "closed_debate"
 
     tag = f"m16_{condition_label}_{true_model}"
     output_dir = f"runs/{tag}"
@@ -85,6 +98,7 @@ def run_condition(
     print(f"  Cycles: {n_cycles}")
     print(f"  Design space: {design_space}")
     print(f"  _NO_DEBATE: {not debate}")
+    print(f"  _ARBITER: {arbiter and debate}")
     print()
 
     # Fresh state and agents for each condition
@@ -93,10 +107,14 @@ def run_condition(
 
     # Set modes
     runner_mod._NO_DEBATE = not debate
-    runner_mod._ARBITER = False  # No arbiter in any M16 condition
+    runner_mod._ARBITER = arbiter and debate
     runner_mod._DESIGN_SPACE = design_space
+    # Restore crux weight when arbiter is active
+    runner_mod._CRUX_WEIGHT = 0.3 if (arbiter and debate) else 0.0
 
-    protocol = DebateProtocol(state, agents)
+    # Only create meta-agents when arbiter is active
+    meta = create_default_meta_agents() if (arbiter and debate) else []
+    protocol = DebateProtocol(state, agents, meta_agents=meta)
     transcript = []
 
     metadata = {
@@ -106,7 +124,7 @@ def run_condition(
         "milestone": "M16",
         "condition": condition_label,
         "design_space": design_space,
-        "arbiter": False,
+        "arbiter": arbiter and debate,
     }
 
     # Track M16-specific metrics
@@ -262,14 +280,17 @@ def run_condition(
 def setup_client():
     """Create Princeton client, loading .env if needed."""
     if not os.environ.get("AI_SANDBOX_KEY"):
-        env_path = os.path.join(os.path.dirname(__file__), ".env")
-        if os.path.exists(env_path):
-            with open(env_path) as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith("#") and "=" in line:
-                        key, _, val = line.partition("=")
-                        os.environ[key.strip()] = val.strip()
+        # Check script dir first, then project root
+        for base in [os.path.dirname(__file__), os.path.join(os.path.dirname(__file__), "..", "..")]:
+            env_path = os.path.join(base, ".env")
+            if os.path.exists(env_path):
+                with open(env_path) as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith("#") and "=" in line:
+                            key, _, val = line.partition("=")
+                            os.environ[key.strip()] = val.strip()
+                break
 
     if not os.environ.get("AI_SANDBOX_KEY"):
         print("ERROR: AI_SANDBOX_KEY environment variable is not set.")
@@ -292,11 +313,11 @@ def set_common_globals():
     runner_mod._N_CONTINUOUS_SAMPLES = 50
     runner_mod._NORMALIZE_CLAIMS = True
     runner_mod._FUZZY_STRUCTURE_MATCH = True
-    runner_mod._CRUX_WEIGHT = 0.0
+    runner_mod._CRUX_WEIGHT = 0.0  # Overridden per-condition when arbiter=True
 
 
 def print_comparison_table(results, conditions_run):
-    """Print three-way comparison across ground truths."""
+    """Print five-way comparison across ground truths."""
     cond_labels = [c[0] for c in conditions_run]
 
     print(f"\n\n{'=' * 100}")
@@ -332,12 +353,18 @@ def print_comparison_table(results, conditions_run):
         print()
 
     # Summary: pairwise advantages
+    all_conds = [
+        "closed_debate",
+        "closed_arbiter",
+        "open_debate",
+        "open_arbiter",
+    ]
     print("\n### Gap Advantage (pp over closed_no_debate baseline)")
     for model in ["GCM", "SUSTAIN", "RULEX"]:
         nd = results.get(f"{model}_closed_no_debate", {})
         nd_gap = nd.get("gap_pct", 0)
         parts = [f"closed_no_debate={nd_gap:.1f}%"]
-        for cond in ["closed_debate", "open_debate"]:
+        for cond in all_conds:
             r = results.get(f"{model}_{cond}", {})
             if r and "error" not in r:
                 g = r.get("gap_pct", 0)
@@ -351,12 +378,14 @@ if __name__ == "__main__":
 
     models = ["GCM", "SUSTAIN", "RULEX"]
 
-    # All three conditions by default:
-    #   (label, design_space, debate)
+    # All five conditions by default:
+    #   (label, design_space, debate, arbiter)
     ALL_CONDITIONS = [
-        ("closed_no_debate", "continuous", False),
-        ("closed_debate", "continuous", True),
-        ("open_debate", "open", True),
+        ("closed_no_debate", "continuous", False, False),
+        ("closed_debate", "continuous", True, False),
+        ("closed_arbiter", "continuous", True, True),
+        ("open_debate", "open", True, False),
+        ("open_arbiter", "open", True, True),
     ]
     selected_conditions = None  # None = all
 
@@ -365,21 +394,31 @@ if __name__ == "__main__":
         if arg in models:
             models = [arg]
         elif arg == "--open-only":
-            selected_conditions = [("open_debate", "open", True)]
+            selected_conditions = [("open_debate", "open", True, False)]
         elif arg == "--closed-only":
-            selected_conditions = [("closed_no_debate", "continuous", False)]
+            selected_conditions = [("closed_no_debate", "continuous", False, False)]
         elif arg == "--debate-only":
-            selected_conditions = [("closed_debate", "continuous", True)]
+            selected_conditions = [("closed_debate", "continuous", True, False)]
+        elif arg == "--arbiter-only":
+            selected_conditions = [
+                ("closed_arbiter", "continuous", True, True),
+                ("open_arbiter", "open", True, True),
+            ]
+        elif arg == "--new-only":
+            selected_conditions = [
+                ("closed_arbiter", "continuous", True, True),
+                ("open_arbiter", "open", True, True),
+            ]
 
     conditions = selected_conditions or ALL_CONDITIONS
 
     # Only create LLM client if a debate condition is requested
-    needs_llm = any(debate for _, _, debate in conditions)
+    needs_llm = any(debate for _, _, debate, _ in conditions)
     client = setup_client() if needs_llm else None
 
     results = {}
     for true_model in models:
-        for cond_label, ds, debate_flag in conditions:
+        for cond_label, ds, debate_flag, arbiter_flag in conditions:
             key = f"{true_model}_{cond_label}"
             try:
                 results[key] = run_condition(
@@ -387,6 +426,7 @@ if __name__ == "__main__":
                     true_model,
                     design_space=ds,
                     debate=debate_flag,
+                    arbiter=arbiter_flag,
                     n_cycles=5,
                 )
             except Exception as e:

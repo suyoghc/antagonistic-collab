@@ -1272,3 +1272,124 @@ Three validation runs: 3 ground truths × 5 cycles, GPT-4o via Princeton, crux_w
 **39. Greedy selection outperforms Thompson when likelihood signals are strong.** Greedy averaged 88.2% gap vs Thompson's 83.0%. With clean synthetic data, the posterior concentrates quickly and Thompson's exploration wastes cycles on suboptimal experiments. However, greedy drives posterior entropy to 0.000 (total certainty) while Thompson retains residual uncertainty (0.001–0.032). On noisier real-world data, Thompson's exploration and honest uncertainty may prove advantageous. (Phase 19, M13)
 
 **40. The debate→computation feedback loop is architecturally open.** The ablation reveals a structural gap: debate phases produce interpretations, critiques, claims, and cruxes, but none of these feed back into the quantities that drive identification (EIG scores, model predictions, posterior weights). For debate to causally help, the loop must close — e.g., interpretation updating model parameters, critique reweighting the posterior, or crux resolution pruning the design space. This is the key architectural task for making debate non-epiphenomenal. (Phase 19, M13)
+
+### On closing the feedback loop (M14)
+
+**41. Closing the debate→computation loop doesn't help when computation alone suffices.** M14 closed the feedback loop with 3 interventions: claim-directed experiment selection (boost EIG candidates matching agent claims), validated parameter revisions (gate LLM-proposed params against RMSE), and claim auto-resolution (resolve claims after execution). All 3 fire mechanically (94 fuzzy matches, 12 claim-directed selections, 7/33 param rejections, 45 claims resolved). But M14 full (avg RMSE 0.127) is worse than M13 no-debate (0.066). The loop works — it just operates in a regime where it's unnecessary. (Phase 20, M14)
+
+**42. Parameter validation is the one debate intervention with clear causal benefit.** Of M14's 3 interventions, only param validation consistently helps: it blocked 21% of LLM-proposed revisions that would have degraded RMSE by 0.02–0.10 each, all on Exemplar_Agent. This is a pure defense mechanism — it prevents debate from hurting, rather than helping debate contribute. The asymmetry is revealing: debate's computational value on synthetic benchmarks is negative (noise injection), and the best you can do is filter out the worst damage. (Phase 20, M14)
+
+**43. LLM agents overclaim — claim auto-resolution functions as a falsification engine.** 87% of auto-resolved claims were falsified vs 13% confirmed. Agents make overconfident predictions (claimed 0.65–0.85, actual 0.10–0.50) driven by narrative plausibility rather than model computation. This is consistent with LLMs being better at generating plausible stories than calibrated numerical predictions (see Lesson 19, CLAUDE.md "LLM for semantics, computation for numerics"). (Phase 20, M14)
+
+**44. Claim-directed selection can steer experiments away from computationally diagnostic candidates.** M14 full RULEX gap (39.0%) was much worse than M13 no-debate (86.1%). Claim-directed selection boosted experiments that agents found narratively interesting (e.g., testing falsified overclaims) rather than computationally diagnostic (maximizing EIG). When debate output feeds into experiment selection, it can actively degrade the selection quality that pure EIG achieves. The solution isn't to remove the mechanism — it's to test in a regime where EIG alone is insufficient. (Phase 20, M14)
+
+**45. LLM free-text requires multiple normalization layers to interface with code.** Three separate fixes were needed before claim-directed selection could fire: (a) normalize_claim_fields() for "Shepard Type I"→"Type_I" and "high noise"→"high_noise", (b) include sampled/temporary structures in the valid set, (c) fuzzy parameter matching for ephemeral sampled structure names across cycles. Each layer addresses a different aspect of the LLM→code boundary: string formatting, registry scope, and temporal persistence. Budget for at least 3 normalization passes when connecting LLM output to deterministic code. (Phase 20, M14)
+
+**46. The boundary between computation-sufficient and debate-needed regimes is now empirically characterized.** M13+M14 together establish: when models are fully specified (predict() determined by structure+condition+params), data is clean (synthetic), and the design space is enumerable (registry+continuous sampling), computation alone identifies the correct model. Debate is epiphenomenal or harmful. The hypothesized debate-needed regime: misspecified models (need LLM-guided param recovery), open design space (can't enumerate candidates), ambiguous data (interpretation affects next experiment). Testing this boundary is the next scientific question. (Phase 20, M14)
+
+---
+
+## Phase 21: Model misspecification — debate causally helps (M15, 2026-03-17)
+
+M15 tests the first hypothesized debate-needed regime from Lesson 46: agents start with calibrated wrong parameters. The computation layer (EIG) can't self-correct because it optimizes experiment selection assuming fixed parameters — it doesn't estimate parameters. Debate adds `sync_params_from_theory()`: agents see prediction failures, diagnose the cause, and propose corrections.
+
+### 21.1 Debate is causally necessary under misspecification
+
+**Expected:** If Lesson 46's hypothesis is correct, debate should outperform no-debate when models have wrong parameters.
+
+**Actual:** 9-run matrix (3 GTs × 3 conditions: no-debate, debate, arbiter). Debate without arbiter improves gap by +3.5pp (GCM) and +22.4pp (RULEX) via parameter recovery of 85.7% and 60.3% respectively. This is the first causal demonstration of debate adding value across the entire project.
+
+**Implication:** The Lesson 46 boundary is empirically confirmed on one axis. EIG selects experiments; debate estimates parameters. These are complementary operations — Pitt & Myung's (2004) point that parameter estimation and model selection must happen together, demonstrated empirically in a hybrid LLM-computation system.
+
+### 21.2 Parameter recovery requires visible prediction failure
+
+**Expected:** Debate would help on all three ground truths equally.
+
+**Actual:** SUSTAIN showed 0% parameter recovery in both debate conditions. The misspecification (r=3.0, eta=0.15) didn't produce enough prediction error to trigger agent revisions — SUSTAIN's predictions were "close enough" that agents didn't notice anything wrong.
+
+**Implication:** LLM agents need to *see* failure before they diagnose it. This is not a limitation of LLMs specifically — human scientists also need prediction-data discrepancy to motivate parameter revision. But it means debate only helps when misspecification is *visible* at the item level, not when it silently degrades aggregate performance. The implication for system design: always show agents item-level prediction errors, not just aggregate RMSE.
+
+### 21.3 The arbiter is catastrophic under misspecification
+
+**Expected:** Arbiter (cruxes + meta-agents) would help by directing experiments toward disputed predictions, complementing param recovery.
+
+**Actual:** Arbiter degraded gap on 2/3 GTs: SUSTAIN -11.6pp, RULEX -54.7pp (wrong winner). Only GCM benefited slightly (+4.9pp). On RULEX, meta-agents distorted divergence mapping, steering experiment selection toward linearly-separable structures instead of RULEX-diagnostic rule-plus-exception structures.
+
+**Implication:** Meta-agents (Integrator, Critic) optimize for argumentative richness, not model discrimination. Under misspecification, where the parameter landscape is already distorted, adding another layer of distortion (meta-agent influence on experiment selection) compounds the problem. The sweet spot is agents + param revision + no meta-agents. This was later revised by M16 — see Phase 22.
+
+### Emerging Principles (continued)
+
+### On misspecification (M15)
+
+**47. Debate and computation have complementary roles: EIG selects experiments, debate estimates parameters.** Neither alone is sufficient under misspecification. EIG can't self-correct wrong parameters; debate can't compute information gain. Together they close the identification loop. This is the architectural division of labor the project was searching for since M4. (Phase 21, M15)
+
+**48. Parameter recovery is gated by prediction error visibility.** Agents only propose corrections when they can see item-level discrepancies between predictions and data. SUSTAIN's misspecification produced invisible aggregate degradation. GCM and RULEX's misspecification produced visible item-level failures. System design implication: maximize the granularity of prediction-data comparisons shown to agents. (Phase 21, M15)
+
+**49. The arbiter layer compounds distortion under misspecification.** When model parameters are wrong, the prediction landscape is already distorted. Meta-agents add a second layer of distortion by steering experiments toward structures that are argumentatively interesting rather than computationally diagnostic. Two stacked distortions are catastrophic (RULEX arbiter: wrong winner). One distortion (wrong params) + one correction (debate param recovery) works. (Phase 21, M15)
+
+---
+
+## Phase 22: Open design space + arbiter — every intervention carries an implicit prior (M16, 2026-03-18)
+
+M16 tests the second hypothesized debate-needed regime from Lesson 46: open design space where agents propose all structures. Also revisits the arbiter after M15 found it harmful — testing whether the arbiter's failure was specific to misspecification or general.
+
+### 22.1 Agent-proposed structures are less discriminative than curated registry on average
+
+**Expected:** Agent proposals might outperform the registry by leveraging semantic knowledge of model mechanisms to design diagnostic experiments.
+
+**Actual:** Open_debate underperformed closed_no_debate on all three GTs: GCM -5.2pp, SUSTAIN -23.6pp, RULEX -3.4pp. Agents proposed 48-56 structures per run, EIG selected from proposals 5/5 times, but the proposals were less discriminative than the curated continuous registry.
+
+**Implication:** The Lesson 46 hypothesis about open design space was wrong in its simple form. Agents *can* propose structures, and those structures are valid and EIG can score them, but they're organized around semantic/narrative properties ("exception_heavy," "conjunctive_rule_with") rather than mathematical properties that maximize information gain. The registry's parameterized linear-separable structures, with precise separation and dimensionality values, hit diagnostic sweet spots that semantic reasoning can't identify.
+
+### 22.2 Agent proposals have a systematic bias toward rule-diagnostic structures
+
+**Expected:** Agent proposals would be model-agnostic — each agent proposing structures favorable to its own model.
+
+**Actual:** RULEX open_debate (82.7%) dramatically outperformed closed_debate (58.6%, +24pp). SUSTAIN open_debate (64.1%) dramatically underperformed closed_no_debate (87.7%, -24pp). Agent proposals are organized around discrete, nameable structural properties — "exception-heavy," "rule_versus_similarity" — which happen to be diagnostic for rule-based models. Continuous parameter interactions diagnostic for SUSTAIN are harder to articulate in natural language.
+
+**Implication:** LLMs have a structural bias toward proposing discrete, rule-like experimental designs because these are *describable in language*. Similarity gradients, cluster recruitment thresholds, and attention-weighted parameter spaces are harder to name and reason about verbally. This is a specific instance of the general observation that LLMs favor entities and structures that have clear linguistic handles. It's not that the agents are "biased toward RULEX" — they're biased toward the kinds of structures that human scientists also find easiest to describe.
+
+### 22.3 The arbiter is not broken — it's biased toward similarity-based models
+
+**Expected:** Arbiter would hurt under correct specification, consistent with M15.
+
+**Actual:** SUSTAIN closed_arbiter: 96.0% gap (+8.3pp) — best SUSTAIN result across all milestones, RMSE 0.020. GCM closed_arbiter: +2.4pp. RULEX closed_arbiter: -22.2pp. The arbiter helps similarity-based models and hurts rule-based models.
+
+**Implication:** M15's conclusion that the arbiter is "net negative" was wrong — it was confounded by misspecification. Under correct specification, the arbiter's crux machinery steers experiment selection toward structures where GCM and SUSTAIN disagree most visibly: continuous, similarity-graded structures. This is genuinely diagnostic for discriminating these two models, producing the best SUSTAIN result we've measured. But it systematically neglects the discrete rule-plus-exception structures that RULEX needs. The arbiter is partial, not broken.
+
+### 22.4 Every intervention carries an implicit model-type prior
+
+**Expected:** Different system components would help or hurt uniformly.
+
+**Actual:** Three components, three distinct biases:
+- Computation (EIG + Thompson): model-agnostic, 76-88% gap across all GTs
+- Arbiter (cruxes + meta-agents): biased toward similarity structures → helps SUSTAIN (+8pp), hurts RULEX (-22pp)
+- Open design (LLM proposals): biased toward rule-diagnostic structures → helps RULEX (+24pp), hurts SUSTAIN (-24pp)
+
+**Implication:** This is the central finding of M16 and arguably the most important theoretical insight of the project. Every intervention in a model selection pipeline carries an implicit model-type prior — not because it's designed to favor certain models, but because the *structural properties of the method* determine which kinds of experiments it generates. Crux-directed selection concentrates on points of disagreement, which are similarity-graded for exemplar/clustering models. LLM proposals concentrate on linguistically describable structures, which are discrete/rule-like. Only EIG's exhaustive evaluation over the full candidate space is approximately model-agnostic.
+
+This connects to Broomell et al.'s (2019) argument that stimulus selection biases model comparison outcomes, and to Navarro's (2019) point that choices preceding statistical analysis constrain which models can win. Our contribution is demonstrating this principle empirically in hybrid LLM-computation systems, where the biases arise from algorithmic structure rather than human experimenter choices.
+
+### 22.5 The arbiter recovers open design losses for similarity models
+
+**Expected:** Arbiter + open design would compound the problems of both.
+
+**Actual:** GCM open_arbiter (+0.1pp) recovered from open_debate (-5.2pp). The crux machinery successfully redirected agent proposals toward more diagnostic structures for similarity models. RULEX open_arbiter (82.0%) was essentially unchanged from open_debate (82.7%) — the biases partially cancelled.
+
+**Implication:** Arbiter and open design have *complementary* biases — one favors similarity, the other favors rules. Their combination partially neutralizes each bias. This suggests a practical architecture: combine curated registry (model-agnostic baseline) with agent proposals (rule-diagnostic supplement) and crux-directed selection (similarity-diagnostic focus), rather than choosing one. The union of complementary biases may approximate the model-agnostic coverage that EIG alone provides, while adding the semantic capabilities that EIG lacks.
+
+### Emerging Principles (continued)
+
+### On open design and implicit priors (M16)
+
+**50. LLM experiment proposals are biased toward linguistically describable structures.** Agents propose structures organized around discrete, nameable properties ("exception-heavy," "rule_versus_similarity") rather than continuous parameter interactions. This favors models whose diagnostic structures have clear verbal descriptions (RULEX) over models whose diagnostics involve continuous gradients (SUSTAIN). The bias is structural — it arises from how language encodes experimental designs. (Phase 22, M16)
+
+**51. The arbiter's crux machinery is a model-type-dependent bias, not noise.** Under misspecification (M15), arbiter effects were confounded with parameter distortion. Under correct specification (M16), the pattern is clear: cruxes steer toward similarity-based structures (+8pp SUSTAIN, +2pp GCM, -22pp RULEX). This is not a bug — cruxes correctly identify where models disagree most. But "where models disagree most" is not model-agnostic; it depends on which model pairs are being compared and which structures make their differences visible. (Phase 22, M16)
+
+**52. Every intervention in a model selection pipeline embeds an implicit model-type prior.** Computation (EIG) is approximately model-agnostic because it evaluates exhaustively. Arbiter (cruxes) biases toward similarity models because model disagreement is most visible on continuous structures. Open design (LLM proposals) biases toward rule models because discrete structures are more linguistically accessible. This is the most general finding of M16 and has direct implications for how hybrid scientific systems should be designed and evaluated. (Phase 22, M16)
+
+**53. Complementary biases can be composed to approximate model-agnostic coverage.** Arbiter helps similarity models; open design helps rule models; computation is the neutral baseline. Rather than choosing one, compose all three: curated registry + agent proposals + crux-directed selection. The M16 data supports this — open_arbiter partially neutralizes the biases of each component alone. Untested but architecturally straightforward. (Phase 22, M16)
+
+**54. Debate helps via parameter estimation (M15) but not experiment design (M16).** These are two distinct causal channels. Parameter estimation requires semantic reasoning (diagnosing why predictions fail → proposing corrections). Experiment design is better served by computation (EIG evaluates mathematical information gain). The partial exception — RULEX open proposals — works because the registry has a coverage gap for rule structures, not because LLM design is generally superior. (Phase 22, M16)
+
+**55. Evaluate hybrid systems for fairness across model types, not just average accuracy.** A system achieving 96% on SUSTAIN and 64% on RULEX is not "good" — it's biased. Average accuracy hides model-type-dependent failures that could lead to incorrect scientific conclusions. Report per-model-type performance and test under all possible ground truths. (Phase 22, M16)

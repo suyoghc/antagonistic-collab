@@ -1,12 +1,114 @@
-# Current State (M15 Phase 2 complete)
+# Current State (M16 — Open Design Space, Phase 2 complete)
 
-## M15 — Model misspecification (Phase 2 complete)
+## M16 — Open Design Space
+
+**Scientific question:** When agents must propose all experiment structures via debate
+(no pre-registered structure registry), does this improve or degrade model
+identification compared to a curated registry? And does the arbiter's crux machinery
+help focus agent proposals, or distort them?
+
+**Motivation:** M14 showed debate was epiphenomenal when models are correctly specified
+and the experiment registry is adequate. M15 showed debate helps under misspecification
+via *parameter estimation*. M16 tests the remaining axis: does debate add value for
+experiment *design* itself? Phase 2 adds arbiter conditions because M15's "arbiter is
+net negative" conclusion was tested only under misspecification — the interaction between
+arbiter and correct specification / open design space was untested.
+
+### Full results — 14/15 runs (GPT-4o, 5 cycles each)
+
+| GT | Condition | Winner | Correct? | RMSE | Gap% | #Structs |
+|---|---|---|---|---|---|---|
+| GCM | closed_no_debate | Exemplar_Agent | Yes | 0.088 | 76.8 | 0 |
+| GCM | closed_debate | Exemplar_Agent | Yes | 0.067 | 81.0 | 10 |
+| GCM | closed_arbiter | Exemplar_Agent | Yes | 0.073 | 79.2 | 8 |
+| GCM | open_debate | Exemplar_Agent | Yes | 0.084 | 71.6 | 54 |
+| GCM | open_arbiter | Exemplar_Agent | Yes | 0.074 | 76.9 | 48 |
+| SUSTAIN | closed_no_debate | Clustering_Agent | Yes | 0.057 | 87.7 | 0 |
+| SUSTAIN | closed_debate | Clustering_Agent | Yes | 0.053 | 88.6 | 10 |
+| SUSTAIN | closed_arbiter | Clustering_Agent | Yes | 0.020 | 96.0 | 10 |
+| SUSTAIN | open_debate | Clustering_Agent | Yes | 0.108 | 64.1 | 56 |
+| SUSTAIN | open_arbiter | — | **ERROR** | — | — | — |
+| RULEX | closed_no_debate | Rule_Agent | Yes | 0.053 | 86.1 | 0 |
+| RULEX | closed_debate | Rule_Agent | Yes | 0.168 | 58.6 | 14 |
+| RULEX | closed_arbiter | Rule_Agent | Yes | 0.140 | 63.9 | 13 |
+| RULEX | open_debate | Rule_Agent | Yes | 0.055 | 82.7 | 48 |
+| RULEX | open_arbiter | Rule_Agent | Yes | 0.061 | 82.0 | 55 |
+
+**Correct winner: 14/14** (1 error: SUSTAIN open_arbiter — "setting an array element
+with a sequence").
+
+### Gap advantage (pp over closed_no_debate baseline)
+
+| GT | closed_debate | closed_arbiter | open_debate | open_arbiter |
+|---|---|---|---|---|
+| GCM | +4.2pp | +2.4pp | -5.2pp | +0.1pp |
+| SUSTAIN | +0.9pp | **+8.3pp** | -23.6pp | ERROR |
+| RULEX | -27.5pp | -22.2pp | -3.4pp | -4.1pp |
+
+### Design (2x2+1 factorial)
+
+| Condition | Registry | Debate | Arbiter | Purpose |
+|---|---|---|---|---|
+| closed_no_debate | curated | no | no | M14 baseline: computation alone |
+| closed_debate | curated | yes | no | Debate + curated registry |
+| closed_arbiter | curated | yes | yes | Cruxes + meta-agents + curated registry |
+| open_debate | agent-proposed | yes | no | Agent proposals without guidance |
+| open_arbiter | agent-proposed | yes | yes | Crux-guided agent proposals |
+
+### Key findings
+
+**1. The arbiter is not universally bad — it's model-type-dependent.**
+
+M15 concluded the arbiter was net negative. M16 overturns this: the arbiter is a *bias*,
+not noise. Cruxes steer experiment selection toward continuous/similarity-based structures
+where models disagree. This is a feature for similarity-based models (SUSTAIN, GCM) and
+a bug for rule-based models (RULEX).
+
+- SUSTAIN closed_arbiter: **96.0% gap** (+8.3pp) — best SUSTAIN result across all
+  milestones. RMSE 0.020 is the lowest we've measured. Crux-directed selection picks
+  structures that maximally distinguish clustering from exemplar strategies.
+- GCM closed_arbiter: 79.2% (+2.4pp) — modest improvement.
+- RULEX closed_arbiter: 63.9% (-22.2pp) — still hurts, consistent with M15 finding,
+  but less catastrophic than M15's -54.7pp (no misspecification compounding the problem).
+
+**2. Open design space helps RULEX, hurts everything else.**
+
+Agent-proposed structures are semantically rich (exception-heavy, rule-diagnostic) which
+helps RULEX but hurts SUSTAIN. This is the mirror image of the arbiter bias:
+
+- RULEX open_debate (82.7%) and open_arbiter (82.0%) both dramatically outperform
+  closed_debate (58.6%) and closed_arbiter (63.9%). Agent proposals are genuinely better
+  than the continuous registry for rule models.
+- SUSTAIN open_debate (64.1%) is the worst SUSTAIN condition (-23.6pp). Agent proposals
+  don't probe clustering behavior as effectively as the curated registry.
+
+**3. Arbiter recovers open design space losses for GCM.**
+
+GCM open_debate drops -5.2pp from baseline. GCM open_arbiter recovers to +0.1pp. The
+crux machinery successfully focuses agent proposals toward more diagnostic structures
+for similarity-based models. This is the one case where arbiter + open design space
+interact positively.
+
+**4. Computation alone remains the most reliable single condition.**
+
+closed_no_debate achieves 76.8-87.7% gap across all three ground truths with zero
+LLM calls. No debate condition consistently beats it across all models. The best
+debate results (SUSTAIN closed_arbiter 96.0%, GCM closed_debate 81.0%) come from
+specific model-condition pairings, not a universally beneficial intervention.
+
+**5. Bug: SUSTAIN open_arbiter errored** ("setting an array element with a sequence").
+Needs investigation before conclusions about that cell are final.
+
+Scripts: `scripts/validation/validate_m16_live.py`
+
+---
+
+## M15 — Model misspecification (complete)
 
 **Scientific question:** Can LLM agents, through debate, identify that their model's
-parameters are wrong and propose corrections — and does this happen better with debate
-than without?
+parameters are wrong and propose corrections?
 
-### Phase 2 results — Full 9-run matrix (GPT-4o, 5 cycles each)
+### Results — Full 9-run matrix (GPT-4o, 5 cycles each)
 
 | GT | Condition | Winner | Correct? | RMSE | Gap | Param Recovery |
 |---|---|---|---|---|---|---|
@@ -22,94 +124,74 @@ than without?
 
 **Correct winner: 8/9.** Only arbiter-RULEX fails.
 
-### Gap advantage over no-debate baseline
-
-| GT | Debate | Arbiter |
-|---|---|---|
-| GCM | +3.5pp | +4.9pp |
-| SUSTAIN | -1.9pp | -11.6pp |
-| RULEX | **+22.4pp** | **-54.7pp** |
-
-### Key findings
-
-- **Debate without arbiter helps on GCM and RULEX**, where misspecification produces
-  visible prediction errors that trigger param revision. Gap widens +3.5pp (GCM) and
-  +22.4pp (RULEX). Param recovery: 85.7% (GCM), 60.3% (RULEX).
-- **Debate is neutral-to-harmful on SUSTAIN.** SUSTAIN's misspecification (r=3.0,
-  eta=0.15) doesn't produce enough prediction error to trigger revisions — 0% recovery
-  in both debate conditions. Debate adds LLM noise without compensating param recovery.
-- **Arbiter consistently degrades gap** relative to no-debate on SUSTAIN (-11.6pp) and
-  RULEX (-54.7pp, wrong winner). Helps slightly on GCM (+4.9pp). Root cause on RULEX:
-  meta-agents distorted divergence mapping, causing experiment selection to favor
-  non-discriminative linearly-separable structures over RULEX-diagnostic
-  rule-plus-exception structures.
-- **Param recovery only fires when misspecification is visible.** GCM and RULEX show
-  strong recovery; SUSTAIN shows none. The LLM agents need to *see* prediction failures
-  before proposing revisions.
-
 Scripts: `scripts/m15_mimicry_sweep.py`, `scripts/validation/validate_m15_live.py`
+
+---
 
 ## Scientific conclusions
 
-### The debate layer vs the arbiter layer
+### The arbiter is a bias, not noise
 
-M14 showed debate was **epiphenomenal** under correct specification — the computational
-pipeline alone identified the correct model in 18/18 conditions. M15 shows debate is
-**causally necessary** under misspecification — but only the *core debate loop*, not the
-full arbiter machinery.
+The arbiter's crux machinery steers experiment selection toward continuous,
+similarity-based structures. This is not random degradation — it's a systematic bias
+that favors certain model types:
 
-Two distinct layers contribute differently:
+| Model type | Arbiter effect (M15 misspec) | Arbiter effect (M16 correct spec) |
+|---|---|---|
+| SUSTAIN (clustering) | -11.6pp | **+8.3pp** (best result) |
+| GCM (exemplar) | +4.9pp | +2.4pp |
+| RULEX (rule-based) | **-54.7pp** (wrong winner) | -22.2pp |
 
-1. **Debate layer** (agents interpreting results + proposing param revisions via
-   `sync_params_from_theory()`): adds genuine causal value. LLM agents see prediction
-   failures, diagnose the cause, and propose corrections. This is what EIG alone can't
-   do — EIG selects experiments, debate estimates parameters. Pitt & Myung's (2004)
-   point confirmed empirically: parameter estimation and model selection must happen
-   together.
+Under misspecification (M15), the bias compounds with parameter noise to produce
+catastrophic RULEX failure. Under correct specification (M16), the same bias produces
+SUSTAIN's best-ever result. The arbiter is not broken — it's partial to
+similarity-based model discrimination.
 
-2. **Arbiter layer** (cruxes + meta-agents + claim-directed selection): net negative.
-   Meta-agents (Integrator, Critic) optimize for argumentative richness, not model
-   discrimination. They distort divergence mapping, degrading experiment selection.
-   On RULEX this was catastrophic — all linearly-separable structures selected instead
-   of diagnostic rule-plus-exception structures, producing wrong winner.
+### When each component helps (revised theory)
 
-**The sweet spot is debate without arbiter** — agents + interpretation + param revision,
-no meta-agents. This improves gap by +3.5pp (GCM) to +22.4pp (RULEX) via parameter
-recovery of 60-86%.
+The Phase 1 "gap-filling" theory was too simple. The full picture:
+
+1. **Computation alone** is the most reliable baseline. 76-88% gap, never gets
+   the wrong winner (23/23 across M14-M16).
+
+2. **Debate layer** (agents interpreting + proposing params/structures):
+   - Under misspecification: +3.5 to +22pp via parameter recovery (M15)
+   - Under correct specification: noise injection, -3 to -28pp (M16)
+   - Exception: open design proposals help RULEX when registry has a coverage gap
+
+3. **Arbiter layer** (cruxes + meta-agents + claim-directed selection):
+   - Not noise but *bias* toward similarity-based structures
+   - Helps SUSTAIN (+8pp) and GCM (+2-5pp)
+   - Hurts RULEX (-22 to -55pp)
+   - Can recover open-design losses for similarity models (GCM open_arbiter)
+
+4. **Open design space** (agent-proposed structures):
+   - Mirror-image bias: semantically rich proposals favor rule-based models
+   - Helps RULEX (+24pp over closed_debate), hurts SUSTAIN (-24pp)
+   - Arbiter partially counteracts open-design bias for GCM
 
 ### M14
 The computational pipeline (Bayesian EIG + model predictions + learning curves) is
 **causally sufficient** to identify the correct model on synthetic benchmarks with
-fully-specified models. Debate adds interpretive value but does not improve
-identification accuracy.
-
-Established by M13 ablation: 18/18 correct across 3 debate conditions ×
-3 ground truths × 2 selection strategies. No-debate achieved the best RMSE (0.055)
-and gap (87.6%) while running 3-4x faster.
-
-## M14 results (GPT-4o, 5 cycles, full debate + computation feedback loop)
-
-| Ground Truth | Winner | RMSE | Gap | Claims | Resolved |
-|---|---|---|---|---|---|
-| GCM | Exemplar_Agent | 0.087 | 78% | 44 | 15 |
-| SUSTAIN | Clustering_Agent | 0.061 | 88% | 36 | 15 |
-| RULEX | Rule_Agent | 0.233 | 39% | 40 | 15 |
-
-All 3 feedback interventions fire: fuzzy structure matching (94 matches),
-claim-directed experiment selection (12 firings), parameter validation (7/33
-rejected), claim auto-resolution (45 resolved, 39 falsified vs 6 confirmed).
+fully-specified models. 18/18 correct across ablation conditions.
 
 ## Key findings across milestones
 
-- **Learning curves are the key discriminator.** RULEX gap: 2.4% (item-level only, M5) → 68% (with learning curves, M6). GCM approximates RULEX's final accuracy but not its sudden learning dynamics.
+- **Learning curves are the key discriminator.** RULEX gap: 2.4% (item-level only, M5) -> 68% (with learning curves, M6).
 - **LLM-agnostic.** Correct model wins in 9/9 cross-LLM runs: GPT-4o, Claude Sonnet, Claude Opus (M4).
-- **Falsification-dominated.** 39/45 claims falsified vs 6 confirmed (M14). The system converges by ruling out wrong theories, not confirming the right one.
-- **Param validation is the strongest M14 intervention.** Blocked 21% of proposed revisions. Prevents RMSE degradation of 0.02–0.10 per blocked revision.
-- **Debate helps under misspecification (M15).** First causal demonstration: debate widens gap +22pp on RULEX, +3.5pp on GCM via parameter recovery. But arbiter hurts — meta-agents distort experiment selection.
+- **Falsification-dominated.** 39/45 claims falsified vs 6 confirmed (M14).
+- **Debate helps under misspecification (M15).** +22pp on RULEX, +3.5pp on GCM via parameter recovery.
+- **Debate hurts under correct specification (M16).** Agent proposals less discriminative than curated registry on average.
+- **Arbiter is model-biased, not broken (M16).** Crux machinery favors similarity-based model discrimination. Best SUSTAIN result (96%) but worst RULEX conditions.
+- **Open design is the mirror bias (M16).** Agent proposals favor rule-diagnostic structures. Best closed-debate RULEX recovery (+24pp) but worst SUSTAIN result (64%).
 
 ## What's next
 
-See [ROADMAP.md](ROADMAP.md) — M16 (open design space), possible arbiter ablations.
+1. Fix SUSTAIN open_arbiter bug (1 missing data point)
+2. Investigate whether crux bias can be corrected (e.g., diversity constraint on
+   crux-directed selection to ensure rule-diagnostic structures also get selected)
+3. Consider M15+M16 combined: misspecification + open design space
+4. See [ROADMAP.md](ROADMAP.md)
 
 ## Full history
 

@@ -4,111 +4,62 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ---
 
-## M15 Phase 2 — Complete (2026-03-17)
+## M16 — Open Design Space — Phase 2 Complete (2026-03-18)
 
-### Full 9-run results
+### Full results (14/15 runs, 1 error)
 
-| GT | Condition | Winner | Correct? | RMSE | Gap | Recovery |
-|---|---|---|---|---|---|---|
-| GCM | No-debate | Exemplar_Agent | Yes | 0.100 | 74.4% | 0% |
-| GCM | Debate | Exemplar_Agent | Yes | 0.085 | 77.9% | 85.7% |
-| GCM | Arbiter | Exemplar_Agent | Yes | 0.074 | 79.3% | 85.7% |
-| SUSTAIN | No-debate | Clustering_Agent | Yes | 0.057 | 87.7% | 0% |
-| SUSTAIN | Debate | Clustering_Agent | Yes | 0.063 | 85.8% | 0% |
-| SUSTAIN | Arbiter | Clustering_Agent | Yes | 0.108 | 76.1% | 22.8% |
-| RULEX | No-debate | Rule_Agent | Yes | 0.176 | 58.0% | 0% |
-| RULEX | Debate | Rule_Agent | Yes | 0.077 | 80.4% | 60.3% |
-| RULEX | Arbiter | Exemplar_Agent | **No** | 0.393 | 3.2% | 30.9% |
+| GT | Condition | Winner | OK? | RMSE | Gap% |
+|---|---|---|---|---|---|
+| GCM | closed_no_debate | Exemplar_Agent | Yes | 0.088 | 76.8 |
+| GCM | closed_debate | Exemplar_Agent | Yes | 0.067 | 81.0 |
+| GCM | closed_arbiter | Exemplar_Agent | Yes | 0.073 | 79.2 |
+| GCM | open_debate | Exemplar_Agent | Yes | 0.084 | 71.6 |
+| GCM | open_arbiter | Exemplar_Agent | Yes | 0.074 | 76.9 |
+| SUSTAIN | closed_no_debate | Clustering_Agent | Yes | 0.057 | 87.7 |
+| SUSTAIN | closed_debate | Clustering_Agent | Yes | 0.053 | 88.6 |
+| SUSTAIN | closed_arbiter | Clustering_Agent | Yes | 0.020 | 96.0 |
+| SUSTAIN | open_debate | Clustering_Agent | Yes | 0.108 | 64.1 |
+| SUSTAIN | open_arbiter | — | ERROR | — | — |
+| RULEX | closed_no_debate | Rule_Agent | Yes | 0.053 | 86.1 |
+| RULEX | closed_debate | Rule_Agent | Yes | 0.168 | 58.6 |
+| RULEX | closed_arbiter | Rule_Agent | Yes | 0.140 | 63.9 |
+| RULEX | open_debate | Rule_Agent | Yes | 0.055 | 82.7 |
+| RULEX | open_arbiter | Rule_Agent | Yes | 0.061 | 82.0 |
 
-### Analysis
+### Gap advantages (pp over closed_no_debate)
 
-**Debate without arbiter is the best configuration under misspecification:**
-- GCM: +3.5pp gap, 85.7% param recovery (c: 0.5 → near GT 4.0)
-- RULEX: +22.4pp gap, 60.3% param recovery (strongest effect)
-- SUSTAIN: -1.9pp gap, 0% recovery — neutral (misspecification invisible to agents)
+| GT | closed_debate | closed_arbiter | open_debate | open_arbiter |
+|---|---|---|---|---|
+| GCM | +4.2pp | +2.4pp | -5.2pp | +0.1pp |
+| SUSTAIN | +0.9pp | **+8.3pp** | -23.6pp | ERROR |
+| RULEX | -27.5pp | -22.2pp | -3.4pp | -4.1pp |
 
-**Arbiter consistently degrades performance:**
-- GCM: +4.9pp (only case where arbiter helps)
-- SUSTAIN: -11.6pp
-- RULEX: -54.7pp, wrong winner
+### Key insight: arbiter is a bias, not noise
 
-**Why SUSTAIN shows 0% recovery:** SUSTAIN's misspecification (r=3.0, eta=0.15 vs GT
-r=9.01, eta=0.092) doesn't produce enough prediction error to trigger LLM revision
-proposals. The agents need to *see* prediction failures before proposing param changes.
-SUSTAIN still wins easily (87.7% gap even with misspec) because its computational
-advantage on clustering-diagnostic structures is robust to these param changes.
+Crux machinery steers toward similarity-based structures. This is a *feature* for
+SUSTAIN/GCM and a *bug* for RULEX. Open design is the mirror bias: agent proposals
+favor rule-diagnostic structures.
 
-**RULEX arbiter failure — root cause (detailed):**
-Experiment selection divergence:
-- No-debate & Debate: selected **rule-plus-exception** (`rpe`) structures (4/5 cycles)
-  — RULEX-diagnostic. Posterior converged to 99.5%.
-- Arbiter: selected only **linearly-separable** (`ls`) structures (5/5 cycles) —
-  non-discriminative. Posterior eroded from 94% → 69%.
+### Open items
 
-Mechanism: meta-agents (Integrator, Critic) influenced interpretation debate, changing
-agents' divergence mapping → different EIG landscape → Thompson sampling favored `ls`
-over `rpe`. Crux-directed selection was NOT the cause (0/5 were crux-directed).
+1. **Fix SUSTAIN open_arbiter bug** — "setting an array element with a sequence".
+   Need to reproduce and trace.
+2. **Commit results + docs** — all MDs updated, need to commit
+3. **Consider next steps:**
+   - Can crux bias be corrected? (diversity constraint on crux-directed selection)
+   - M15+M16 combined: misspecification + open design space
+   - Arbiter debiasing: ensure cruxes also generate rule-diagnostic structures
 
-### Bugfix during M15
+### Commits this session (prior)
+1. `1529202` — `test(M15): harden M15 code paths — 19 tests + param_distance extraction`
+2. `aa67cae` — `feat(M16): open design space — agents propose all structures via debate`
 
-`runner.py:1278` — `spec["crux_id"]` KeyError when claim-directed boost specs (which
-lack `crux_id`) matched the selected experiment. Fixed to `spec.get("crux_id")`.
-Surfaced during GCM arbiter run.
-
-### M14→M15 synthesis
-
-M14 showed debate was **epiphenomenal** under correct specification — the computational
-pipeline alone identified the correct model in 18/18 conditions. M15 shows debate is
-**causally necessary** under misspecification, but only the *core debate loop*:
-
-- **Debate layer** (agents + interpretation + param revision): adds causal value.
-  LLM agents see prediction failures, diagnose the cause, propose corrections via
-  `sync_params_from_theory()`. This is what EIG alone can't do — EIG does selection,
-  debate does estimation. Pitt & Myung (2004) confirmed empirically.
-- **Arbiter layer** (cruxes + meta-agents): net negative. Meta-agents optimize for
-  argumentative richness, not model discrimination. They distort divergence mapping,
-  degrading experiment selection quality.
-
-The sweet spot: **debate without arbiter.**
-
-### Open questions
-
-1. **Is the arbiter effect robust?** Single run per condition. Need replications to
-   separate signal from Thompson sampling stochasticity.
-2. **Would removing meta-agents but keeping cruxes help?** Current arbiter bundles
-   cruxes + meta-agents. The problem is meta-agent influence on divergence mapping,
-   not crux-directed selection itself.
-3. **Why does arbiter help on GCM but hurt everywhere else?** GCM's misspecification
-   (c=0.5) may interact differently with meta-agent interpretations.
-4. **Can param recovery be triggered on SUSTAIN?** Current misspecification (r=3.0,
-   eta=0.15) is too mild — 0% recovery. Need stronger misspecification or explicit
-   prompting to diagnose param errors.
-
----
-
-## M15 Test Hardening + M16 Code — In Progress (2026-03-17)
-
-### M15 Test Hardening (Part 1) — Complete
-Added 19 tests in 4 classes to `tests/test_bugfixes.py`:
-- `TestValidateNovelStructure` (8 tests) — validates `validate_novel_structure()`
-- `TestCruxIdBugfix` (3 tests) — verifies `spec.get("crux_id")` fix at runner.py:1278
-- `TestParamDistance` (5 tests) — tests `param_distance()` (moved from validate_m15_live.py to runner.py)
-- `TestParamRecoveryFlow` (3 tests) — param patching + recovery computation
-
-### M16 Implementation (Part 2) — Code complete, pending validation
-- `generate_full_candidate_pool()` — added `"open"` branch (empty structures, agent proposals only)
-- `run_structure_proposal()` — new function, agents propose 2-3 structures per cycle
-- `run_cycle()` — inserted structure_proposal call for open mode
-- `run_full_pool_selection()` — empty-pool fallback seeds Type_I + Type_VI
-- `run_interpretation_debate()` — open-mode directive encourages structure proposals
-- CLI: `--design-space open` added to argparse
-- `validate_m16_live.py` — three-condition validation script
-- `TestOpenDesignSpace` (5 tests) — open pool construction
-
-### Next steps
-- Run full test suite to confirm no regressions
-- Smoke test: `python scripts/validation/validate_m16_live.py RULEX --open-only`
-- Full validation: 3 GTs × 3 conditions = 9 runs
+### Files modified this session
+- `scripts/validation/validate_m16_live.py` — added arbiter parameter, 5 conditions,
+  `--arbiter-only` / `--new-only` CLI flags, meta-agent creation, crux weight restore
+- `CURRENT_STATE.md` — full M16 Phase 1+2 results, revised theory
+- `ROADMAP.md` — M16 promoted to latest, findings updated
+- `Notes/archive/DECISIONS.md` — D46 (arbiter addition to M16)
 
 ---
 
@@ -121,5 +72,5 @@ Added 19 tests in 4 classes to `tests/test_bugfixes.py`:
 - **Pure divergence-driven selection without diversity** — picks the same high-divergence structure every cycle (Type_VI). RULEX never gets tested on favorable structures.
 - **EIG greedy optimization** — selects the same structure repeatedly (Phase 13). Thompson sampling (D34) fixes this.
 - **Pairwise curve divergence as posterior evidence** — rewards model distinctiveness, not fit to data. Data-independent bonus distorts posterior. Removed in D35.
-- **Multiplicative EIG boost for cruxes** — 2× multiplier barely shifts Thompson sampling when EIG scores cluster narrowly. Replaced with mixture distribution in D37.
+- **Multiplicative EIG boost for cruxes** — 2x multiplier barely shifts Thompson sampling when EIG scores cluster narrowly. Replaced with mixture distribution in D37.
 - **Exact structure name matching for sampled structures** — ephemeral names change every cycle. Fixed with parameter-based fuzzy matching (D42).

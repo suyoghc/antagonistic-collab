@@ -1,15 +1,22 @@
 # Roadmap
 
-## Latest: M15 — Model misspecification (Phase 2 complete)
+## Latest: M16 — Open Design Space (Phase 2 complete)
 
-**First causal demonstration that debate adds value.** Under parameter misspecification,
-the core debate loop (agents interpreting results + proposing param revisions) improves
-identification gap by +3.5pp (GCM) to +22.4pp (RULEX) via 60-86% parameter recovery.
-The arbiter layer (cruxes + meta-agents) is net negative — it distorts experiment
-selection. M14 showed debate was epiphenomenal under correct specification; M15 shows
-it's causally necessary under misspecification.
+**14/15 runs complete, 14/14 correct winners.** Key finding: the arbiter is a bias,
+not noise. Crux machinery steers experiment selection toward similarity-based structures
+— best-ever SUSTAIN result (96% gap, +8.3pp) but continued RULEX degradation (-22pp).
+Open design is the mirror bias: agent proposals favor rule-diagnostic structures,
+helping RULEX (+24pp over closed_debate) but hurting SUSTAIN (-24pp). Computation alone
+remains most reliable across all model types. One error: SUSTAIN open_arbiter.
 
 See [CURRENT_STATE.md](CURRENT_STATE.md) for full results and analysis.
+
+### M15 — Model misspecification (complete)
+
+First causal demonstration that debate adds value. Under parameter misspecification,
+the core debate loop improves gap by +3.5pp (GCM) to +22.4pp (RULEX) via 60-86%
+parameter recovery. Arbiter layer net negative under misspecification (revised by M16:
+the arbiter is model-biased, not universally harmful).
 
 ### M14 — Debate→Computation Feedback Loop (complete)
 
@@ -105,28 +112,66 @@ No new pipeline machinery needed — just a validation script + param sweep scri
 - Wagenmakers, Ratcliff, Gomez & Iverson (2004). Assessing model mimicry using the
   parametric bootstrap. *JMP*, 48, 28–50.
 
-### M16 — Open design space (code complete, pending validation)
-Remove structure registry. Force agents to propose every experiment via debate.
-Only `temporary_structures` from agent proposals enter the EIG pool.
-Tests whether debate generates diagnostic experiments that EIG alone can't discover.
+### M16 — Open design space (Phase 2 complete)
 
-**Implementation:** `--design-space open` CLI flag. New `run_structure_proposal()`
-phase runs between divergence mapping and EIG selection. Agents propose 2-3 structures
-per cycle; valid proposals accumulate in `protocol.temporary_structures`. Pool grows
-from ~6-9 structures on cycle 0 to ~15-24 by cycle 4. Fallback: if all proposals
-invalid, seeds with Type_I + Type_VI.
+**Scientific question:** Does debate add value for experiment *design*? Does the arbiter
+help or hurt under correct specification?
 
-**Three conditions:** closed_no_debate (M14 baseline), closed_debate (standard),
-open_debate (agent-proposed only). Validation: `scripts/validation/validate_m16_live.py`.
+**Design:** 2×2+1 factorial (closed/open × debate/arbiter + no-debate baseline).
+15 runs total, 14 completed, 1 error (SUSTAIN open_arbiter).
+
+**Key findings:**
+- Arbiter is model-biased: +8.3pp SUSTAIN (best ever), +2.4pp GCM, -22pp RULEX
+- Open design is the mirror bias: +24pp RULEX recovery, -24pp SUSTAIN
+- Arbiter recovers open-design losses for GCM (open_arbiter +0.1pp vs open_debate -5.2pp)
+- Computation alone most reliable across all model types (76-88% gap)
+
+**Open:** Fix SUSTAIN open_arbiter error. Consider crux debiasing.
 
 **Tests:** `TestOpenDesignSpace` (5 tests) in `tests/test_bugfixes.py`.
+Validation: `scripts/validation/validate_m16_live.py`.
 
-### Conditions where debate may causally matter
+### M-future — R-IDeA as alternative OED type
+
+**Scientific question:** Does R-IDeA's multi-objective acquisition (representativeness +
+informativeness + de-amplification) reduce the model-type biases that M16 identified,
+and does it interact differently with debate than EIG does?
+
+**Motivation:** EIG optimizes for informativeness only. M16 showed this is model-agnostic
+when the design space is adequate, but every other component (arbiter, open design)
+introduces model-type bias. Tang, Sloman & Kaski (2025, R-IDeA) add two terms:
+representativeness (broad coverage) and de-amplification (don't amplify existing errors).
+These directly target the failure modes M16 documented.
+
+**Design:** Add R-IDeA as a new OED type alongside EIG in the experiment selection
+pipeline, not replacing it. Run the existing 5-condition factorial (closed/open ×
+debate/arbiter + no-debate baseline) with R-IDeA scoring instead of EIG. Compare
+per-GT gaps and model-type bias patterns.
+
+**Key comparisons:**
+- R-IDeA no-debate vs. EIG no-debate: does de-amplification reduce per-GT variance?
+- R-IDeA + debate vs. EIG + debate: does R-IDeA change when debate helps vs. hurts?
+- R-IDeA + open design: does representativeness term counteract narrative narrowing?
+
+**Implementation:** Add an `oed_type` parameter to the experiment selection pipeline
+(values: `"eig"`, `"r_idea"`). R-IDeA scoring requires: (1) a representativeness
+metric over the candidate pool, (2) the existing EIG term, (3) a de-amplification
+estimate based on current residuals. The pipeline selects from the same candidate
+pool — only the scoring changes.
+
+**Connection:** See [New Ideas/Sloman - Bayesian OED under Misspecification.md] for
+full analysis. Also related: GBOED (Barlas, Sloman & Kaski 2025) could be a third
+OED type targeting robustness to misspecified noise distributions.
+
+### Conditions where debate causally matters (updated)
 - Model misspecification — **confirmed (M15).** Debate improves gap by +3.5pp (GCM),
   +22.4pp (RULEX) via parameter recovery. Neutral when misspecification is invisible (SUSTAIN).
-- Non-enumerated design space (LLM agents propose novel structures)
-- Ambiguous data (real human data with noise, individual differences)
-- Explanation for humans (goal is understanding, not just identification)
+- Non-enumerated design space — **partially confirmed (M16).** Agent proposals help RULEX
+  (+24pp over closed_debate) when registry lacks diagnostic structures. But hurt SUSTAIN (-24pp).
+- Arbiter as model-biased tool — **new finding (M16).** Crux machinery helps similarity
+  models (SUSTAIN +8pp, GCM +2pp), hurts rule models (RULEX -22pp). Not broken, just partial.
+- Ambiguous data (real human data with noise, individual differences) — untested
+- Explanation for humans (goal is understanding, not just identification) — untested
 
 See [Notes/archive/LESSONS_LEARNED.md](Notes/archive/LESSONS_LEARNED.md) for 40 theses
 on LLM-mediated scientific debate.

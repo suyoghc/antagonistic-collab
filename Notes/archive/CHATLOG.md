@@ -796,4 +796,112 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 
 ---
 
+### Session 30 — 2026-03-16/17 (M14: Close Debate→Computation Feedback Loop)
+
+**Commits:** (pending)
+
+**What we did:**
+- Implemented 3 M14 interventions following TDD (Red→Green→Refactor):
+  1. **Claim-directed experiment selection** — `claims_to_boost_specs()` converts untested testable claims to EIG boost specs. Merged with crux specs in `run_full_pool_selection()`. 7 tests.
+  2. **Validated parameter revisions** — `validate_param_revision()` gates `sync_params_from_theory()` with RMSE comparison. Rejects degradations > 0.01. 4 tests.
+  3. **Claim auto-resolution** — `resolve_claims_from_data()` resolves claims matching executed experiment. Hybrid pattern-parsing + RMSE fallback. 4 tests.
+- Fixed packaging issues raised by Codex (pyyaml dep, openai optional dep, CLI dedup)
+- Smoke test confirmed all 3 interventions fire
+- **Run 1:** Live validation 3/3 correct, but claim-directed selection never fired — LLM free-text didn't match registry keys
+- **Diagnosis:** Claims had structure="Shepard Type I" not "Type_I", condition="high noise" not "high_noise"
+- **Fix 1:** `normalize_claim_fields()` with `_match_structure()` and `_match_condition()` helpers (13 tests)
+- **Run 2:** Claims now have valid conditions but structure=sampled names not in registry
+- **Fix 2:** Include `protocol.sampled_structures` and `protocol.temporary_structures` in valid set
+- **Run 3:** Sampled structures are ephemeral — regenerated each cycle with different names/seeds
+- **Fix 3:** `_fuzzy_match_sampled_structure()` parses parameters from names (`sampled_ls_8d_sep0.99_13` → type=ls, dims=8, sep=0.99) and finds nearest match in current pool (12 tests)
+- **Run 4 (final):** All interventions firing — 94 fuzzy matches, 12 claim-directed selections, 7/33 param rejections, 45 claims resolved. 3/3 correct.
+- **Ablation:** crux_weight=0 also 3/3 correct but wider RMSE spread
+- Updated TASKS.md, Notes/TASKS.md, SCRATCHPAD.md, DECISIONS.md (D42)
+- 428/428 tests passing, lint/format clean
+
+**M14 final validation results:**
+
+| GT | Winner | RMSE | Gap% | Claims | Resolved |
+|---|---|---|---|---|---|
+| GCM | Exemplar_Agent | 0.087 | 77.8% | 44 | 15 |
+| SUSTAIN | Clustering_Agent | 0.061 | 87.9% | 36 | 15 |
+| RULEX | Rule_Agent | 0.233 | 39.0% | 40 | 15 |
+
+**Key findings:**
+- Feedback loop mechanically complete — all 3 interventions fire as designed
+- Debate still does not beat no-debate on synthetic benchmarks (M13 no-debate avg RMSE 0.066 vs M14 full 0.127)
+- Param validation is the strongest intervention (21% rejection rate, prevents 0.02–0.10 RMSE degradation per rejection)
+- Claim auto-resolution heavily falsification-skewed (87% falsified) — system is a falsification engine
+- The boundary is empirically clear: debate adds no value when models are complete, data is synthetic, and design space is enumerable
+
+**Key discussion:**
+- User asked about where debate may help, cited analysis identifying computation-sufficient vs debate-needed regimes
+- Three feasible paths within current codebase: (1) model misspecification, (2) open design space, (3) real data
+- Architecture already has hooks: pluggable experiment_runner, auxiliary_assumptions field, temporary_structures mechanism
+- Agreed M15 should test model misspecification (most feasible path)
+
+**Status:** M14 complete. D42 logged. 428 tests. Proposed M15 (misspecification) and M16 (open design space).
+
+---
+
+## Session: 2026-03-17 — M15 complete + M16 implementation + Phase 1 validation
+
+**What was done:**
+- M15 test hardening: 19 tests across 4 classes, extracted `param_distance()` from runner
+- M15 Phase 2: full 9-run matrix (3 GTs × 3 conditions) with GPT-4o, 5 cycles each
+- M16 implementation: `--design-space open`, `run_structure_proposal()`, empty-pool fallback
+- M16 smoke test: RULEX open_debate correct, 88% gap, 54 agent-proposed structures
+- M16 Phase 1 validation launched (9 runs: closed_no_debate, closed_debate, open_debate)
+
+**Key findings (M15):**
+- First causal demonstration: debate helps under misspecification
+- Debate without arbiter: +3.5pp (GCM), +22.4pp (RULEX) via parameter recovery
+- Arbiter catastrophic on RULEX (-54.7pp, wrong winner) — meta-agents distort experiment selection
+- Parameter recovery requires visible prediction failure (SUSTAIN: 0% recovery)
+
+**Commits:**
+- `1529202` — test(M15): harden M15 code paths
+- `aa67cae` — feat(M16): open design space
+
+**Decisions:** D44 (test hardening), D45 (M16 design)
+
+---
+
+## Session: 2026-03-18 — M16 Phase 1 results + Phase 2 arbiter validation + writeup
+
+**What was done:**
+- M16 Phase 1 results analyzed: 9/9 correct winners, open_debate doesn't beat baseline
+- Added arbiter conditions to M16 (D46): closed_arbiter + open_arbiter
+- M16 Phase 2 validation: 6 arbiter runs (14/15 complete, SUSTAIN open_arbiter errored)
+- Updated CURRENT_STATE.md, ROADMAP.md, SCRATCHPAD.md, DECISIONS.md with full M16 results
+- Added section 6.2 "Every intervention carries an implicit model-type prior" to WRITEUP.md
+- Added 4 new references (Broomell 2019, Navarro 2019, Kennedy 2019, Peters & Chin-Yee 2025)
+- Appended LESSONS_LEARNED.md: Phase 21 (M15) + Phase 22 (M16), lessons 47-55
+
+**Key findings (M16):**
+- Open design doesn't beat curated registry on average (-3 to -24pp)
+- RULEX exception: open_debate (82.7%) >> closed_debate (58.6%)
+- **Arbiter is model-biased, not broken:** SUSTAIN closed_arbiter 96.0% (+8.3pp, best ever), RULEX -22pp
+- **Central insight: every intervention embeds an implicit model-type prior**
+  - Computation (EIG): model-agnostic (76-88% all GTs)
+  - Arbiter: biases toward similarity structures
+  - Open design: biases toward rule-diagnostic structures
+  - Complementary biases may compose to approximate model-agnostic coverage
+
+**Key discussion:**
+- User identified that M15's "arbiter is bad" conclusion was premature — needed M16 to test under correct spec
+- The "gap-filling" theory of when debate helps (Phase 1 conclusion) was too simple
+- Revised theory: each component has a model-type prior, not just a noise level
+- Proposed combining curated registry + agent proposals + crux selection for complementary coverage
+- Relevant literature: Broomell et al. (2019) on stimulus-model relationships, Navarro (2019) on pre-analysis choices
+
+**Open items:**
+- Fix SUSTAIN open_arbiter bug ("setting an array element with a sequence")
+- Test combined closed+open design (union of registry and agent proposals)
+- Consider crux debiasing (diversity constraint across structure types)
+
+**Decisions:** D46 (arbiter addition to M16)
+
+---
+
 *This log is maintained manually. Update it at the end of each session.*

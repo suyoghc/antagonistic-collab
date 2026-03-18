@@ -4,9 +4,9 @@ Historical development documentation for the antagonistic collaboration project 
 
 | File | Description |
 |------|-------------|
-| [CHATLOG.md](CHATLOG.md) | Session-by-session development log (M1-M14) |
+| [CHATLOG.md](CHATLOG.md) | Session-by-session development log (M1-M16) |
 | [DECISIONS.md](DECISIONS.md) | Numbered design decisions with rationale (D1-D30+) |
-| [LESSONS_LEARNED.md](LESSONS_LEARNED.md) | 40 theses on LLM-mediated scientific debate |
+| [LESSONS_LEARNED.md](LESSONS_LEARNED.md) | 55 theses on LLM-mediated scientific debate (M1-M16) |
 | [WRITEUP.md](WRITEUP.md) | Academic paper draft |
 | [REPORT.md](REPORT.md) | Technical report with full results |
 | [FEATURES.md](FEATURES.md) | Feature specifications and implementation notes |

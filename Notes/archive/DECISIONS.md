@@ -1100,4 +1100,55 @@ Three conditions: closed_no_debate (M14 baseline), closed_debate (standard), ope
 - Small pool reduces EIG effectiveness → by design; tests whether debate adds value
 - Agents may propose redundant structures → prompt shows existing pool; could add dedup
 
-**Status:** Code complete, 5 new tests pass. Pending live validation (9 runs).
+**Status:** Phase 1 complete (9 runs, 9/9 correct). Phase 2 (arbiter conditions) in progress.
+
+---
+
+## D46: M16 Phase 2 — Adding arbiter conditions to open design space — 2026-03-18
+
+**Problem:** M16 Phase 1 dropped the arbiter based on M15's finding that meta-agents
+distort experiment selection. But M15's arbiter failure was specific: under
+misspecification, meta-agents optimized for argumentative richness instead of model
+discrimination. M16 asks a different question under correct specification — and the
+arbiter's crux machinery might interact differently with an open design space. In
+open_debate, agents propose structures based on narrative reasoning; cruxes could
+redirect proposals toward actual points of model disagreement.
+
+**Decision:** Expand from 3 to 5 conditions (2×2+1 factorial):
+- closed_no_debate (baseline, already run)
+- closed_debate (already run)
+- **closed_arbiter** (NEW: curated registry + cruxes + meta-agents)
+- open_debate (already run)
+- **open_arbiter** (NEW: agent-proposed structures + cruxes + meta-agents)
+
+Arbiter conditions enable `_ARBITER=True`, `_CRUX_WEIGHT=0.3`, and instantiate
+`create_default_meta_agents()` (Integrator + Critic). Updated
+`validate_m16_live.py` with `arbiter` parameter, `--arbiter-only` / `--new-only`
+CLI flags.
+
+**Alternatives considered:** Could run only open_arbiter (the most novel combination).
+Chose to also run closed_arbiter for completeness — it separates the arbiter's effect
+on experiment *selection from registry* vs experiment *design from scratch*.
+
+**Results (14/15 complete, SUSTAIN open_arbiter errored):**
+
+| GT | closed_arbiter gap | open_arbiter gap | vs baseline |
+|---|---|---|---|
+| GCM | 79.2% | 76.9% | +2.4pp, +0.1pp |
+| SUSTAIN | **96.0%** | ERROR | **+8.3pp** (best ever) |
+| RULEX | 63.9% | 82.0% | -22.2pp, -4.1pp |
+
+**Answers to key questions:**
+1. Closed_arbiter helps SUSTAIN substantially (+8.3pp, best result across all milestones)
+   and GCM modestly (+2.4pp). Still hurts RULEX (-22.2pp) but less than M15 (-54.7pp).
+2. Open_arbiter recovers open_debate losses for GCM (+0.1pp vs -5.2pp). Neutral on RULEX
+   (82.0% vs 82.7%). SUSTAIN errored.
+3. Arbiter's M15 failure was NOT a general property — it's a model-type-dependent bias.
+   Crux machinery steers toward similarity-based structures: helps SUSTAIN/GCM, hurts RULEX.
+
+**Key insight:** The arbiter is a bias, not noise. It favors similarity-based model
+discrimination. Open design is the mirror bias — agent proposals favor rule-diagnostic
+structures. Neither is universally good or bad; each helps the model type whose
+diagnostic structures it naturally generates.
+
+**Status:** Complete (1 error pending fix).
