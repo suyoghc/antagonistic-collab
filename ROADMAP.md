@@ -105,10 +105,21 @@ No new pipeline machinery needed — just a validation script + param sweep scri
 - Wagenmakers, Ratcliff, Gomez & Iverson (2004). Assessing model mimicry using the
   parametric bootstrap. *JMP*, 48, 28–50.
 
-### M16 — Open design space (proposed)
+### M16 — Open design space (code complete, pending validation)
 Remove structure registry. Force agents to propose every experiment via debate.
 Only `temporary_structures` from agent proposals enter the EIG pool.
 Tests whether debate generates diagnostic experiments that EIG alone can't discover.
+
+**Implementation:** `--design-space open` CLI flag. New `run_structure_proposal()`
+phase runs between divergence mapping and EIG selection. Agents propose 2-3 structures
+per cycle; valid proposals accumulate in `protocol.temporary_structures`. Pool grows
+from ~6-9 structures on cycle 0 to ~15-24 by cycle 4. Fallback: if all proposals
+invalid, seeds with Type_I + Type_VI.
+
+**Three conditions:** closed_no_debate (M14 baseline), closed_debate (standard),
+open_debate (agent-proposed only). Validation: `scripts/validation/validate_m16_live.py`.
+
+**Tests:** `TestOpenDesignSpace` (5 tests) in `tests/test_bugfixes.py`.
 
 ### Conditions where debate may causally matter
 - Model misspecification — **confirmed (M15).** Debate improves gap by +3.5pp (GCM),

@@ -217,7 +217,7 @@ def generate_full_candidate_pool(
 ) -> list[tuple[str, str]]:
     """All structure×condition pairs for EIG experiment selection.
 
-    Three modes:
+    Four modes:
         - ``"base"``: STRUCTURE_REGISTRY only (11 × 5 = 55 candidates).
         - ``"richer"``: + PARAMETRIC_STRUCTURES + PARAMETRIC_CONDITIONS
           (~24 × 7 = 168 candidates). Fixed grid from M11.
@@ -225,6 +225,11 @@ def generate_full_candidate_pool(
           all 7 conditions. Samples new structures each call from continuous
           parameter ranges (M12). Stores sampled structures on
           ``protocol.sampled_structures`` for resolution.
+        - ``"open"``: No registry structures. Pool comes entirely from
+          ``extra_structures`` (agent proposals stored in
+          ``protocol.temporary_structures``). Returns empty pool if no
+          proposals exist yet. Used by M16 to test whether debate-proposed
+          structures are diagnostic.
 
     All modes include ``extra_structures`` and PARAMETRIC_CONDITIONS.
 
@@ -232,7 +237,7 @@ def generate_full_candidate_pool(
         protocol: DebateProtocol instance (for access to registries).
         extra_structures: Optional dict of additional structures (e.g., from
             novel agent proposals) to include in the pool.
-        design_space: "base", "richer", or "continuous" (default).
+        design_space: "base", "richer", "continuous" (default), or "open".
         n_continuous_samples: Structures to sample per call (continuous only).
         continuous_seed: RNG seed for sampling (continuous only).
 
@@ -247,21 +252,28 @@ def generate_full_candidate_pool(
         _sample_continuous_structures,
     )
 
-    structures = dict(STRUCTURE_REGISTRY)
+    if design_space == "open":
+        # Open mode: no registry structures. Pool comes entirely from
+        # extra_structures (agent proposals in protocol.temporary_structures).
+        structures = dict(extra_structures) if extra_structures else {}
+    else:
+        structures = dict(STRUCTURE_REGISTRY)
 
-    if design_space == "richer":
-        structures.update(PARAMETRIC_STRUCTURES)
-    elif design_space == "continuous":
-        sampled = _sample_continuous_structures(n_continuous_samples, continuous_seed)
-        protocol.sampled_structures = sampled
-        structures.update(sampled)
+        if design_space == "richer":
+            structures.update(PARAMETRIC_STRUCTURES)
+        elif design_space == "continuous":
+            sampled = _sample_continuous_structures(
+                n_continuous_samples, continuous_seed
+            )
+            protocol.sampled_structures = sampled
+            structures.update(sampled)
 
-    if extra_structures:
-        structures.update(extra_structures)
+        if extra_structures:
+            structures.update(extra_structures)
 
     # All modes get interpolated conditions (cheap and useful)
     conditions = dict(CONDITION_EFFECTS)
-    if design_space in ("richer", "continuous"):
+    if design_space in ("richer", "continuous", "open"):
         conditions.update(PARAMETRIC_CONDITIONS)
 
     pool = []

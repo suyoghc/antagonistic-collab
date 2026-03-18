@@ -101,9 +101,9 @@ def _build_argparser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--design-space",
-        choices=["base", "richer", "continuous"],
+        choices=["base", "richer", "continuous", "open"],
         default="continuous",
-        help="Design space: base (55), richer (168 fixed grid), continuous (sampled each cycle, default).",
+        help="Design space: base (55), richer (168 fixed grid), continuous (sampled each cycle, default), open (agent-proposed only, M16).",
     )
     parser.add_argument(
         "--n-continuous-samples",

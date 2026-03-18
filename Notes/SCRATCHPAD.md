@@ -86,6 +86,32 @@ The sweet spot: **debate without arbiter.**
 
 ---
 
+## M15 Test Hardening + M16 Code — In Progress (2026-03-17)
+
+### M15 Test Hardening (Part 1) — Complete
+Added 19 tests in 4 classes to `tests/test_bugfixes.py`:
+- `TestValidateNovelStructure` (8 tests) — validates `validate_novel_structure()`
+- `TestCruxIdBugfix` (3 tests) — verifies `spec.get("crux_id")` fix at runner.py:1278
+- `TestParamDistance` (5 tests) — tests `param_distance()` (moved from validate_m15_live.py to runner.py)
+- `TestParamRecoveryFlow` (3 tests) — param patching + recovery computation
+
+### M16 Implementation (Part 2) — Code complete, pending validation
+- `generate_full_candidate_pool()` — added `"open"` branch (empty structures, agent proposals only)
+- `run_structure_proposal()` — new function, agents propose 2-3 structures per cycle
+- `run_cycle()` — inserted structure_proposal call for open mode
+- `run_full_pool_selection()` — empty-pool fallback seeds Type_I + Type_VI
+- `run_interpretation_debate()` — open-mode directive encourages structure proposals
+- CLI: `--design-space open` added to argparse
+- `validate_m16_live.py` — three-condition validation script
+- `TestOpenDesignSpace` (5 tests) — open pool construction
+
+### Next steps
+- Run full test suite to confirm no regressions
+- Smoke test: `python scripts/validation/validate_m16_live.py RULEX --open-only`
+- Full validation: 3 GTs × 3 conditions = 9 runs
+
+---
+
 ## Failed approaches (do not repeat)
 
 - **Pre-LOO prediction** — training and testing on same items gives GCM self-similarity bias (D11). Always use LOO.

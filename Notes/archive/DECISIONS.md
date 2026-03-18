@@ -1006,3 +1006,98 @@ Key findings:
 - Explanation for humans (goal is understanding, not just identification)
 
 **Status:** Done. All 18/18 conditions complete.
+
+---
+
+## D42: Fuzzy parameter matching for ephemeral sampled structures — 2026-03-16
+
+**Problem:** Claim-directed experiment selection never fired during live validation because sampled structures are regenerated each cycle with different seeds. A claim from cycle 0 targeting `sampled_ls_8d_sep0.99_13` won't exist in cycle 1's pool — the name encodes a random index that changes every cycle.
+
+**Decision:** Implement parameter-based fuzzy matching as a fallback in `claims_to_boost_specs()`. When a claim targets a sampled structure name not in the current pool:
+1. Parse the encoded parameters from the name (type=ls/rpe, dims, separation/exceptions)
+2. Find the closest match in the current pool by: same type → closest dims (10× weight) → closest separation or n_exceptions
+
+Gated by `_FUZZY_STRUCTURE_MATCH = True` (on by default, toggleable).
+
+**Alternatives considered:**
+1. **Persist sampled structures across cycles** — Would break the continuous design space sampling that M12 introduced. Each cycle should explore new regions of parameter space.
+2. **Store claims by parameters instead of names** — Would require changing the `DebateClaim` dataclass and all claim-producing code. Too invasive for the payoff.
+3. **Exact parameter matching only** — Too strict; separation values are continuous floats unlikely to repeat exactly. Nearest-neighbor is more robust.
+
+**Implementation:**
+- `_parse_sampled_params(name)`: regex parser for `sampled_ls_{dims}d_sep{sep}_{idx}` and `sampled_rpe_{dims}d_{exc}exc_{idx}`
+- `_fuzzy_match_sampled_structure(name, pool)`: nearest-neighbor by dims (10× weight) + parameter distance
+- Modified `claims_to_boost_specs()`: fallback to fuzzy match when exact structure lookup fails
+- 12 new tests in `TestFuzzySampledStructureMatch`
+
+**Status:** Implemented, 428/428 tests pass. Live validation: 94 fuzzy matches fired across 3 ground truths. Done.
+
+---
+
+## D43: M14 final assessment — debate epiphenomenal even with closed feedback loop — 2026-03-17
+
+**Problem:** M13 showed debate is epiphenomenal on synthetic benchmarks. M14 closed the debate→computation feedback loop with 3 interventions (claim-directed selection, validated param revisions, claim auto-resolution) + 2 fixes (normalization, fuzzy structure matching). Does the closed loop change the outcome?
+
+**Finding:** No. Despite all interventions firing mechanically (94 fuzzy matches, 12 claim-directed selections, 7/33 param rejections, 45 claims resolved), M14 full does not beat the M13 no-debate baseline:
+
+| Condition | Avg RMSE | Avg Gap% |
+|---|---|---|
+| M13 No-Debate (Thompson) | 0.066 | 83.5% |
+| M13 Debate+Arbiter (Thompson) | 0.070 | 83.2% |
+| M14 Full (feedback loop) | 0.127 | 68.2% |
+| M14 Ablation (crux_weight=0) | 0.161 | 58.5% |
+
+**Interpretation:** The computational pipeline (EIG + Bayesian posterior + model predictions) is sufficient when models are fully specified and data is clean. Debate adds noise rather than signal because:
+1. Claim-directed selection steers toward narratively interesting but computationally non-diagnostic experiments
+2. LLM agents overclaim consistently (87% of claims falsified), so claim boosting amplifies bad hypotheses
+3. Param validation prevents the worst damage but can't add information the computation doesn't already have
+
+**What M14 *did* establish:**
+- Param validation is causally beneficial (prevents 0.02–0.10 RMSE degradation per blocked revision)
+- The feedback loop mechanism works — it just operates in a regime where it's unnecessary
+- The boundary between computation-sufficient and debate-needed regimes is now empirically characterized
+
+**Next:** Test in the debate-needed regime — model misspecification (M15), open design space (M16), or real data (M17).
+
+**Status:** M14 complete. This is a precise negative result, not a failure — it establishes where the boundary is.
+
+---
+
+## D44: M15 test hardening + param_distance() extraction — 2026-03-17
+
+**Problem:** M15 Phase 2 results are validated via `validate_m15_live.py` (real LLM calls), but the underlying code paths have no unit tests. Codex flagged this as a gap.
+
+**Decision:** Added 19 unit tests in 4 classes to `tests/test_bugfixes.py`:
+- `TestValidateNovelStructure` (8 tests) — gates every structure entering the EIG pool
+- `TestCruxIdBugfix` (3 tests) — regression for the `spec.get("crux_id")` fix
+- `TestParamDistance` (5 tests) — normalized Euclidean distance for param recovery
+- `TestParamRecoveryFlow` (3 tests) — param patching + recovery computation
+
+Also extracted `_param_distance()` from `validate_m15_live.py` → `runner.py::param_distance()` (public API) so it's importable and testable. Validation script imports from runner.
+
+**Alternatives:** Could have tested by importing from the script via sys.path manipulation. Chose to extract to runner.py since it belongs with other param-related functions (`validate_param_revision`, `sync_params_from_theory`).
+
+**Status:** 19/19 tests pass. Full suite no regressions.
+
+---
+
+## D45: M16 open design space implementation — 2026-03-17
+
+**Problem:** M14 showed debate is epiphenomenal when the design space is pre-enumerated. M15 showed debate helps under misspecification. M16 tests a different axis: what if the design space itself requires debate? Remove the registry so agents must propose all structures.
+
+**Decision:** Four-part implementation:
+1. `generate_full_candidate_pool()` gains `"open"` mode — empty structures dict, pool comes entirely from `extra_structures` (agent proposals)
+2. New `run_structure_proposal()` function — runs between divergence mapping and EIG selection. Each agent proposes 2-3 structures via LLM. Valid proposals stored in `protocol.temporary_structures`
+3. `run_full_pool_selection()` — empty-pool fallback seeds Type_I + Type_VI
+4. Interpretation prompt gains open-mode directive encouraging structure proposals (second proposal opportunity per cycle)
+
+Three conditions: closed_no_debate (M14 baseline), closed_debate (standard), open_debate (agent-proposed only). No arbiter in any condition (M15 showed arbiter hurts).
+
+**Alternatives:** Could have had agents propose structures without dedicated phase (only during interpretation). Chose dedicated phase for clearer signal and more proposals.
+
+**Risks:**
+- LLM structures may be low quality → mitigated by `validate_novel_structure()` + fallback
+- Small pool reduces EIG effectiveness → by design; tests whether debate adds value
+- Agents may propose redundant structures → prompt shows existing pool; could add dedup
+
+**Status:** Code complete, 5 new tests pass. Pending live validation (9 runs).
