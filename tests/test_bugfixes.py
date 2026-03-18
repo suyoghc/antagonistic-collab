@@ -4902,6 +4902,24 @@ class TestNovelStructureValidation:
         assert valid is False
         assert "dim" in msg.lower()
 
+    def test_validate_novel_structure_ragged_dimensions(self):
+        """Structure with inconsistent stimulus dimensions fails validation.
+
+        Regression test: SUSTAIN open_arbiter crashed with 'setting an array
+        element with a sequence' because a 12-item structure had items with
+        different dimensionalities, which np.asarray() cannot handle.
+        """
+        from antagonistic_collab.debate_protocol import validate_novel_structure
+
+        spec = {
+            "name": "ragged",
+            "stimuli": [[0, 0, 1], [1, 1, 0], [0, 1], [1, 0, 1]],  # item 2 is 2D, rest 3D
+            "labels": [0, 1, 0, 1],
+        }
+        valid, msg = validate_novel_structure(spec)
+        assert valid is False
+        assert "ragged" in msg.lower() or "dim" in msg.lower()
+
     def test_validate_novel_structure_mismatched_lengths(self):
         """Mismatched stimuli/labels lengths fail."""
         from antagonistic_collab.debate_protocol import validate_novel_structure

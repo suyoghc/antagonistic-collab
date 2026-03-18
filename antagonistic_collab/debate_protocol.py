@@ -262,11 +262,19 @@ def validate_novel_structure(spec: dict) -> tuple[bool, str]:
     if len(stimuli) > 32:
         return False, f"Too many items ({len(stimuli)}); max 32"
 
-    # Check dimensions
+    # Check dimensions — all items must be lists with the same length
     if len(stimuli) > 0 and isinstance(stimuli[0], list):
         n_dims = len(stimuli[0])
         if n_dims > 8:
             return False, f"Too many dimensions ({n_dims}); max 8"
+        for i, s in enumerate(stimuli[1:], 1):
+            if not isinstance(s, list):
+                return False, f"Item {i} is not a list"
+            if len(s) != n_dims:
+                return (
+                    False,
+                    f"Ragged dimensions: item 0 has {n_dims}D, item {i} has {len(s)}D",
+                )
     elif len(stimuli) > 0:
         return False, "Stimuli must be 2D (list of lists)"
 
@@ -853,7 +861,13 @@ class DebateProtocol:
         else:
             struct = STRUCTURE_REGISTRY["Type_II"]
 
-        stimuli = np.asarray(struct["stimuli"])
+        try:
+            stimuli = np.asarray(struct["stimuli"], dtype=float)
+        except (ValueError, TypeError):
+            # Ragged dimensions slipped past validation — fall back to Type_II
+            print(f"⚠ Ragged stimuli in '{structure_name}'; falling back to Type_II")
+            struct = STRUCTURE_REGISTRY["Type_II"]
+            stimuli = np.asarray(struct["stimuli"], dtype=float)
         labels = np.asarray(struct["labels"])
 
         # Build params: agent defaults → condition overrides → agent overrides

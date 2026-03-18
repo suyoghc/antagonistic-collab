@@ -1383,7 +1383,7 @@ def run_full_pool_selection(
     # Convert active cruxes to boost specs for EIG (ARBITER)
     boost_specs = []
     if _ARBITER:
-        boost_specs = cruxes_to_boost_specs(protocol.state)
+        boost_specs = cruxes_to_boost_specs(protocol.state, protocol=protocol)
         if boost_specs:
             crux_ids = [s["crux_id"] for s in boost_specs]
             print(
@@ -2096,16 +2096,23 @@ def finalize_cruxes(
     return finalized
 
 
-def cruxes_to_boost_specs(state: EpistemicState) -> list[dict]:
+def cruxes_to_boost_specs(
+    state: EpistemicState, protocol: "DebateProtocol | None" = None
+) -> list[dict]:
     """Convert active cruxes with discriminating experiments into boost specs.
 
     Parses "structure/condition" from crux.discriminating_experiment.
     Normalizes whitespace and validates against known structures/conditions.
+    When a protocol is provided, also accepts agent-proposed structures
+    (temporary_structures, sampled_structures) — necessary for open design mode.
     Returns list of {"structure": ..., "condition": ..., "crux_id": ...}.
     """
     from .debate_protocol import STRUCTURE_REGISTRY, CONDITION_EFFECTS
 
     valid_structures = set(STRUCTURE_REGISTRY.keys())
+    if protocol is not None:
+        valid_structures |= set(getattr(protocol, "temporary_structures", {}).keys())
+        valid_structures |= set(getattr(protocol, "sampled_structures", {}).keys())
     valid_conditions = set(CONDITION_EFFECTS.keys())
 
     specs = []
