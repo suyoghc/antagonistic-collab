@@ -6,8 +6,28 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ## Current status (2026-03-19)
 
-M14–M17 factorial complete. 47/48 correct across all conditions. No active
-implementation work — at a natural inflection point.
+M14–M17 factorial complete. 47/48 correct across all conditions.
+R-IDeA standalone tested — doesn't beat EIG in either regime.
+
+### R-IDeA + debate (in progress)
+
+Testing whether R-IDeA experiment selection + debate parameter recovery
+composes better than EIG + debate. Uses monkeypatch approach:
+`validate_ridea_debate.py` swaps `bayesian_selection.select_from_pool`
+at runtime with an R-IDeA version, keeping all 9 debate phases intact.
+No changes to main codebase — if results are positive, integrate properly
+via `_OED_TYPE` global in runner.py.
+
+R-IDeA results (all conditions):
+- Correct spec, no debate: EIG 86.9% > R-IDeA 80.5%
+- Misspec, no debate: EIG 75.1% > R-IDeA 65.4%
+- Misspec, R-IDeA + debate: **53.7% mean — worst condition tested**
+  RULEX drops to 19.4% (vs 80.4% with EIG+debate). R-IDeA's
+  representativeness term steers away from diagnostic experiments,
+  preventing the visible prediction failures debate needs for param recovery.
+- **Conclusion: EIG + debate (81.4%, 3.3% std) remains the gold standard.**
+  Informativeness + semantic diagnosis compose; diversification + diagnosis
+  are antagonistic.
 
 ### Next directions (not started)
 
