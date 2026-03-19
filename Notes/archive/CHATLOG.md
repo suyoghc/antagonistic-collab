@@ -904,4 +904,43 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 
 ---
 
+### Session — 2026-03-19
+
+**What was done:**
+1. Fixed SUSTAIN open_arbiter bug (already fixed in 0c4837c), re-ran to fill missing
+   M16 data point: 70.7% gap, correct winner. M16 now 15/15.
+2. Added Section 5.7 to WRITEUP.md: "The design space as implicit prior: M14-M16"
+   — 6 new tables (Tables 4-9), citations (Tang/Sloman R-IDeA, Barlas GBOED).
+   Updated Tables 1 and 3, run counts, Limitations section.
+3. Generated 5 publication-quality figures in `figures/`
+4. Completed M17 (Misspecification + Open Design): 6/6 correct
+   - GCM open_arbiter: 87.8% — best GCM ever, param recovery + arbiter synergy
+   - RULEX open_arbiter: 42.2% — correct (rescued from M15's wrong-winner catastrophe)
+   - 47/48 correct across M14-M17
+5. Wrote `New Ideas/Reflections_M17.md`: philosophy of science analysis connecting
+   M14-M17 to Dubova, Sloman, Breithaupt, GeCCo, AlphaEvolve, OED literature.
+   Includes per-paper idea tracker (15 solved with milestone attribution, 15 new).
+6. Wrote `New Ideas/tomgriffits.md`: 21 research questions across 8 Griffiths clusters.
+
+**Commits:**
+- `736fcb1` — M16 complete 15/15 matrix
+- `a98db9c` — WRITEUP Section 5.7 + figures
+- `7828593` — M17 validation script
+- `f0d52e1` — M17 results: 6/6 correct, composition is non-additive
+- `561cd34` — Reflections_M17 initial
+- `83d1fd7` — Per-paper idea tracker with strikethroughs
+- `913ecfc` — Enriched strikethrough annotations
+- `f585f41` — Griffiths connection points
+
+**Key discussion:**
+- "Every reasoning mechanism can only see model differences expressible in its own
+  representational format" — the meta-principle across all papers
+- Objectivity through triangulation of complementary biases (Longino)
+- Misspecification breaks Dubova's narrowing trap by creating epistemic humility
+- Resource rationality (Griffiths) may explain why the biases exist
+
+**Decisions:** D47 (M17 implementation and results)
+
+---
+
 *This log is maintained manually. Update it at the end of each session.*

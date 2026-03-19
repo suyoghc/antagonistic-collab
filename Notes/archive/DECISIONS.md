@@ -1151,4 +1151,47 @@ discrimination. Open design is the mirror bias — agent proposals favor rule-di
 structures. Neither is universally good or bad; each helps the model type whose
 diagnostic structures it naturally generates.
 
-**Status:** Complete (1 error pending fix).
+**Status:** Complete (1 error pending fix — fixed in 0c4837c, re-run filled the cell:
+SUSTAIN open_arbiter 70.7% gap, correct winner).
+
+## D47: M17 — Misspecification + Open Design Space — 2026-03-19
+
+**Problem:** M15 showed debate helps under misspecification via parameter recovery.
+M16 showed open design helps RULEX via rule-diagnostic proposals. But these were
+tested independently. The hardest regime — wrong parameters AND no curated registry —
+was untested. This is also closest to real scientific practice. Do the two mechanisms
+compose or interfere?
+
+**Decision:** Run 6 new conditions: 3 GTs × 2 open conditions (open_debate,
+open_arbiter) with M15's misspecified params. Compare against existing M15 (closed,
+misspec) and M16 (open, correct spec) data. Script: `validate_m17_live.py --new-only`.
+
+**Alternatives considered:** Could re-run all 15 conditions (5 per GT) for a complete
+M17 factorial. Chose 6 new runs only since closed conditions under misspecification
+replicate M15 data, and the scientific question is specifically about the open
+conditions.
+
+**Results (6/6 correct):**
+
+| GT | open_debate gap | open_arbiter gap | Param recovery |
+|---|---|---|---|
+| GCM | 67.3% | **87.8%** (best GCM ever) | 42.9% / 85.7% |
+| SUSTAIN | 77.4% | 72.7% | 0% / 0% |
+| RULEX | 57.8% | 42.2% (correct!) | 46.3% / 0% |
+
+**Key findings:**
+1. GCM open_arbiter (87.8%) — best GCM result across all milestones. Param recovery
+   (85.7%) and arbiter-guided proposals compose synergistically.
+2. RULEX open_arbiter (42.2%) — correct winner, vs M15 arbiter-RULEX (3.2%, wrong).
+   Open design rescues RULEX from arbiter catastrophe by providing rule-diagnostic
+   structures that counteract the similarity bias.
+3. Composition is non-additive: GCM benefits from synergy, RULEX open_debate loses
+   M15's param recovery advantage (60.3% → 46.3%), SUSTAIN is roughly stable.
+4. 47/48 correct across M14–M17. Only M15 arbiter-RULEX (closed, misspec) fails.
+
+**Insight:** The complementary biases of arbiter (similarity-favoring) and open
+design (rule-favoring) partially cancel under the hardest regime, producing better
+results than either alone for GCM and rescuing RULEX from catastrophe. Objectivity
+through composition of complementary biases, not through a single unbiased component.
+
+**Status:** Complete.

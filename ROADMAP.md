@@ -132,7 +132,7 @@ help or hurt under correct specification?
 - Arbiter recovers open-design losses for GCM (open_arbiter +0.1pp vs open_debate -5.2pp)
 - Computation alone most reliable across all model types (76-88% gap)
 
-**Open:** Consider crux debiasing. M15+M16 combined (misspec + open design).
+**Open:** Crux debiasing. R-IDeA as alternative OED. Real data integration.
 
 **Tests:** `TestOpenDesignSpace` (5 tests) in `tests/test_bugfixes.py`.
 Validation: `scripts/validation/validate_m16_live.py`.
@@ -169,13 +169,16 @@ pool — only the scoring changes.
 full analysis. Also related: GBOED (Barlas, Sloman & Kaski 2025) could be a third
 OED type targeting robustness to misspecified noise distributions.
 
-### Conditions where debate causally matters (updated)
+### Conditions where debate causally matters (updated through M17)
 - Model misspecification — **confirmed (M15).** Debate improves gap by +3.5pp (GCM),
   +22.4pp (RULEX) via parameter recovery. Neutral when misspecification is invisible (SUSTAIN).
 - Non-enumerated design space — **partially confirmed (M16).** Agent proposals help RULEX
   (+24pp over closed_debate) when registry lacks diagnostic structures. But hurt SUSTAIN (-24pp).
-- Arbiter as model-biased tool — **new finding (M16).** Crux machinery helps similarity
-  models (SUSTAIN +8pp, GCM +2pp), hurts rule models (RULEX -22pp). Not broken, just partial.
+- Arbiter as model-biased tool — **confirmed as bias, not noise (M16).** Crux machinery
+  helps similarity models (SUSTAIN +8pp, GCM +2pp), hurts rule models (RULEX -22pp).
+- Composition under double stress — **confirmed (M17).** Misspec + open design + arbiter
+  produces best-ever GCM (87.8%) via synergy. Open design rescues RULEX from arbiter
+  catastrophe (3.2% wrong → 42.2% correct). Complementary biases partially cancel.
 - Ambiguous data (real human data with noise, individual differences) — untested
 - Explanation for humans (goal is understanding, not just identification) — untested
 
