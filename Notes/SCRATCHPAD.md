@@ -45,11 +45,29 @@ models (GCM fully: -5.2pp→+0.1pp, SUSTAIN partially: -23.6pp→-17.0pp).
 
 SUSTAIN closed_arbiter replication: 95.6% gap (vs original 96.0%). Excellent consistency.
 
-### Consider next steps
+## M17 — Misspecification + Open Design (in progress, 2026-03-18)
 
+**Scientific question:** Do debate's parameter recovery (M15) and structure
+proposal (M16) compose or interfere under the hardest regime?
+
+### Design
+- Combines M15 misspecified params with M16 open design space
+- 6 new runs: 3 GTs × 2 open conditions (open_debate, open_arbiter)
+- Compare against M15's 9 closed runs (already have data)
+- Script: `scripts/validation/validate_m17_live.py --new-only`
+
+### Predictions (before seeing data)
+- **GCM open_debate (misspec):** Debate should help via param recovery (+3.5pp
+  in M15 closed). Open design hurt GCM by -5.2pp in M16. Net effect unclear.
+- **RULEX open_debate (misspec):** Best case scenario — debate's +22pp param
+  recovery PLUS open design's +24pp RULEX advantage could compound.
+- **SUSTAIN open_arbiter (misspec):** Worst case — arbiter hurt SUSTAIN -11.6pp
+  in M15 AND open design hurt -23.6pp in M16. Could these compound?
+
+### Open questions after M17
 1. Can crux bias be corrected? (diversity constraint on crux-directed selection)
-2. M15+M16 combined: misspecification + open design space
-3. Arbiter debiasing: ensure cruxes also generate rule-diagnostic structures
+2. Arbiter debiasing: ensure cruxes also generate rule-diagnostic structures
+3. R-IDeA as alternative OED type
 
 ---
 
