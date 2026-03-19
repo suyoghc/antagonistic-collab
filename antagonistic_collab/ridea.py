@@ -36,15 +36,36 @@ from antagonistic_collab.bayesian_selection import (
 # ── Component Scores ──
 
 
+def _prediction_signature(model_predictions: dict[str, np.ndarray]) -> np.ndarray:
+    """Fixed-length summary of predictions for distance computation.
+
+    Structures have varying numbers of items, so raw prediction vectors
+    can't be compared directly. We summarize each model's predictions as
+    (mean, std, min, max) — a 4-element vector per model. The full
+    signature is the concatenation across models (sorted by name).
+
+    This captures the essential information: how confidently and how
+    variably does each model predict on this structure?
+    """
+    sorted_names = sorted(model_predictions.keys())
+    parts = []
+    for name in sorted_names:
+        arr = np.asarray(model_predictions[name], dtype=np.float64)
+        parts.extend([float(np.mean(arr)), float(np.std(arr)),
+                       float(np.min(arr)), float(np.max(arr))])
+    return np.array(parts, dtype=np.float64)
+
+
 def compute_representativeness(
     model_predictions: dict[str, np.ndarray],
     previous_predictions: list[dict[str, np.ndarray]],
 ) -> float:
     """How different is this candidate from previously executed experiments?
 
-    Measured as minimum Euclidean distance in prediction space to any
-    prior experiment. If no prior experiments, returns 1.0 (maximally
-    representative).
+    Measured as minimum Euclidean distance in prediction-signature space
+    to any prior experiment. Uses a fixed-length summary (mean, std, min,
+    max per model) so structures with different numbers of items can be
+    compared. If no prior experiments, returns 1.0.
 
     Args:
         model_predictions: {model_name: array of P(correct) per item}
@@ -58,19 +79,12 @@ def compute_representativeness(
     if not previous_predictions:
         return 1.0
 
-    # Stack predictions into a single vector (sorted by model name for
-    # consistency)
-    sorted_names = sorted(model_predictions.keys())
-    current = np.concatenate(
-        [np.asarray(model_predictions[m], dtype=np.float64) for m in sorted_names]
-    )
+    current = _prediction_signature(model_predictions)
 
     min_dist = float("inf")
     for prev in previous_predictions:
-        prev_vec = np.concatenate(
-            [np.asarray(prev[m], dtype=np.float64) for m in sorted_names]
-        )
-        dist = float(np.linalg.norm(current - prev_vec))
+        prev_sig = _prediction_signature(prev)
+        dist = float(np.linalg.norm(current - prev_sig))
         min_dist = min(min_dist, dist)
 
     return min_dist
