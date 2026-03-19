@@ -941,6 +941,39 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 
 **Decisions:** D47 (M17 implementation and results)
 
+### Session continued — 2026-03-19 (R-IDeA + complementary biases)
+
+**What was done:**
+1. Implemented standalone R-IDeA module (`antagonistic_collab/ridea.py`) with 15 tests.
+   Three-objective scoring: representativeness + informativeness + de-amplification.
+2. Tested R-IDeA vs EIG head-to-head:
+   - Correct spec: EIG 86.9% > R-IDeA 80.5%
+   - Misspec: EIG 75.1% > R-IDeA 65.4%
+3. Tested R-IDeA + debate (monkeypatch of select_from_pool):
+   - R-IDeA+debate 53.7% — worst condition tested. RULEX drops to 19.4%.
+   - EIG+debate 81.4% remains gold standard under misspecification.
+4. Identified principle: complementary biases must use orthogonal information channels.
+   R-IDeA failed because it reweights the same signal EIG optimizes. Successful
+   complements (arbiter, LLM proposals) use different representational formats.
+5. Brainstormed additional complementary biases: learning-curve-directed selection
+   (targets SUSTAIN's temporal dynamics), falsification-directed, random injection.
+
+**Commits:**
+- `75c64af` — R-IDeA standalone module + 15 tests
+- `aab6279` — R-IDeA validation (negative result, EIG wins all regimes)
+- `4f86487` — R-IDeA + debate validation (worst condition tested)
+- `5d2a6ba` — Doc updates: D48, roadmap, CURRENT_STATE
+
+**Key discussion:**
+- R-IDeA's representativeness term starves debate's parameter recovery by diluting
+  visible prediction failures. Informativeness + diagnosis synergistic; diversification
+  + diagnosis antagonistic.
+- Missing bias: no mechanism targets SUSTAIN's temporal dynamics (cluster recruitment).
+  Learning-curve-directed selection would use an orthogonal information channel.
+- Message drafted for George Kachergis summarizing M14-M17 findings.
+
+**Decisions:** D48 (R-IDeA negative result)
+
 ---
 
 *This log is maintained manually. Update it at the end of each session.*

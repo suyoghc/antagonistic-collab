@@ -1393,3 +1393,69 @@ This connects to Broomell et al.'s (2019) argument that stimulus selection biase
 **54. Debate helps via parameter estimation (M15) but not experiment design (M16).** These are two distinct causal channels. Parameter estimation requires semantic reasoning (diagnosing why predictions fail → proposing corrections). Experiment design is better served by computation (EIG evaluates mathematical information gain). The partial exception — RULEX open proposals — works because the registry has a coverage gap for rule structures, not because LLM design is generally superior. (Phase 22, M16)
 
 **55. Evaluate hybrid systems for fairness across model types, not just average accuracy.** A system achieving 96% on SUSTAIN and 64% on RULEX is not "good" — it's biased. Average accuracy hides model-type-dependent failures that could lead to incorrect scientific conclusions. Report per-model-type performance and test under all possible ground truths. (Phase 22, M16)
+
+## Phase 23: Misspecification + open design — composition is non-additive (M17, 2026-03-19)
+
+### 23.1 Complementary biases compose synergistically for GCM
+
+**Expected:** Combining misspecification (M15) with open design (M16) would be the hardest regime — wrong parameters AND no curated registry.
+
+**Actual:** GCM open_arbiter achieves 87.8% — best GCM result across all milestones. Parameter recovery (85.7%) and arbiter-guided structure proposals reinforce each other. The arbiter steers proposals toward similarity-diagnostic structures, and debate recovers the sensitivity parameter — both mechanisms contribute what the other lacks.
+
+**Implication:** Complementary biases don't just cancel each other's harms — under the right conditions, they produce genuine synergy that exceeds any single-mechanism result. But this is model-dependent, not universal.
+
+### 23.2 Open design rescues RULEX from arbiter catastrophe
+
+**Expected:** RULEX open_arbiter under misspecification would compound two failure modes (arbiter bias + wrong params).
+
+**Actual:** RULEX open_arbiter (42.2%, correct) vs M15 arbiter-RULEX (3.2%, wrong winner). The open design space provides rule-diagnostic structures that counteract the arbiter's similarity bias, preventing the catastrophic experiment narrowing that caused the only wrong winner in the project.
+
+**Implication:** Adding more components to a failing system can rescue it if the new component has the opposite bias. The system's only failure (M15 arbiter-RULEX) was caused by a *single* bias dominating; the open design space broke that monopoly.
+
+### 23.3 Composition is non-additive and model-dependent
+
+**Expected:** Effects from M15 and M16 would add linearly.
+
+**Actual:** They don't. GCM benefits synergistically (87.8% > either M15 or M16 alone). RULEX open_debate (57.8%) loses M15's param recovery advantage (80.4%) — the diverse structure proposals scatter attention away from the structures that trigger visible prediction failures. SUSTAIN is roughly stable across conditions.
+
+**Implication:** You cannot predict the composition of biases from their individual effects. The interaction depends on whether the mechanisms operate on the same or different information channels.
+
+## Phase 24: R-IDeA — formal diversification cannot substitute for semantic diagnosis (2026-03-19)
+
+### 24.1 R-IDeA underperforms EIG in all regimes
+
+**Expected:** R-IDeA's multi-objective acquisition (representativeness + informativeness + de-amplification) would reduce model-type variance by diversifying experiment selection.
+
+**Actual:** R-IDeA is worse than EIG in every condition tested: correct spec (80.5% vs 86.9%), misspec (65.4% vs 75.1%). The representativeness and de-amplification terms dilute the informativeness signal without providing compensating information.
+
+**Implication:** Under well-specified EIG, adding diversity objectives is pure cost. The informativeness signal is already model-agnostic; diluting it helps no one.
+
+### 24.2 R-IDeA + debate is the worst condition tested
+
+**Expected:** R-IDeA (fixing experiment selection) + debate (fixing parameters) would attack misspecification from orthogonal directions and compose well.
+
+**Actual:** R-IDeA + debate (53.7% mean, RULEX 19.4%) is worse than EIG + debate (81.4%, RULEX 80.4%) and worse than EIG alone (75.1%). The representativeness term steers away from maximally informative experiments, preventing the visible prediction failures that debate needs to trigger parameter recovery. RULEX recovery drops from 60.3% (EIG+debate) to 0% (R-IDeA+debate).
+
+**Implication:** Debate's parameter recovery mechanism is *informativeness-dependent* — it requires experiments that expose prediction failures clearly. Any intervention that diversifies at the expense of informativeness starves this mechanism.
+
+### 24.3 Complementary biases must use orthogonal information channels
+
+**Expected:** Any additional scoring objective should improve fairness.
+
+**Actual:** R-IDeA reweights the same item-level prediction space that EIG already optimizes — it's diversifying within the same information channel. The arbiter (gradient-visible disagreement) and LLM proposals (linguistically nameable structures) work as complements because they use genuinely *different representational formats* to perceive model differences.
+
+**Implication:** The principle for successful bias composition: components must perceive model differences through different information channels (item predictions, temporal dynamics, linguistic structure), not through different weightings of the same channel. This predicts that learning-curve-directed selection (temporal dynamics — a genuinely new channel) should compose better than R-IDeA did.
+
+### Emerging Principles (continued)
+
+### On composition and diversification (M17 + R-IDeA)
+
+**56. Composition is non-additive: complementary biases can synergize or interfere.** GCM open_arbiter under misspecification (87.8%) exceeds any single-mechanism result — genuine synergy. But RULEX open_debate under misspecification (57.8%) loses M15's param recovery advantage (80.4%) — genuine interference. You cannot predict composition from individual effects. (Phase 23, M17)
+
+**57. Open design can rescue a system from single-bias dominance.** M15 arbiter-RULEX failed because one bias (similarity-favoring cruxes) monopolized experiment selection. Adding open design (rule-favoring proposals) broke the monopoly and restored correct identification. The fix for a biased system is not to remove the bias but to add a counterbalancing one. (Phase 23, M17)
+
+**58. Formal diversification is antagonistic to semantic diagnosis.** R-IDeA+debate (53.7%) is worse than EIG+debate (81.4%) because representativeness dilutes the informative experiments debate needs to see prediction failures. Informativeness and semantic diagnosis are synergistic; diversification and diagnosis are antagonistic. (Phase 24, R-IDeA)
+
+**59. Complementary biases must use orthogonal information channels.** R-IDeA failed because it reweights item-level predictions — the same channel EIG already optimizes. Successful complements (arbiter, LLM proposals) use different representational formats (gradient visibility, linguistic accessibility). This predicts that new complements should target genuinely new information (temporal dynamics, transfer behavior) rather than reweight existing signals. (Phase 24, R-IDeA)
+
+**60. Debate's parameter recovery is informativeness-dependent.** Agents diagnose parameter errors by observing visible prediction failures on informative experiments. Any intervention that reduces experiment informativeness (R-IDeA, random selection) starves this mechanism. The optimal regime for debate is maximally informative experiments (EIG) + maximally diagnostic reasoning (semantic diagnosis). (Phase 24, R-IDeA)

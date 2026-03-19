@@ -46,9 +46,11 @@ Run `python -m antagonistic_collab --help` for all CLI options.
 
 ## Project status
 
-- [**Current results and conclusions**](CURRENT_STATE.md) — where we are as of M14
-- [**Roadmap**](ROADMAP.md) — next milestones (M15: model misspecification, M16: open design space)
-- [**Development history**](Notes/archive/INDEX.md) — 14 milestones of docs, decisions, and lessons learned
+**47/48 correct model identifications** across a factorial crossing misspecification × open/closed design × debate/arbiter (M14–M17). Key finding: every experiment selection mechanism carries an implicit model-type prior; composing mechanisms with complementary biases produces better results than any single method.
+
+- [**Current results and conclusions**](CURRENT_STATE.md) — M17 complete (misspec + open design)
+- [**Roadmap**](ROADMAP.md) — R-IDeA tested (negative result), next: complementary biases, paper, real data
+- [**Development history**](Notes/archive/INDEX.md) — 17 milestones of docs, decisions, and lessons learned
 
 ## References
 
