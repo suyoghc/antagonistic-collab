@@ -4,9 +4,9 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ---
 
-## M16 — Open Design Space — Phase 2 Complete (2026-03-18)
+## M16 — Open Design Space — Complete (2026-03-18)
 
-### Full results (14/15 runs, 1 error)
+### Full results (15/15 runs, 15/15 correct)
 
 | GT | Condition | Winner | OK? | RMSE | Gap% |
 |---|---|---|---|---|---|
@@ -19,7 +19,7 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 | SUSTAIN | closed_debate | Clustering_Agent | Yes | 0.053 | 88.6 |
 | SUSTAIN | closed_arbiter | Clustering_Agent | Yes | 0.020 | 96.0 |
 | SUSTAIN | open_debate | Clustering_Agent | Yes | 0.108 | 64.1 |
-| SUSTAIN | open_arbiter | — | ERROR | — | — |
+| SUSTAIN | open_arbiter | Clustering_Agent | Yes | 0.100 | 70.7 |
 | RULEX | closed_no_debate | Rule_Agent | Yes | 0.053 | 86.1 |
 | RULEX | closed_debate | Rule_Agent | Yes | 0.168 | 58.6 |
 | RULEX | closed_arbiter | Rule_Agent | Yes | 0.140 | 63.9 |
@@ -31,35 +31,25 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 | GT | closed_debate | closed_arbiter | open_debate | open_arbiter |
 |---|---|---|---|---|
 | GCM | +4.2pp | +2.4pp | -5.2pp | +0.1pp |
-| SUSTAIN | +0.9pp | **+8.3pp** | -23.6pp | ERROR |
+| SUSTAIN | +0.9pp | **+8.3pp** | -23.6pp | -17.0pp |
 | RULEX | -27.5pp | -22.2pp | -3.4pp | -4.1pp |
 
 ### Key insight: arbiter is a bias, not noise
 
 Crux machinery steers toward similarity-based structures. This is a *feature* for
 SUSTAIN/GCM and a *bug* for RULEX. Open design is the mirror bias: agent proposals
-favor rule-diagnostic structures.
+favor rule-diagnostic structures. Arbiter recovers open-design losses for similarity
+models (GCM fully: -5.2pp→+0.1pp, SUSTAIN partially: -23.6pp→-17.0pp).
 
-### Open items
+### Replication note (closed_arbiter)
 
-1. **Fix SUSTAIN open_arbiter bug** — "setting an array element with a sequence".
-   Need to reproduce and trace.
-2. **Commit results + docs** — all MDs updated, need to commit
-3. **Consider next steps:**
-   - Can crux bias be corrected? (diversity constraint on crux-directed selection)
-   - M15+M16 combined: misspecification + open design space
-   - Arbiter debiasing: ensure cruxes also generate rule-diagnostic structures
+SUSTAIN closed_arbiter replication: 95.6% gap (vs original 96.0%). Excellent consistency.
 
-### Commits this session (prior)
-1. `1529202` — `test(M15): harden M15 code paths — 19 tests + param_distance extraction`
-2. `aa67cae` — `feat(M16): open design space — agents propose all structures via debate`
+### Consider next steps
 
-### Files modified this session
-- `scripts/validation/validate_m16_live.py` — added arbiter parameter, 5 conditions,
-  `--arbiter-only` / `--new-only` CLI flags, meta-agent creation, crux weight restore
-- `CURRENT_STATE.md` — full M16 Phase 1+2 results, revised theory
-- `ROADMAP.md` — M16 promoted to latest, findings updated
-- `Notes/archive/DECISIONS.md` — D46 (arbiter addition to M16)
+1. Can crux bias be corrected? (diversity constraint on crux-directed selection)
+2. M15+M16 combined: misspecification + open design space
+3. Arbiter debiasing: ensure cruxes also generate rule-diagnostic structures
 
 ---
 

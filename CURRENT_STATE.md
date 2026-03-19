@@ -1,4 +1,4 @@
-# Current State (M16 — Open Design Space, Phase 2 complete)
+# Current State (M16 — Open Design Space, complete)
 
 ## M16 — Open Design Space
 
@@ -14,7 +14,7 @@ experiment *design* itself? Phase 2 adds arbiter conditions because M15's "arbit
 net negative" conclusion was tested only under misspecification — the interaction between
 arbiter and correct specification / open design space was untested.
 
-### Full results — 14/15 runs (GPT-4o, 5 cycles each)
+### Full results — 15/15 runs (GPT-4o, 5 cycles each)
 
 | GT | Condition | Winner | Correct? | RMSE | Gap% | #Structs |
 |---|---|---|---|---|---|---|
@@ -27,22 +27,21 @@ arbiter and correct specification / open design space was untested.
 | SUSTAIN | closed_debate | Clustering_Agent | Yes | 0.053 | 88.6 | 10 |
 | SUSTAIN | closed_arbiter | Clustering_Agent | Yes | 0.020 | 96.0 | 10 |
 | SUSTAIN | open_debate | Clustering_Agent | Yes | 0.108 | 64.1 | 56 |
-| SUSTAIN | open_arbiter | — | **ERROR** | — | — | — |
+| SUSTAIN | open_arbiter | Clustering_Agent | Yes | 0.100 | 70.7 | 54 |
 | RULEX | closed_no_debate | Rule_Agent | Yes | 0.053 | 86.1 | 0 |
 | RULEX | closed_debate | Rule_Agent | Yes | 0.168 | 58.6 | 14 |
 | RULEX | closed_arbiter | Rule_Agent | Yes | 0.140 | 63.9 | 13 |
 | RULEX | open_debate | Rule_Agent | Yes | 0.055 | 82.7 | 48 |
 | RULEX | open_arbiter | Rule_Agent | Yes | 0.061 | 82.0 | 55 |
 
-**Correct winner: 14/14** (1 error: SUSTAIN open_arbiter — "setting an array element
-with a sequence").
+**Correct winner: 15/15.**
 
 ### Gap advantage (pp over closed_no_debate baseline)
 
 | GT | closed_debate | closed_arbiter | open_debate | open_arbiter |
 |---|---|---|---|---|
 | GCM | +4.2pp | +2.4pp | -5.2pp | +0.1pp |
-| SUSTAIN | +0.9pp | **+8.3pp** | -23.6pp | ERROR |
+| SUSTAIN | +0.9pp | **+8.3pp** | -23.6pp | -17.0pp |
 | RULEX | -27.5pp | -22.2pp | -3.4pp | -4.1pp |
 
 ### Design (2x2+1 factorial)
@@ -82,12 +81,15 @@ helps RULEX but hurts SUSTAIN. This is the mirror image of the arbiter bias:
 - SUSTAIN open_debate (64.1%) is the worst SUSTAIN condition (-23.6pp). Agent proposals
   don't probe clustering behavior as effectively as the curated registry.
 
-**3. Arbiter recovers open design space losses for GCM.**
+**3. Arbiter recovers open design space losses for similarity models.**
 
-GCM open_debate drops -5.2pp from baseline. GCM open_arbiter recovers to +0.1pp. The
-crux machinery successfully focuses agent proposals toward more diagnostic structures
-for similarity-based models. This is the one case where arbiter + open design space
-interact positively.
+The arbiter partially counteracts the open-design penalty for both GCM and SUSTAIN:
+- GCM: open_debate -5.2pp → open_arbiter +0.1pp (full recovery)
+- SUSTAIN: open_debate -23.6pp → open_arbiter -17.0pp (+6.6pp recovery, still negative)
+
+The crux machinery focuses agent proposals toward similarity-diagnostic structures,
+which is exactly what open design proposals lack. Recovery is complete for GCM but
+only partial for SUSTAIN, where the open-design penalty is larger.
 
 **4. Computation alone remains the most reliable single condition.**
 
@@ -95,9 +97,6 @@ closed_no_debate achieves 76.8-87.7% gap across all three ground truths with zer
 LLM calls. No debate condition consistently beats it across all models. The best
 debate results (SUSTAIN closed_arbiter 96.0%, GCM closed_debate 81.0%) come from
 specific model-condition pairings, not a universally beneficial intervention.
-
-**5. Bug: SUSTAIN open_arbiter errored** ("setting an array element with a sequence").
-Needs investigation before conclusions about that cell are final.
 
 Scripts: `scripts/validation/validate_m16_live.py`
 
@@ -136,11 +135,11 @@ The arbiter's crux machinery steers experiment selection toward continuous,
 similarity-based structures. This is not random degradation — it's a systematic bias
 that favors certain model types:
 
-| Model type | Arbiter effect (M15 misspec) | Arbiter effect (M16 correct spec) |
-|---|---|---|
-| SUSTAIN (clustering) | -11.6pp | **+8.3pp** (best result) |
-| GCM (exemplar) | +4.9pp | +2.4pp |
-| RULEX (rule-based) | **-54.7pp** (wrong winner) | -22.2pp |
+| Model type | Arbiter effect (M15 misspec) | Arbiter effect (M16 closed) | Arbiter effect (M16 open) |
+|---|---|---|---|
+| SUSTAIN (clustering) | -11.6pp | **+8.3pp** (best result) | -17.0pp (but +6.6pp recovery vs open_debate) |
+| GCM (exemplar) | +4.9pp | +2.4pp | +0.1pp (full recovery vs open_debate) |
+| RULEX (rule-based) | **-54.7pp** (wrong winner) | -22.2pp | -4.1pp |
 
 Under misspecification (M15), the bias compounds with parameter noise to produce
 catastrophic RULEX failure. Under correct specification (M16), the same bias produces
@@ -152,7 +151,7 @@ similarity-based model discrimination.
 The Phase 1 "gap-filling" theory was too simple. The full picture:
 
 1. **Computation alone** is the most reliable baseline. 76-88% gap, never gets
-   the wrong winner (23/23 across M14-M16).
+   the wrong winner (24/24 across M14-M16).
 
 2. **Debate layer** (agents interpreting + proposing params/structures):
    - Under misspecification: +3.5 to +22pp via parameter recovery (M15)
@@ -163,12 +162,12 @@ The Phase 1 "gap-filling" theory was too simple. The full picture:
    - Not noise but *bias* toward similarity-based structures
    - Helps SUSTAIN (+8pp) and GCM (+2-5pp)
    - Hurts RULEX (-22 to -55pp)
-   - Can recover open-design losses for similarity models (GCM open_arbiter)
+   - Recovers open-design losses: fully for GCM, partially for SUSTAIN
 
 4. **Open design space** (agent-proposed structures):
    - Mirror-image bias: semantically rich proposals favor rule-based models
    - Helps RULEX (+24pp over closed_debate), hurts SUSTAIN (-24pp)
-   - Arbiter partially counteracts open-design bias for GCM
+   - Arbiter partially counteracts open-design bias for similarity models
 
 ### M14
 The computational pipeline (Bayesian EIG + model predictions + learning curves) is
@@ -182,16 +181,15 @@ fully-specified models. 18/18 correct across ablation conditions.
 - **Falsification-dominated.** 39/45 claims falsified vs 6 confirmed (M14).
 - **Debate helps under misspecification (M15).** +22pp on RULEX, +3.5pp on GCM via parameter recovery.
 - **Debate hurts under correct specification (M16).** Agent proposals less discriminative than curated registry on average.
-- **Arbiter is model-biased, not broken (M16).** Crux machinery favors similarity-based model discrimination. Best SUSTAIN result (96%) but worst RULEX conditions.
-- **Open design is the mirror bias (M16).** Agent proposals favor rule-diagnostic structures. Best closed-debate RULEX recovery (+24pp) but worst SUSTAIN result (64%).
+- **Arbiter is model-biased, not broken (M16).** Crux machinery favors similarity-based model discrimination. Best SUSTAIN result (96%) but worst RULEX conditions. Recovers open-design losses for similarity models.
+- **Open design is the mirror bias (M16).** Agent proposals favor rule-diagnostic structures. Best closed-debate RULEX recovery (+24pp) but worst SUSTAIN result (64%). 15/15 correct across all conditions.
 
 ## What's next
 
-1. Fix SUSTAIN open_arbiter bug (1 missing data point)
-2. Investigate whether crux bias can be corrected (e.g., diversity constraint on
+1. Investigate whether crux bias can be corrected (e.g., diversity constraint on
    crux-directed selection to ensure rule-diagnostic structures also get selected)
-3. Consider M15+M16 combined: misspecification + open design space
-4. See [ROADMAP.md](ROADMAP.md)
+2. Consider M15+M16 combined: misspecification + open design space
+3. See [ROADMAP.md](ROADMAP.md)
 
 ## Full history
 

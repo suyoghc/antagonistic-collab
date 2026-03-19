@@ -2,12 +2,13 @@
 
 ## Latest: M16 — Open Design Space (Phase 2 complete)
 
-**14/15 runs complete, 14/14 correct winners.** Key finding: the arbiter is a bias,
+**15/15 runs complete, 15/15 correct winners.** Key finding: the arbiter is a bias,
 not noise. Crux machinery steers experiment selection toward similarity-based structures
 — best-ever SUSTAIN result (96% gap, +8.3pp) but continued RULEX degradation (-22pp).
 Open design is the mirror bias: agent proposals favor rule-diagnostic structures,
-helping RULEX (+24pp over closed_debate) but hurting SUSTAIN (-24pp). Computation alone
-remains most reliable across all model types. One error: SUSTAIN open_arbiter.
+helping RULEX (+24pp over closed_debate) but hurting SUSTAIN (-24pp). Arbiter recovers
+open-design losses for similarity models (GCM fully, SUSTAIN partially).
+Computation alone remains most reliable across all model types.
 
 See [CURRENT_STATE.md](CURRENT_STATE.md) for full results and analysis.
 
@@ -118,7 +119,7 @@ No new pipeline machinery needed — just a validation script + param sweep scri
 help or hurt under correct specification?
 
 **Design:** 2×2+1 factorial (closed/open × debate/arbiter + no-debate baseline).
-15 runs total, 14 completed, 1 error (SUSTAIN open_arbiter).
+15 runs total, 15/15 correct.
 
 **Key findings:**
 - Arbiter is model-biased: +8.3pp SUSTAIN (best ever), +2.4pp GCM, -22pp RULEX
@@ -126,7 +127,7 @@ help or hurt under correct specification?
 - Arbiter recovers open-design losses for GCM (open_arbiter +0.1pp vs open_debate -5.2pp)
 - Computation alone most reliable across all model types (76-88% gap)
 
-**Open:** Fix SUSTAIN open_arbiter error. Consider crux debiasing.
+**Open:** Consider crux debiasing. M15+M16 combined (misspec + open design).
 
 **Tests:** `TestOpenDesignSpace` (5 tests) in `tests/test_bugfixes.py`.
 Validation: `scripts/validation/validate_m16_live.py`.
