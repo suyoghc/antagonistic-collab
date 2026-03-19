@@ -93,3 +93,151 @@ No single mechanism is unbiased. Objectivity is not the absence of perspective b
 Dubova warns that theory-motivation narrows. Sloman formalizes why. Breithaupt explains the narrative mechanism. GeCCo shows that model-level feedback avoids the problem entirely. AlphaEvolve shows that explanation-indifferent search avoids it differently. And our M14–M17 factorial shows that composing mechanisms with complementary biases can approximate the model-agnosticism that no single mechanism achieves alone — with the caveat that this composition is currently accidental, not principled.
 
 The next step — implementing R-IDeA — would test whether *principled* multi-objective optimization achieves the same bias-cancellation more reliably than our current accidental composition.
+
+---
+
+# Updated Ideas per Paper (post-M17)
+
+Status key: ~~Strikethrough~~ = solved/substantially addressed, with milestone noted.
+
+---
+
+## Dubova — Theory-Motivated Experimentation
+
+### Prior ideas
+
+1. ~~**Q1: Does adversarial structure rescue theory-motivated experimentation from Dubova's trap?** (Solved, M16. Answer: largely confirmed — agent-selected experiments underperform OED on average. Boundary condition: RULEX agents outperform OED when registry has coverage gap.)~~
+2. **Q2: Is the illusion of progress measurable in LLM agents?** Measure whether agents' expressed confidence correlates with actual RMSE improvement. Raw data exists (87% falsification rate, 3-5x overclaiming) but standalone analysis not yet done.
+3. ~~**Q3: Does the narrowing pattern vary by ground truth?** (Solved, M16. SUSTAIN -23.6pp, GCM -5.2pp, RULEX -3.4pp. Narrowing cost is inversely proportional to linguistic accessibility of diagnostic structures.)~~
+4. ~~**Q4: Can adversarial revision serve as anti-narrowing?** (Partially solved, M16. Arbiter redirects narrowing rather than eliminating it. Combined open+arbiter partially neutralizes both biases.)~~
+5. **Q5: Is there a cycle threshold where narrowing overtakes signal?** Run 10+ cycle debates looking for crossover. Not yet tested.
+6. **Q6: Does the dual-process architecture interact with Dubova's finding?** Not directly tested as standalone question.
+7. ~~**Q7: Does combining theory-motivated selection with formal OED beat both alone?** (Solved, M17. Answer: yes, for GCM — open_arbiter under misspecification achieves 87.8%, better than either OED-only or agent-only. But composition is model-dependent, not universal.)~~
+
+### New M17 ideas
+
+8. **Q8: Misspecification as Dubova-trap breaker.** M17 shows SUSTAIN open_debate (77.4%) beats M16 open_debate (64.1%) — misspecification *reduces* narrowing by making agents uncertain. Test systematically: vary misspecification severity and measure narrowing. Prediction: moderate misspecification produces the least-narrow proposals because agents are uncertain enough to explore but not so lost that they propose randomly.
+
+9. **Q9: Composition order effects.** Does it matter whether agents first recover parameters (M15 mechanism) then propose structures (M16 mechanism), or vice versa? The current system interleaves both within each cycle. A sequential design (first N cycles closed for param recovery, then switch to open) might outperform interleaved composition.
+
+---
+
+## Sloman — Bayesian OED under Misspecification
+
+### Prior ideas
+
+1. **Q1: Does R-IDeA's de-amplification reduce model-type bias?** Not yet tested. Highest priority integration.
+2. **Q2: Can GBOED replace standard Bayesian inference?** Not yet tested.
+3. ~~**Q3: Is debate-driven parameter correction complementary to R-IDeA?** (Partially solved, M17. M17 shows debate param correction + open design compose synergistically for GCM. This is the empirical precursor — R-IDeA would replace the "accidental" composition with principled multi-objective optimization.)~~
+4. ~~**Q4: Does active learning bias predict which GTs suffer most?** (Partially solved, M15+M17. RULEX suffers most from arbiter bias under misspec; SUSTAIN suffers most from open-design bias. Pattern consistent with Sloman's prediction that models with narrow diagnostic regions are most vulnerable to active learning bias.)~~
+5. **Q5: Can SIM's social interpolation replace LLM belief revision?** Not yet tested.
+6. **Q6: Does the nuisance parameter framework predict implicit priors?** Not yet tested as a formal diagnostic, though M14-M17 data validates the framework empirically.
+7. **Q7: How does excess capacity learning interact with identifiability?** Not yet tested.
+
+### Prior integration ideas
+
+1. **Idea 1: R-IDeA as alternative OED type.** Not yet implemented. Still highest priority.
+2. **Idea 2: GBOED for posterior update.** Not yet implemented.
+3. **Idea 3: Active learning bias diagnostic.** Not yet implemented.
+4. ~~**Idea 4: Misspecification as bridge between computation and debate.** (Partially solved, M15+M17. The empirical core now exists: M15 shows debate helps under misspec, M17 shows composition amplifies the benefit. What remains is the formal characterization + joint paper.)~~
+5. **Idea 5: Negative transfer → negative debate.** Not yet tested.
+6. **Idea 6: Parameter estimation diagnostics.** Not yet tested.
+7. **Idea 7: LLM agents as testbed for active learning bias.** Not formally tested as standalone.
+8. **Idea 8: Architectural prescription for automating science.** Not yet written up.
+
+### New M17 ideas
+
+9. **Q8: Does R-IDeA replicate M17's accidental synergy?** M17's GCM open_arbiter (87.8%) arises from accidental composition of complementary biases. R-IDeA formally optimizes representativeness + informativeness + de-amplification. Test: does R-IDeA on the M17 regime (misspec + open) match or beat 87.8% *without* needing to know which biases exist? This is the critical test of principled vs. accidental composition.
+
+10. **Q9: Bias-aware OED.** M14-M17 shows every component has a model-type-dependent effect. Design a meta-OED that tracks per-model-type diagnosticity and ensures minimum coverage across all model pairs, not just maximum average EIG. This is OED Q7 restated in Sloman's framework.
+
+11. **Q10: Parameter recovery × design space interaction.** M17 shows param recovery is modulated by design space (GCM: 85.7% closed, 42.9% open_debate, 85.7% open_arbiter; RULEX: 60.3% closed, 46.3% open_debate, 0% open_arbiter). Does R-IDeA's de-amplification term predict this interaction? If de-amplification reduces the parameter estimation error that motivates debate-driven recovery, the two mechanisms may be substitutable rather than complementary.
+
+---
+
+## Breithaupt/Crockett — Narrative Side-Taking
+
+### Prior ideas
+
+1. **Q1: Does narrative coherence predict persuasion independent of RMSE?** Not yet tested as standalone analysis.
+2. ~~**Q2: Do agents exhibit side-taking escalation?** (Solved, M14-M16. Yes: 87% falsification rate, persistent 3-5x overclaiming, dominant "explain" response to falsification, only 1 "abandon" across all runs. Breithaupt's escalation at epistemic level, bounded by computational backstop.)~~
+3. **Q3: Can Crockett's outrage dynamics be operationalized?** Not yet tested.
+4. **Q4: Is the glossary an effective anti-straw-manning intervention?** Not yet tested.
+5. ~~**Q5: Narrative-driven vs. divergence-driven experiment selection.** (Solved, M16. Confirmed: LLM proposals are systematically biased toward linguistically describable structures. Effect sizes: RULEX +24pp, SUSTAIN -24pp.)~~
+6. ~~**Q6: Does dual-process architecture resolve the tension?** (Partially solved, M14-M16. The architecture contains but doesn't eliminate narrative bias — narrative coercion is real but computational backstop prevents it from corrupting final results.)~~
+
+### New M17 ideas
+
+7. **Q7: Epistemic humility as narrative disruptor.** M17 shows misspecification reduces narrative narrowing (SUSTAIN open_debate: 77.4% under misspec vs 64.1% under correct spec). Breithaupt's model predicts narrative compels side-taking when agents are *confident*. When predictions visibly fail, narrative grip loosens. Test: vary agents' awareness of their own prediction failures and measure narrative diversity of proposals. Prediction: agents who see their RMSE get worse propose more diverse structures than agents shielded from feedback.
+
+8. **Q8: The arbiter as narrator.** The arbiter's crux machinery is itself a narrative device — it says "the critical question is X" and focuses all agents on that question. M17 shows this narrative focus helps when the narrator's perspective aligns with the ground truth (GCM: +20.5pp) and hurts when it doesn't (RULEX: -15.6pp). This is Breithaupt's moderator-as-empathizer: the arbiter "takes sides" by choosing which disagreements matter.
+
+---
+
+## GeCCo — LLM-Generated Cognitive Models
+
+### Prior ideas
+
+1. **Idea 1: GeCCo as model generator for debate.** Not yet tested.
+2. **Idea 2: Adversarial refinement of GeCCo models.** Not yet tested.
+3. **Idea 3: GeCCo + EIG closed loop.** Not yet tested.
+4. **Idea 4: BIC-based model posterior.** Not yet tested.
+5. ~~**Idea 5: Ablation methodology.** (Partially solved, M14-M17. Component-level ablation done: no-debate, debate, arbiter, open design across correct/misspec regimes. 47/48 run factorial reveals signed, model-type-dependent effects per component. Remaining: finer-grained ablation of claim ledger, parameter persistence, critique phase individually.)~~
+6. **Idea 6: Overclaiming metric exported to GeCCo.** Not yet tested.
+7. **Idea 7: Adversarial GeCCo with competing generators.** Not yet tested.
+8. **Idea 8: Ground-truth recovery with debate.** Not yet tested.
+9. **Idea 9: GeCCo on categorization domain.** Not yet tested. M16 prediction sharpened: RULEX recovery > SUSTAIN recovery.
+10. **Idea 10: Learning curves as shared discriminator.** Not yet tested.
+
+### New M17 ideas
+
+11. **Idea 11: GeCCo models as fourth agent under misspecification.** M17's regime (wrong params + open design) is the ideal testbed for GeCCo-generated models: if GeCCo discovers a novel model, does it survive adversarial debate under the hardest conditions? The linguistic accessibility bias predicts GeCCo will generate RULEX-like models that benefit from open design but are vulnerable to arbiter bias — exactly the interaction M17 documents.
+
+12. **Idea 12: GeCCo's feedback loop vs. debate's feedback loop — composition test.** GeCCo changes the *model itself*; debate changes the *context* (params + structures). M17 shows context-change helps under misspecification. Does model-change (GeCCo) + context-change (debate) compose, or is one strictly better? Run GeCCo iterative refinement alongside debate-driven parameter recovery on the same models and measure whether the combination exceeds either alone.
+
+13. **Idea 13: Predict GeCCo's linguistic accessibility bias from M16-M17 data.** M16 quantified the bias: +24pp for linguistically accessible models, -24pp for continuous models. Use these effect sizes to predict which GeCCo-generated models will be over/under-represented before running GeCCo on categorization data. If predictions hold, this validates the linguistic accessibility bias as a general property of LLM-mediated science.
+
+---
+
+## AlphaEvolve — Evolutionary Algorithm Discovery
+
+### Prior ideas
+
+1. **Idea 1: AlphaEvolve generates models, debate adjudicates.** Not yet tested.
+2. **Idea 2: Evolve the evaluation function.** Not yet tested. M15-M16 update warned: evolving the evaluator doesn't escape implicit priors.
+3. **Idea 3: Evolve EIG approximation heuristics.** Not yet tested.
+4. ~~**Idea 4: Ensemble diversity (Flash+Pro → Theory+Meta agents).** (Partially solved, M16-M17. The complementary-bias-composition principle is validated: arbiter (depth, similarity bias) + open design (breadth, rule bias) partially cancel. The specific Flash/Pro cost differentiation is not implemented, but the architectural insight is confirmed.)~~
+5. **Idea 5: Population-based debate — evolve agent strategies.** Not yet tested.
+6. **Idea 6: Import prompt sampling into crux negotiation.** Not yet tested.
+7. **Idea 7: Adversarial evolution with competing populations.** Not yet tested.
+8. **Idea 8: Evolve cognitive models from scratch on Shepard types.** Not yet tested. Highest priority.
+9. ~~**Idea 9: Evolutionary parameter refinement to close feedback loop.** (Partially superseded, M15. Debate-driven parameter recovery works through semantic diagnosis of visible failures — 85.7% recovery for GCM, 60.3% for RULEX. M17 confirms param recovery still works under open design. Evolutionary refinement addresses a different regime: when failures are NOT semantically visible. The two mechanisms are complementary, not substitutable.)~~
+10. **Idea 10: Meta-evolution of debate protocols.** Not yet tested.
+
+### New M17 ideas
+
+11. **Idea 11: Evolve the bias-composition architecture.** M17 shows that the *specific combination* of arbiter + open design + misspec produces synergy for GCM (87.8%) but not RULEX (42.2%). An evolutionary approach could search over combinations of components (which phases to include, what crux_weight, open vs closed, etc.) optimizing for minimum variance across model types rather than maximum average gap. The fitness function is "fairness" (min gap across GTs), not "accuracy" (mean gap).
+
+12. **Idea 12: AlphaEvolve for crux debiasing.** The arbiter's similarity bias arises from how cruxes are identified (divergence-seeking). Evolve the crux identification prompt or the crux→experiment mapping to minimize model-type variance. AlphaEvolve's mutation-evaluation loop could discover crux formulations that produce more balanced experiment selection without manual engineering of diversity constraints.
+
+---
+
+## OED Literature — Myung, Pitt, Navarro
+
+### Prior ideas
+
+1. ~~**Q1: OED as benchmark for debate quality.** (Solved, M13+M16. OED-selected achieves 76-88% gap; agent-selected achieves 58-83%.)~~
+2. ~~**Q2: OED vs narrative convergence speed.** (Solved, M16. OED wins on average; agents win for RULEX when registry has coverage gap.)~~
+3. ~~**Q3: Three conditions (free choice / OED menu / OED only).** (Solved, M16. Maps to open_debate / closed_debate / closed_no_debate. Result: OED-only ≥ OED-menu > free-choice on average, reversed for RULEX.)~~
+4. **Q4: Lakatos-optimal design.** Not yet tested.
+5. ~~**Q5: Why agents resist divergence ranking.** (Solved, M16. Structural mismatch: structures LLMs can articulate ≠ structures that maximize information gain. Not motivational resistance but representational incompatibility.)~~
+6. ~~**Q6: Adaptive Bayesian OED.** (Solved, M8-M12. EIG + posterior update + Thompson sampling is the computational backbone.)~~
+7. **Q7: Fairness-aware OED ensuring minimum diagnosticity per model pair.** Proposed by M16 update. Not yet implemented.
+
+### New M17 ideas
+
+8. **Q8: OED under double stress as new benchmark.** M17 establishes a new benchmark regime: misspec + open design. The current best (87.8% GCM open_arbiter) was achieved by accidental bias composition. A proper fairness-aware OED should achieve comparable or better performance *uniformly* across model types. This is the test: can formal OED methods match the peak of accidental composition while avoiding its troughs (RULEX 42.2%)?
+
+9. **Q9: Non-myopic OED for bias mitigation.** Current EIG is myopic (one-step lookahead). Under M17's regime, the first few experiments lock in parameter estimates that constrain later cycles. Non-myopic OED (Foster et al., 2021) could plan experiment sequences that first recover parameters (high-divergence structures) then discriminate models (balanced structures). The M17 finding that param recovery is modulated by design space suggests that experiment *ordering* matters — a sequential plan could separate the parameter-recovery and model-discrimination phases.
+
+10. **Q10: Quantify the "accidental composition premium."** Across M14-M17, the best single-component result for each GT differs from the best multi-component result. Compute the gap: how much does composition add beyond the best single mechanism? If the premium is consistently positive, it argues for hybrid architectures even when principled methods (R-IDeA) exist. If the premium is zero or negative for some GTs, it argues for replacing accidental composition with principled optimization.
