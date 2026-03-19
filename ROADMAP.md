@@ -137,37 +137,60 @@ help or hurt under correct specification?
 **Tests:** `TestOpenDesignSpace` (5 tests) in `tests/test_bugfixes.py`.
 Validation: `scripts/validation/validate_m16_live.py`.
 
-### M-future — R-IDeA as alternative OED type
+### R-IDeA as alternative OED type (tested — negative result)
 
 **Scientific question:** Does R-IDeA's multi-objective acquisition (representativeness +
-informativeness + de-amplification) reduce the model-type biases that M16 identified,
-and does it interact differently with debate than EIG does?
+informativeness + de-amplification) reduce the model-type biases that M16 identified?
 
-**Motivation:** EIG optimizes for informativeness only. M16 showed this is model-agnostic
-when the design space is adequate, but every other component (arbiter, open design)
-introduces model-type bias. Tang, Sloman & Kaski (2025, R-IDeA) add two terms:
-representativeness (broad coverage) and de-amplification (don't amplify existing errors).
-These directly target the failure modes M16 documented.
+**Answer: No.** R-IDeA underperforms EIG in all regimes tested:
+- Correct spec, no debate: EIG 86.9% > R-IDeA 80.5%
+- Misspec, no debate: EIG 75.1% > R-IDeA 65.4%
+- Misspec, R-IDeA + debate: 53.7% — **worst condition tested**. RULEX drops to 19.4%
+  (vs 80.4% with EIG+debate) because representativeness dilutes visible prediction
+  failures that debate needs for parameter recovery.
 
-**Design:** Add R-IDeA as a new OED type alongside EIG in the experiment selection
-pipeline, not replacing it. Run the existing 5-condition factorial (closed/open ×
-debate/arbiter + no-debate baseline) with R-IDeA scoring instead of EIG. Compare
-per-GT gaps and model-type bias patterns.
+**Key insight:** Informativeness and semantic diagnosis are synergistic — debate needs
+the most informative experiments to see prediction failures and diagnose parameter errors.
+Diversifying experiment selection (R-IDeA) is antagonistic to diagnosis — it starves the
+mechanism that actually works. EIG + debate (81.4%, 3.3% std) remains the gold standard
+under misspecification.
 
-**Key comparisons:**
-- R-IDeA no-debate vs. EIG no-debate: does de-amplification reduce per-GT variance?
-- R-IDeA + debate vs. EIG + debate: does R-IDeA change when debate helps vs. hurts?
-- R-IDeA + open design: does representativeness term counteract narrative narrowing?
+Scripts: `antagonistic_collab/ridea.py`, `scripts/validation/validate_ridea.py`,
+`scripts/validation/validate_ridea_debate.py`. Tests: `tests/test_ridea.py` (15 tests).
 
-**Implementation:** Add an `oed_type` parameter to the experiment selection pipeline
-(values: `"eig"`, `"r_idea"`). R-IDeA scoring requires: (1) a representativeness
-metric over the candidate pool, (2) the existing EIG term, (3) a de-amplification
-estimate based on current residuals. The pipeline selects from the same candidate
-pool — only the scoring changes.
+### M-future — Additional complementary biases
 
-**Connection:** See [New Ideas/Sloman - Bayesian OED under Misspecification.md] for
-full analysis. Also related: GBOED (Barlas, Sloman & Kaski 2025) could be a third
-OED type targeting robustness to misspecified noise distributions.
+**Scientific question:** Can we add selection mechanisms that target currently underserved
+model types (especially SUSTAIN) to further reduce model-type variance?
+
+**Motivation:** The current system has three biases: EIG (model-agnostic, item-level
+predictions), arbiter cruxes (favors similarity models via gradient-visible disagreement),
+and LLM proposals (favors rule models via linguistically nameable structures). SUSTAIN's
+most distinctive feature — cluster recruitment dynamics, order-sensitive learning — is not
+specifically targeted by any component.
+
+**Candidate mechanisms:**
+
+| Component | Sees | Favors | Fills gap |
+|---|---|---|---|
+| EIG | Item-level prediction divergence | Model-agnostic | Baseline |
+| Arbiter cruxes | Smooth gradient disagreement | GCM/SUSTAIN | Similarity models |
+| LLM proposals | Nameable structures | RULEX | Rule models |
+| **Learning curve selection** | Temporal dynamics | SUSTAIN | Currently underserved |
+| **Falsification-directed** | Leader weakness | Adaptive | Anti-confirmation bias |
+| **Random injection** | Everything uniformly | None | Universal debiaser |
+
+**Learning curve selection** is highest priority: we already compute learning curves
+for scoring but don't use them for experiment *selection*. RULEX shows sudden jumps
+(rule discovery), SUSTAIN shows cluster recruitment steps, GCM shows smooth gradual
+learning. Selecting experiments that maximize learning-curve divergence would directly
+target SUSTAIN's distinctive mechanism.
+
+**Falsification-directed selection** targets experiments where the current posterior leader
+is weakest. Adaptive per-cycle, systematically anti-confirmatory.
+
+**Random injection** (Dubova-inspired): small probability of random experiment each cycle
+breaks systematic bias. Theoretically grounded, trivial to implement.
 
 ### Conditions where debate causally matters (updated through M17)
 - Model misspecification — **confirmed (M15).** Debate improves gap by +3.5pp (GCM),

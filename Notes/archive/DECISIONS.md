@@ -1195,3 +1195,40 @@ results than either alone for GCM and rescuing RULEX from catastrophe. Objectivi
 through composition of complementary biases, not through a single unbiased component.
 
 **Status:** Complete.
+
+## D48: R-IDeA as alternative OED — negative result — 2026-03-19
+
+**Problem:** M16 showed every component carries implicit model-type priors. Tang,
+Sloman & Kaski (2025, R-IDeA) propose a principled multi-objective acquisition
+(representativeness + informativeness + de-amplification) that could reduce these
+biases formally rather than through accidental composition. Would R-IDeA beat EIG?
+
+**Decision:** Implement R-IDeA as standalone module (`ridea.py`), test head-to-head
+against EIG under correct specification and misspecification, then test R-IDeA + debate
+combination via monkeypatch of `select_from_pool()`.
+
+**Results:**
+
+| Condition | EIG | R-IDeA |
+|---|---|---|
+| Correct spec, no debate | 86.9% | 80.5% |
+| Misspec, no debate | 75.1% | 65.4% |
+| Misspec, + debate | **81.4%** | **53.7%** |
+
+R-IDeA underperforms EIG in all regimes. R-IDeA + debate is the worst condition
+tested — RULEX drops to 19.4% (vs 80.4% with EIG+debate). Root cause:
+representativeness term steers away from the most informative experiments,
+preventing the visible prediction failures that debate needs to trigger parameter
+recovery (RULEX recovery: 0% vs 60.3%).
+
+**Key insight:** Informativeness (EIG) and semantic diagnosis (debate) are
+synergistic — debate needs maximally informative experiments to see failures.
+Diversification (R-IDeA) and diagnosis are antagonistic — diversification dilutes
+the signal. You cannot substitute formal multi-objective optimization for semantic
+diagnosis under misspecification.
+
+**Alternatives considered:** Different R-IDeA weights (α, β). Current: α=0.3, β=0.3.
+Could tune, but the direction is clear — any weight on representativeness/de-amplification
+dilutes informativeness.
+
+**Status:** Complete. Negative result. R-IDeA not integrated into main pipeline.

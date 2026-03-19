@@ -29,17 +29,16 @@ R-IDeA results (all conditions):
   Informativeness + semantic diagnosis compose; diversification + diagnosis
   are antagonistic.
 
-### Next directions (not started)
+### Next directions
 
-1. **Crux debiasing** — diversity constraint on crux-directed selection to make
-   arbiter model-agnostic. Engineering work.
-2. **R-IDeA as alternative OED** — Tang, Sloman & Kaski (2025). Replace EIG with
-   multi-objective acquisition. Tests whether principled optimization matches
-   M17's accidental bias composition.
-3. **Real data integration** — human participants via Prolific/AutoRA. The big one.
+1. **Additional complementary biases** — learning-curve-directed selection
+   (targets SUSTAIN's temporal dynamics, currently underserved), falsification-directed
+   selection (anti-confirmation, adaptive), random injection (Dubova-inspired debiaser).
+   Learning curve selection is highest priority — data already computed, just not used
+   for selection.
+2. **Real data integration** — human participants via Prolific/AutoRA.
+3. **Write paper** — synthetic story is self-contained through R-IDeA negative result.
 4. **Griffiths connections** — see `New Ideas/tomgriffits.md` for 21 questions.
-   Top priorities: Q4 (mimicry vs unification), Q7 (AutoRA comparison),
-   Q10 (iterated learning formalization).
 
 ### Documentation produced this session (2026-03-19)
 

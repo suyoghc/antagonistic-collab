@@ -274,12 +274,15 @@ fully-specified models. 18/18 correct across ablation conditions.
 - **Arbiter is model-biased, not broken (M16).** Crux machinery favors similarity-based model discrimination. Best SUSTAIN result (96%) but worst RULEX conditions. Recovers open-design losses for similarity models.
 - **Open design is the mirror bias (M16).** Agent proposals favor rule-diagnostic structures. Best closed-debate RULEX recovery (+24pp) but worst SUSTAIN result (64%). 15/15 correct across all conditions.
 - **Composition is non-additive (M17).** Misspec + open design: 6/6 correct. GCM arbiter achieves best-ever 87.8% via synergy. Open design rescues RULEX from arbiter catastrophe (3.2% wrong → 42.2% correct). 47/48 correct across M14–M17.
+- **R-IDeA cannot substitute for debate (negative result).** Formal multi-objective OED (representativeness + informativeness + de-amplification) underperforms EIG in all regimes. R-IDeA + debate (53.7% mean) is worse than EIG + debate (81.4%) because diversifying experiments dilutes the visible prediction failures debate needs for parameter recovery. Informativeness and semantic diagnosis are synergistic; diversification and diagnosis are antagonistic.
 
 ## What's next
 
-1. Investigate whether crux bias can be corrected (diversity constraint)
-2. R-IDeA as alternative OED type (representativeness + informativeness + de-amplification)
-3. Real data integration (human participants via Prolific/AutoRA)
+1. **Additional complementary biases** — current system underserves SUSTAIN (no mechanism
+   targets temporal/clustering dynamics). Candidates: learning-curve-directed selection,
+   falsification-directed selection, order-sensitive selection, random injection.
+2. Real data integration (human participants via Prolific/AutoRA)
+3. Write up synthetic results as paper 1
 4. See [ROADMAP.md](ROADMAP.md)
 
 ## Full history
