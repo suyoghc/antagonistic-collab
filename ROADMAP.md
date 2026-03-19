@@ -1,14 +1,19 @@
 # Roadmap
 
-## Latest: M16 — Open Design Space (Phase 2 complete)
+## Latest: M17 — Misspecification + Open Design (complete)
 
-**15/15 runs complete, 15/15 correct winners.** Key finding: the arbiter is a bias,
-not noise. Crux machinery steers experiment selection toward similarity-based structures
-— best-ever SUSTAIN result (96% gap, +8.3pp) but continued RULEX degradation (-22pp).
-Open design is the mirror bias: agent proposals favor rule-diagnostic structures,
-helping RULEX (+24pp over closed_debate) but hurting SUSTAIN (-24pp). Arbiter recovers
-open-design losses for similarity models (GCM fully, SUSTAIN partially).
-Computation alone remains most reliable across all model types.
+**6/6 correct under double stress.** Combines M15 misspecification with M16 open design.
+Key finding: composition is non-additive and model-dependent. GCM open_arbiter achieves
+best-ever GCM result (87.8%) via synergy between param recovery (85.7%) and arbiter-guided
+proposals. Open design rescues RULEX from arbiter catastrophe — M15 arbiter-RULEX was the
+project's only wrong winner (3.2%); M17 open_arbiter-RULEX is correct (42.2%).
+47/48 correct across M14–M17.
+
+### M16 — Open Design Space (complete)
+
+**15/15 correct.** Arbiter is a bias, not noise: helps SUSTAIN (+8.3pp, 96% gap),
+hurts RULEX (-22pp). Open design is the mirror bias: helps RULEX (+24pp), hurts
+SUSTAIN (-24pp). Computation alone most reliable across all model types.
 
 See [CURRENT_STATE.md](CURRENT_STATE.md) for full results and analysis.
 

@@ -45,29 +45,29 @@ models (GCM fully: -5.2pp→+0.1pp, SUSTAIN partially: -23.6pp→-17.0pp).
 
 SUSTAIN closed_arbiter replication: 95.6% gap (vs original 96.0%). Excellent consistency.
 
-## M17 — Misspecification + Open Design (in progress, 2026-03-18)
+## M17 — Misspecification + Open Design — Complete (2026-03-19)
 
-**Scientific question:** Do debate's parameter recovery (M15) and structure
-proposal (M16) compose or interfere under the hardest regime?
+**6/6 correct.** Key findings:
 
-### Design
-- Combines M15 misspecified params with M16 open design space
-- 6 new runs: 3 GTs × 2 open conditions (open_debate, open_arbiter)
-- Compare against M15's 9 closed runs (already have data)
-- Script: `scripts/validation/validate_m17_live.py --new-only`
+| GT | open_debate | open_arbiter |
+|---|---|---|
+| GCM | 67.3% (42.9% recovery) | **87.8%** (85.7% recovery, best GCM ever) |
+| SUSTAIN | 77.4% (0% recovery) | 72.7% (0% recovery) |
+| RULEX | 57.8% (46.3% recovery) | 42.2% (0% recovery, but correct!) |
 
-### Predictions (before seeing data)
-- **GCM open_debate (misspec):** Debate should help via param recovery (+3.5pp
-  in M15 closed). Open design hurt GCM by -5.2pp in M16. Net effect unclear.
-- **RULEX open_debate (misspec):** Best case scenario — debate's +22pp param
-  recovery PLUS open design's +24pp RULEX advantage could compound.
-- **SUSTAIN open_arbiter (misspec):** Worst case — arbiter hurt SUSTAIN -11.6pp
-  in M15 AND open design hurt -23.6pp in M16. Could these compound?
+### Key insights
+1. **GCM open_arbiter** — best GCM result ever (87.8%). Param recovery + arbiter
+   proposals compose synergistically.
+2. **Open design rescues RULEX from arbiter catastrophe** — M15 arbiter-RULEX was
+   3.2% (wrong winner). M17 open_arbiter-RULEX is 42.2% (correct). Agent-proposed
+   rule-diagnostic structures counteract the arbiter's similarity bias.
+3. **Composition is non-additive** — effects don't add linearly across milestones.
+4. **47/48 correct across M14–M17** — only M15 arbiter-RULEX fails.
 
-### Open questions after M17
+### Open questions
 1. Can crux bias be corrected? (diversity constraint on crux-directed selection)
-2. Arbiter debiasing: ensure cruxes also generate rule-diagnostic structures
-3. R-IDeA as alternative OED type
+2. R-IDeA as alternative OED type
+3. Real data integration
 
 ---
 

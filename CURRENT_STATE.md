@@ -1,4 +1,86 @@
-# Current State (M16 — Open Design Space, complete)
+# Current State (M17 — Misspecification + Open Design, complete)
+
+## M17 — Misspecification + Open Design
+
+**Scientific question:** When agents start with wrong parameters AND must propose all
+experiment structures via debate, do parameter recovery (M15's win) and structure
+proposal (M16's RULEX win) compose or interfere?
+
+**Motivation:** M15 showed debate helps under misspecification via parameter recovery
+(+22pp RULEX). M16 showed open design helps RULEX via rule-diagnostic proposals (+24pp).
+M17 tests the hardest regime: both challenges simultaneously. This is also closest to
+real scientific practice, where neither parameters nor experiment designs are pre-specified.
+
+### Results — 6/6 correct (GPT-4o, 5 cycles each)
+
+| GT | Condition | Winner | Correct? | RMSE | Gap% | #Structs | Param Recovery |
+|---|---|---|---|---|---|---|---|
+| GCM | open_debate | Exemplar_Agent | Yes | 0.114 | 67.3 | 48 | 42.9% |
+| GCM | open_arbiter | Exemplar_Agent | Yes | 0.047 | **87.8** | 58 | 85.7% |
+| SUSTAIN | open_debate | Clustering_Agent | Yes | 0.085 | 77.4 | 48 | 0% |
+| SUSTAIN | open_arbiter | Clustering_Agent | Yes | 0.098 | 72.7 | 51 | 0% |
+| RULEX | open_debate | Rule_Agent | Yes | 0.189 | 57.8 | 51 | 46.3% |
+| RULEX | open_arbiter | Rule_Agent | Yes | 0.214 | 42.2 | 57 | 0% |
+
+### Cross-milestone comparison
+
+| GT | Condition | M17 (misspec+open) | M15 (misspec+closed) | M16 (correct+open) |
+|---|---|---|---|---|
+| GCM | open_debate | 67.3% | 77.9% (debate) | 71.6% |
+| GCM | open_arbiter | **87.8%** | 79.3% (arbiter) | 76.9% |
+| SUSTAIN | open_debate | 77.4% | 85.8% (debate) | 64.1% |
+| SUSTAIN | open_arbiter | 72.7% | 76.1% (arbiter) | 70.7% |
+| RULEX | open_debate | 57.8% | 80.4% (debate) | 82.7% |
+| RULEX | open_arbiter | 42.2% | 3.2% (arbiter, **wrong**) | 82.0% |
+
+### Key findings
+
+**1. GCM open_arbiter (87.8%) — best GCM result across all milestones.**
+
+Parameter recovery (85.7%) and arbiter-guided open proposals compose synergistically.
+Better than M15 arbiter (79.3%, closed registry) AND M16 open_arbiter (76.9%, correct
+params). The arbiter steers proposals toward similarity-diagnostic structures, and debate
+recovers the misspecified sensitivity parameter — the two mechanisms reinforce rather than
+interfere. RMSE 0.047 is the second-lowest measured (after SUSTAIN closed_arbiter 0.020).
+
+**2. Open design rescues RULEX from arbiter catastrophe.**
+
+M15 arbiter-RULEX (3.2%, wrong winner) was the project's only incorrect identification.
+M17 open_arbiter-RULEX (42.2%, correct) shows the open design space partially counteracts
+the arbiter's similarity bias by providing rule-diagnostic structures that the closed
+registry lacks. The arbiter still hurts RULEX (42.2% vs open_debate 57.8%) but no longer
+causes wrong-winner failure.
+
+**3. Composition is non-additive and model-dependent.**
+
+The effects of misspecification and open design do not simply add:
+- GCM: arbiter + misspec + open > either alone (synergy)
+- SUSTAIN: open_debate under misspec (77.4%) > open_debate correct spec (64.1%)
+- RULEX: open_debate under misspec (57.8%) < M15 debate (80.4%) — param recovery
+  weakened by open design's structure diversity
+
+**4. Parameter recovery is modulated by design space.**
+
+| GT | M15 debate recovery | M17 open_debate recovery | M17 open_arbiter recovery |
+|---|---|---|---|
+| GCM | 85.7% | 42.9% | 85.7% |
+| SUSTAIN | 0% | 0% | 0% |
+| RULEX | 60.3% | 46.3% | 0% |
+
+GCM fully recovers under open_arbiter but only partially under open_debate. RULEX
+recovery degrades from 60.3% (M15 closed) to 46.3% (M17 open_debate) and drops to 0%
+under open_arbiter. The arbiter appears to redirect agent attention from parameter
+revision toward structure-level reasoning.
+
+**5. 6/6 correct — the system is robust under double stress.**
+
+Even the hardest condition (RULEX open_arbiter: wrong params + arbiter bias + open
+design) produces the correct winner. Combined with M14 (18/18), M15 (8/9), and M16
+(15/15), the system achieves 47/48 correct across all factorial conditions.
+
+Scripts: `scripts/validation/validate_m17_live.py`
+
+---
 
 ## M16 — Open Design Space
 
@@ -135,16 +217,17 @@ The arbiter's crux machinery steers experiment selection toward continuous,
 similarity-based structures. This is not random degradation — it's a systematic bias
 that favors certain model types:
 
-| Model type | Arbiter effect (M15 misspec) | Arbiter effect (M16 closed) | Arbiter effect (M16 open) |
-|---|---|---|---|
-| SUSTAIN (clustering) | -11.6pp | **+8.3pp** (best result) | -17.0pp (but +6.6pp recovery vs open_debate) |
-| GCM (exemplar) | +4.9pp | +2.4pp | +0.1pp (full recovery vs open_debate) |
-| RULEX (rule-based) | **-54.7pp** (wrong winner) | -22.2pp | -4.1pp |
+| Model type | M15 misspec closed | M16 correct closed | M16 correct open | M17 misspec open |
+|---|---|---|---|---|
+| SUSTAIN (clustering) | -11.6pp | **+8.3pp** (best) | -17.0pp | -15.0pp |
+| GCM (exemplar) | +4.9pp | +2.4pp | +0.1pp | **+13.4pp** (best GCM) |
+| RULEX (rule-based) | **-54.7pp** (wrong) | -22.2pp | -4.1pp | -15.8pp (but correct) |
 
-Under misspecification (M15), the bias compounds with parameter noise to produce
-catastrophic RULEX failure. Under correct specification (M16), the same bias produces
-SUSTAIN's best-ever result. The arbiter is not broken — it's partial to
-similarity-based model discrimination.
+M17 reveals the interaction: under misspecification + open design, the arbiter's
+similarity bias is partially counteracted by the open design space's rule-diagnostic
+bias. RULEX open_arbiter (42.2%, correct) vs M15 arbiter (3.2%, wrong) — the open
+design space rescued RULEX from catastrophe. GCM open_arbiter (87.8%) achieves the
+best GCM result ever via synergy between param recovery and arbiter-guided proposals.
 
 ### When each component helps (revised theory)
 
@@ -160,14 +243,21 @@ The Phase 1 "gap-filling" theory was too simple. The full picture:
 
 3. **Arbiter layer** (cruxes + meta-agents + claim-directed selection):
    - Not noise but *bias* toward similarity-based structures
-   - Helps SUSTAIN (+8pp) and GCM (+2-5pp)
-   - Hurts RULEX (-22 to -55pp)
-   - Recovers open-design losses: fully for GCM, partially for SUSTAIN
+   - Helps SUSTAIN (+8pp) and GCM (+2-5pp) under correct specification
+   - Hurts RULEX (-22 to -55pp) under closed design
+   - Under misspec + open design (M17): synergy with GCM (+13.4pp, best ever),
+     rescues RULEX from wrong winner (3.2% → 42.2%)
 
 4. **Open design space** (agent-proposed structures):
    - Mirror-image bias: semantically rich proposals favor rule-based models
    - Helps RULEX (+24pp over closed_debate), hurts SUSTAIN (-24pp)
-   - Arbiter partially counteracts open-design bias for similarity models
+   - **Counteracts arbiter bias**: M15 arbiter-RULEX was catastrophic (wrong winner),
+     M17 arbiter-RULEX with open design is correct (42.2%)
+
+5. **Composition is non-additive (M17):**
+   - Misspec + open compose synergistically for GCM arbiter (87.8%, best ever)
+   - Open design rescues RULEX from arbiter catastrophe under misspec
+   - But open design weakens RULEX param recovery (60% → 46% → 0%)
 
 ### M14
 The computational pipeline (Bayesian EIG + model predictions + learning curves) is
@@ -183,13 +273,14 @@ fully-specified models. 18/18 correct across ablation conditions.
 - **Debate hurts under correct specification (M16).** Agent proposals less discriminative than curated registry on average.
 - **Arbiter is model-biased, not broken (M16).** Crux machinery favors similarity-based model discrimination. Best SUSTAIN result (96%) but worst RULEX conditions. Recovers open-design losses for similarity models.
 - **Open design is the mirror bias (M16).** Agent proposals favor rule-diagnostic structures. Best closed-debate RULEX recovery (+24pp) but worst SUSTAIN result (64%). 15/15 correct across all conditions.
+- **Composition is non-additive (M17).** Misspec + open design: 6/6 correct. GCM arbiter achieves best-ever 87.8% via synergy. Open design rescues RULEX from arbiter catastrophe (3.2% wrong → 42.2% correct). 47/48 correct across M14–M17.
 
 ## What's next
 
-1. Investigate whether crux bias can be corrected (e.g., diversity constraint on
-   crux-directed selection to ensure rule-diagnostic structures also get selected)
-2. Consider M15+M16 combined: misspecification + open design space
-3. See [ROADMAP.md](ROADMAP.md)
+1. Investigate whether crux bias can be corrected (diversity constraint)
+2. R-IDeA as alternative OED type (representativeness + informativeness + de-amplification)
+3. Real data integration (human participants via Prolific/AutoRA)
+4. See [ROADMAP.md](ROADMAP.md)
 
 ## Full history
 
