@@ -1,5 +1,23 @@
 # Roadmap
 
+## In Progress: Decision-Making Domain Extension
+
+Extending the framework to a second domain (decision-making under risk) to test
+whether the implicit-prior / complementary-bias findings generalize. Three models
+implemented: Expected Utility (↔ SUSTAIN), Cumulative Prospect Theory (↔ GCM),
+Priority Heuristic (↔ RULEX). Gamble registry (76 problems) and synthetic runner
+working (3/3 correct). Remaining: EIG adapter, validation script, agent configs.
+
+If the same bias pattern replicates → NeurIPS paper on implicit priors in hybrid
+AI systems as a domain-general principle.
+
+### R-IDeA — tested, negative result
+
+R-IDeA (formal diversification) underperforms EIG in all regimes. R-IDeA+debate
+(53.7%) is worst condition tested — diversification starves debate's parameter
+recovery mechanism. Lesson: complementary biases must use orthogonal information
+channels, not reweight the same channel.
+
 ## Latest: M17 — Misspecification + Open Design (complete)
 
 **6/6 correct under double stress.** Combines M15 misspecification with M16 open design.

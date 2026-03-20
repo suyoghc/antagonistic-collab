@@ -974,6 +974,48 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 
 **Decisions:** D48 (R-IDeA negative result)
 
+### Session continued — 2026-03-20 (Decision-making domain)
+
+**What was done:**
+1. Decided to extend to decision-making domain for NeurIPS-level contribution
+   (one domain = finding, two domains = principle)
+2. Identified structurally parallel models:
+   - EU (↔ SUSTAIN): normative baseline, 1 param, smooth
+   - CPT (↔ GCM): dominant descriptive, 5 params, smooth
+   - Priority Heuristic (↔ RULEX): lexicographic rules, 0-1 params, discrete
+3. Implemented all three models with tests (17/17 pass):
+   - `models/expected_utility.py`, `models/prospect_theory.py`,
+     `models/priority_heuristic.py`
+4. Built gamble structure registry (76 problems):
+   - `models/gamble_structures.py` — 17 base + 59 parametric
+5. Built synthetic runner and scoring:
+   - `models/decision_runner.py` — 3/3 correct on base registry
+6. Wrote NeurIPS strategy: `New Ideas/NeurIPS.md`
+7. Wrote GeCCo fork plan: `New Ideas/gecco_arbiter_fork.md` (two forks:
+   gecco-core for discovery, gecco-supplement for model gaps)
+8. Created slide deck: `slide deck/adversarial_collab_presentation.qmd`
+
+**Remaining to wire into full pipeline:**
+- EIG adapter for gamble predictions
+- Validation script (M14-equivalent factorial)
+- Agent configs (CPT_Agent, EU_Agent, PH_Agent system prompts)
+
+**Commits:**
+- `56c715e` — Decision models (EU, CPT, PH) + 17 tests
+- `a33f0fe` — Gamble registry (76) + decision runner (3/3 correct)
+- `a6beec7` — Untrack .gitignore
+- `5f6f536` — Add slide deck/ to gitignore
+
+**Key discussion:**
+- NeurIPS framing: not multi-agent coordination paper, but automated science /
+  Bayesian OED paper with implicit prior finding
+- Structural parallel: CPT↔GCM (smooth), EU↔SUSTAIN (baseline), PH↔RULEX (rules)
+- If bias pattern replicates: the principle is about representational format,
+  not domain content
+- Tom Griffiths would want resource-rational framing; Jay Myung would want
+  head-to-head ADO comparison
+- GeCCo connection via ARBITER docx → two forks (gecco-core, gecco-supplement)
+
 ---
 
 *This log is maintained manually. Update it at the end of each session.*

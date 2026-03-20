@@ -4,50 +4,78 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ---
 
-## Current status (2026-03-19)
+## Current status (2026-03-20)
 
-M14–M17 factorial complete. 47/48 correct across all conditions.
-R-IDeA standalone tested — doesn't beat EIG in either regime.
+M14–M17 factorial complete (categorization). 47/48 correct.
+R-IDeA tested — negative result in all regimes.
+Decision-making domain implementation **in progress**.
 
-### R-IDeA + debate (in progress)
+### Decision-Making Domain — IN PROGRESS
 
-Testing whether R-IDeA experiment selection + debate parameter recovery
-composes better than EIG + debate. Uses monkeypatch approach:
-`validate_ridea_debate.py` swaps `bayesian_selection.select_from_pool`
-at runtime with an R-IDeA version, keeping all 9 debate phases intact.
-No changes to main codebase — if results are positive, integrate properly
-via `_OED_TYPE` global in runner.py.
+**Goal:** Replicate the implicit-prior/complementary-bias findings in a second
+domain (decision-making under risk) to elevate the paper from CogSci to NeurIPS.
+
+**Three models implemented and tested (17/17 tests pass):**
+- EU (Expected Utility) ↔ SUSTAIN — normative baseline, 1 param (r)
+- CPT (Cumulative Prospect Theory) ↔ GCM — dominant descriptive, 5 params
+- Priority Heuristic ↔ RULEX — lexicographic rules, 0-1 params
+
+**Gamble structure registry built (76 problems):**
+- 17 base diagnostic problems (certainty effect, common ratio, fourfold pattern,
+  loss aversion, risk premium, PH-specific)
+- 59 parametric variants (cert-vs-risky, mixed, risky pairs)
+
+**Synthetic runner working:** 3/3 correct on base registry with clear gaps.
+
+**What remains to wire into the full pipeline:**
+1. **EIG adapter** — make `compute_eig()` work with gamble predictions
+   (treat each gamble as an "item", P(choose A) as "accuracy")
+2. **Validation script** — `validate_decision_m14.py` running the same
+   no-debate/debate/arbiter factorial as categorization
+3. **Agent configs** — CPT_Agent, EU_Agent, PH_Agent with system prompts
+   encoding each theory's core claims and known weaknesses
+
+**Key files:**
+- `antagonistic_collab/models/expected_utility.py` — EU model
+- `antagonistic_collab/models/prospect_theory.py` — CPT model
+- `antagonistic_collab/models/priority_heuristic.py` — Priority Heuristic model
+- `antagonistic_collab/models/gamble_structures.py` — registry (76 gambles)
+- `antagonistic_collab/models/decision_runner.py` — synthetic data + scoring
+- `tests/test_decision_models.py` — 17 tests
+
+**Predictions to test:**
+- Arbiter should favor CPT/EU (smooth gradients) over PH (discrete rules)
+- LLM proposals should favor PH (easy to describe) over CPT (hard to articulate)
+- EIG should be model-agnostic
+- If pattern replicates across both domains → principle about representational
+  format, not domain content → NeurIPS paper
+
+### R-IDeA — Complete (negative result)
 
 R-IDeA results (all conditions):
 - Correct spec, no debate: EIG 86.9% > R-IDeA 80.5%
 - Misspec, no debate: EIG 75.1% > R-IDeA 65.4%
 - Misspec, R-IDeA + debate: **53.7% mean — worst condition tested**
-  RULEX drops to 19.4% (vs 80.4% with EIG+debate). R-IDeA's
-  representativeness term steers away from diagnostic experiments,
-  preventing the visible prediction failures debate needs for param recovery.
-- **Conclusion: EIG + debate (81.4%, 3.3% std) remains the gold standard.**
-  Informativeness + semantic diagnosis compose; diversification + diagnosis
-  are antagonistic.
+- **Conclusion: EIG + debate (81.4%, 3.3% std) remains gold standard.**
+  Informativeness + semantic diagnosis are synergistic; diversification +
+  diagnosis are antagonistic. Complementary biases must use orthogonal
+  information channels, not reweight the same channel.
 
-### Next directions
+### Paper Strategy
 
-1. **Additional complementary biases** — learning-curve-directed selection
-   (targets SUSTAIN's temporal dynamics, currently underserved), falsification-directed
-   selection (anti-confirmation, adaptive), random injection (Dubova-inspired debiaser).
-   Learning curve selection is highest priority — data already computed, just not used
-   for selection.
-2. **Real data integration** — human participants via Prolific/AutoRA.
-3. **Write paper** — synthetic story is self-contained through R-IDeA negative result.
-4. **Griffiths connections** — see `New Ideas/tomgriffits.md` for 21 questions.
+- Target: **NeurIPS** (automated science / Bayesian OED community)
+- Framing: implicit priors in hybrid AI systems, demonstrated across two domains
+- See `New Ideas/NeurIPS.md` for full strategy
+- Two-domain result elevates from CogSci to NeurIPS
+- One domain = finding, two domains = principle
 
-### Documentation produced this session (2026-03-19)
+### Other directions (not started)
 
-- M17 results: 6/6 correct (misspec + open design)
-- WRITEUP.md Section 5.7: open design results with 6 new tables
-- 5 publication-quality figures in `figures/`
-- `New Ideas/Reflections_M17.md`: philosophy of science analysis + per-paper
-  idea tracker (15 solved, 15 new)
-- `New Ideas/tomgriffits.md`: 21 research questions across 8 Griffiths clusters
+1. **GeCCo forks** — see `New Ideas/gecco_arbiter_fork.md`
+   - gecco-core: can LLMs discover cognitive models from scratch?
+   - gecco-supplement: is there a fourth model of categorization?
+2. **Griffiths connections** — see `New Ideas/tomgriffits.md` (21 questions)
+3. **Real data** — human participants via Prolific/AutoRA
 
 ---
 
@@ -62,3 +90,4 @@ R-IDeA results (all conditions):
 - **Pairwise curve divergence as posterior evidence** — rewards model distinctiveness, not fit to data. Data-independent bonus distorts posterior. Removed in D35.
 - **Multiplicative EIG boost for cruxes** — 2x multiplier barely shifts Thompson sampling when EIG scores cluster narrowly. Replaced with mixture distribution in D37.
 - **Exact structure name matching for sampled structures** — ephemeral names change every cycle. Fixed with parameter-based fuzzy matching (D42).
+- **R-IDeA (formal diversification)** — representativeness + de-amplification dilutes informativeness signal. R-IDeA+debate (53.7%) worse than EIG+debate (81.4%). Diversify channels, not weightings (D48).

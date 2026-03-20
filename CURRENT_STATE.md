@@ -278,12 +278,14 @@ fully-specified models. 18/18 correct across ablation conditions.
 
 ## What's next
 
-1. **Additional complementary biases** — current system underserves SUSTAIN (no mechanism
-   targets temporal/clustering dynamics). Candidates: learning-curve-directed selection,
-   falsification-directed selection, order-sensitive selection, random injection.
-2. Real data integration (human participants via Prolific/AutoRA)
-3. Write up synthetic results as paper 1
-4. See [ROADMAP.md](ROADMAP.md)
+1. **Decision-making domain (in progress)** — EU, CPT, Priority Heuristic implemented
+   and tested (17/17). Gamble registry (76 problems) and synthetic runner working
+   (3/3 correct). Remaining: EIG adapter, validation script, agent configs.
+   Tests whether implicit-prior pattern replicates across domains (NeurIPS target).
+2. Write up two-domain results as NeurIPS submission
+3. GeCCo forks (gecco-core, gecco-supplement) — model discovery + adjudication
+4. Real data integration (human participants via Prolific/AutoRA)
+5. See [ROADMAP.md](ROADMAP.md)
 
 ## Full history
 
