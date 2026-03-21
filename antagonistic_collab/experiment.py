@@ -20,7 +20,7 @@ import numpy as np
 
 VALID_SELECTION_STRATEGIES = {"thompson", "greedy"}
 VALID_GROUND_TRUTHS = {"GCM", "SUSTAIN", "RULEX"}
-VALID_DESIGN_SPACES = {"base", "richer", "continuous"}
+VALID_DESIGN_SPACES = {"base", "richer", "continuous", "open"}
 
 
 @dataclass

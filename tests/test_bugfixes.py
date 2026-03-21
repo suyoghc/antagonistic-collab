@@ -9958,6 +9958,16 @@ class TestExperimentFramework:
                 name="bad", true_model="GCM", selection_strategy="invalid"
             )
 
+    def test_experiment_condition_accepts_open_design_space(self):
+        """design_space='open' must be accepted — CLI and runner both support it."""
+        from antagonistic_collab.experiment import ExperimentCondition
+
+        # Should NOT raise
+        cond = ExperimentCondition(
+            name="open_test", true_model="GCM", design_space="open"
+        )
+        assert cond.design_space == "open"
+
     def test_load_experiment_rejects_unknown_keys(self):
         """Misspelled YAML keys raise ValueError instead of being silently dropped."""
         import tempfile
