@@ -1,4 +1,4 @@
-# Current State (M17 — Misspecification + Open Design, complete)
+# Current State (Decision Arbiter complete — two-domain implicit-prior result)
 
 ## M17 — Misspecification + Open Design
 
@@ -209,13 +209,61 @@ Scripts: `scripts/m15_mimicry_sweep.py`, `scripts/validation/validate_m15_live.p
 
 ---
 
+## Decision Domain Arbiter — Cross-domain replication of arbiter bias
+
+**Scientific question:** Does the arbiter's model-type bias replicate in the
+decision domain? If so, is it toward *similarity* (as in categorization) or
+toward *complexity* (a more general mechanism)?
+
+### Results (GPT-4o, 10 cycles, misspecified params)
+
+| GT | No-debate | Debate | Arbiter |
+|---|---|---|---|
+| CPT | Wrong | Wrong | **Wrong** (12.0% recovery) |
+| EU | Wrong | **Correct** (75%) | **Wrong** (37.5% recovery) |
+| PH | Wrong | **Correct** (100%) | **Correct** (78.2% recovery) |
+| Score | 0/3 | 2/3 | **1/3** |
+
+### Key findings
+
+**1. Arbiter bias replicates cross-domain — and it's toward complexity, not just similarity.**
+
+EU flipped from correct (debate) to wrong (arbiter). Crux-directed selection
+steered toward CPT-favoring gambles (loss_aversion selected 4×). The arbiter asks
+"where do models disagree most?" → complex models (more parameters) disagree more
+→ complexity bias in experiment selection. In categorization, this manifested as
+similarity bias (SUSTAIN/GCM are more complex than RULEX). In decisions, it
+manifests as CPT bias (5 params > EU's 1 or PH's 3).
+
+**2. Three-layer implicit prior framework.**
+
+| Layer | Categorization bias | Decision bias | General principle |
+|---|---|---|---|
+| Computation (EIG) | ~Neutral | ~Neutral | Model-agnostic |
+| Debate (interpretation) | Interpretability | Interpretability | Favors linguistically accessible params |
+| Arbiter (cruxes + meta) | Similarity models | Complex models | Favors models with more distinctive predictions |
+
+**3. More sophisticated LLM coordination makes things worse.**
+
+Debate (2/3) > Arbiter (1/3). The arbiter's crux-directed selection mechanism
+actively undermines the debate's parameter recovery by steering experiments
+away from where simpler models can demonstrate their fit.
+
+---
+
 ## Scientific conclusions
 
-### The arbiter is a bias, not noise
+### The arbiter is a bias, not noise — and the bias is toward complexity
 
-The arbiter's crux machinery steers experiment selection toward continuous,
-similarity-based structures. This is not random degradation — it's a systematic bias
-that favors certain model types:
+The arbiter's crux machinery steers experiment selection toward regions where
+complex models make distinctive predictions. In categorization, this manifested
+as a similarity-model bias (SUSTAIN/GCM are more parameterically complex than
+RULEX). In the decision domain, it manifests as a CPT bias (5 params vs EU's 1
+or PH's 3). The underlying mechanism is the same: cruxes ask "where do models
+disagree most?" and complex models with more parameters produce more distinctive
+predictions, attracting crux-directed experiments.
+
+**Categorization (M15–M17):**
 
 | Model type | M15 misspec closed | M16 correct closed | M16 correct open | M17 misspec open |
 |---|---|---|---|---|
@@ -223,13 +271,15 @@ that favors certain model types:
 | GCM (exemplar) | +4.9pp | +2.4pp | +0.1pp | **+13.4pp** (best GCM) |
 | RULEX (rule-based) | **-54.7pp** (wrong) | -22.2pp | -4.1pp | -15.8pp (but correct) |
 
-M17 reveals the interaction: under misspecification + open design, the arbiter's
-similarity bias is partially counteracted by the open design space's rule-diagnostic
-bias. RULEX open_arbiter (42.2%, correct) vs M15 arbiter (3.2%, wrong) — the open
-design space rescued RULEX from catastrophe. GCM open_arbiter (87.8%) achieves the
-best GCM result ever via synergy between param recovery and arbiter-guided proposals.
+**Decision domain:**
 
-### When each component helps (revised theory)
+| Model type | Arbiter effect |
+|---|---|
+| CPT (5 params, complex) | +12pp recovery (still wrong — but arbiter helps CPT posterior) |
+| EU (1 param, simple) | **-37.5pp** (flipped from correct to wrong) |
+| PH (3 params, rule-based) | -21.8pp (weakened but survived) |
+
+### When each component helps (revised theory, two domains)
 
 The Phase 1 "gap-filling" theory was too simple. The full picture:
 
@@ -240,13 +290,15 @@ The Phase 1 "gap-filling" theory was too simple. The full picture:
    - Under misspecification: +3.5 to +22pp via parameter recovery (M15)
    - Under correct specification: noise injection, -3 to -28pp (M16)
    - Exception: open design proposals help RULEX when registry has a coverage gap
+   - **Replicates cross-domain**: 0/3→2/3 in both categorization and decisions
 
 3. **Arbiter layer** (cruxes + meta-agents + claim-directed selection):
-   - Not noise but *bias* toward similarity-based structures
-   - Helps SUSTAIN (+8pp) and GCM (+2-5pp) under correct specification
-   - Hurts RULEX (-22 to -55pp) under closed design
+   - Not noise but *bias* toward complex models (more params → more distinctive predictions)
+   - Categorization: helps SUSTAIN (+8pp) and GCM (+2-5pp), hurts RULEX (-22 to -55pp)
+   - Decisions: helps CPT posterior, hurts EU (flips from correct to wrong), weakens PH
    - Under misspec + open design (M17): synergy with GCM (+13.4pp, best ever),
      rescues RULEX from wrong winner (3.2% → 42.2%)
+   - **Replicates cross-domain**: net negative in both domains under misspecification
 
 4. **Open design space** (agent-proposed structures):
    - Mirror-image bias: semantically rich proposals favor rule-based models
@@ -275,16 +327,15 @@ fully-specified models. 18/18 correct across ablation conditions.
 - **Open design is the mirror bias (M16).** Agent proposals favor rule-diagnostic structures. Best closed-debate RULEX recovery (+24pp) but worst SUSTAIN result (64%). 15/15 correct across all conditions.
 - **Composition is non-additive (M17).** Misspec + open design: 6/6 correct. GCM arbiter achieves best-ever 87.8% via synergy. Open design rescues RULEX from arbiter catastrophe (3.2% wrong → 42.2% correct). 47/48 correct across M14–M17.
 - **R-IDeA cannot substitute for debate (negative result).** Formal multi-objective OED (representativeness + informativeness + de-amplification) underperforms EIG in all regimes. R-IDeA + debate (53.7% mean) is worse than EIG + debate (81.4%) because diversifying experiments dilutes the visible prediction failures debate needs for parameter recovery. Informativeness and semantic diagnosis are synergistic; diversification and diagnosis are antagonistic.
+- **Arbiter bias replicates cross-domain as complexity bias (Decision arbiter).** Debate 2/3 → arbiter 1/3. EU flipped from correct to wrong. Crux-directed selection steers toward complex models (more params → more distinctive predictions). Each layer of LLM involvement adds an implicit prior; more sophisticated coordination makes things worse.
 
 ## What's next
 
-1. **Decision-making domain — REPLICATION CONFIRMED (D51, 10 cycles).**
-   Decision M15 results (GPT-4o, 10 cycles): 0/3 no-debate → **2/3 debate**.
-   Matches categorization M15 exactly. PH 100% recovery (all params exact),
-   EU 75% recovery (r exact). CPT still wrong (alpha/beta outside LLM
-   diagnostic capability). Cross-domain parallel: PH↔RULEX, EU↔GCM,
-   CPT↔SUSTAIN. Two-domain result ready for NeurIPS framing.
-2. Write up two-domain results as NeurIPS submission
+1. **Write up two-domain results as NeurIPS submission.** Both debate replication
+   (0/3→2/3) and arbiter bias replication (complexity bias) confirmed cross-domain.
+   Core contribution: implicit priors in hybrid AI systems.
+2. CPT prompt enrichment study — can explicit parameter-to-prediction guidance
+   break through the representational-format boundary? (Separate from main result.)
 3. GeCCo forks (gecco-core, gecco-supplement) — model discovery + adjudication
 4. Real data integration (human participants via Prolific/AutoRA)
 5. See [ROADMAP.md](ROADMAP.md)

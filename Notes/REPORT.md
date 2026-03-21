@@ -1,7 +1,7 @@
 # Antagonistic Collaboration via LLM Debate: Can AI Agents Resolve Scientific Disputes?
 
-**Phase: M17 + Decision Domain Replication (updated)**
-**Date: 2026-03-21** (originally 2026-03-14; updated through decision domain replication)
+**Phase: M17 + Decision Domain Complete (debate + arbiter replication)**
+**Date: 2026-03-21** (originally 2026-03-14; updated through decision domain arbiter replication)
 
 ---
 
@@ -17,9 +17,9 @@ Across 17 milestones and 48 factorial conditions, the system achieves **47/48 co
 
 **Under open design + misspecification (M16–M17, 21/21 correct):** Every intervention carries an implicit model-type prior: the arbiter favors similarity models, open design favors rule models, EIG is approximately agnostic. These biases compose non-additively — synergy for some model types, interference for others. R-IDeA (formal diversification) is antagonistic to debate's parameter recovery mechanism; complementary biases must use orthogonal information channels.
 
-**Cross-domain replication (Decision M15):** The misspecification finding replicates in decision-making under risk: 0/3 no-debate → 2/3 debate (10 cycles), matching categorization exactly. The representational-format principle is domain-general: PH↔RULEX (strongest recovery), EU↔GCM (recovered with more data), CPT↔SUSTAIN (abstract parameters resist diagnosis).
+**Cross-domain replication (Decision M15):** The misspecification finding replicates in decision-making under risk: 0/3 no-debate → 2/3 debate (10 cycles), matching categorization exactly. The representational-format principle is domain-general: PH↔RULEX (strongest recovery), EU↔GCM (recovered with more data), CPT↔SUSTAIN (abstract parameters resist diagnosis). The arbiter bias also replicates: debate 2/3 → arbiter 1/3 (EU flipped from correct to wrong). The bias is toward *complexity* (models with more parameters produce more distinctive predictions, attracting crux-directed experiments), not just similarity — a more general mechanism than the categorization-only result suggested.
 
-We distill 64 lessons on what LLM-mediated scientific debate can and cannot do.
+We distill 68 lessons on what LLM-mediated scientific debate can and cannot do.
 
 ---
 
@@ -726,11 +726,13 @@ Scripts: `antagonistic_collab/ridea.py`, `scripts/validation/validate_ridea.py`,
 
 ### 3.33 Decision domain: Cross-domain replication of the misspecification finding
 
-To test whether the implicit-prior / complementary-bias findings generalize beyond categorization, we implemented a second domain: decision-making under risk. Three models implemented, chosen for structural parallels to the categorization models:
+To test whether the implicit-prior / complementary-bias findings generalize beyond categorization, we implemented a second domain: decision-making under risk. Three models implemented:
 
-- **Expected Utility (EU)** ↔ SUSTAIN — normative baseline, 1 free parameter (risk aversion r). Predicts rational choice via utility maximization.
-- **Cumulative Prospect Theory (CPT)** ↔ GCM — dominant descriptive model, 5 parameters (alpha, beta, lambda_, gamma_pos, gamma_neg). Kahneman & Tversky's nonlinear weighting of outcomes and probabilities.
-- **Priority Heuristic (PH)** ↔ RULEX — lexicographic rule model, 3 parameters (prob_threshold, outcome_threshold_frac, phi). Brandstätter, Gigerenzer & Hertwig's fast-and-frugal heuristic.
+- **Expected Utility (EU)** — normative baseline, 1 free parameter (risk aversion r). Predicts rational choice via utility maximization.
+- **Cumulative Prospect Theory (CPT)** — dominant descriptive model, 5 parameters (alpha, beta, lambda_, gamma_pos, gamma_neg). Kahneman & Tversky's nonlinear weighting of outcomes and probabilities.
+- **Priority Heuristic (PH)** — lexicographic rule model, 3 parameters (prob_threshold, outcome_threshold_frac, phi). Brandstätter, Gigerenzer & Hertwig's fast-and-frugal heuristic.
+
+Note: The models were chosen partly for their theoretical roles (EU as normative baseline parallels SUSTAIN; CPT as dominant descriptive parallels GCM; PH as heuristic challenger parallels RULEX). However, the empirical recovery parallels turned out to follow a different mapping — PH↔RULEX, EU↔GCM, CPT↔SUSTAIN — based on parameter interpretability rather than field role. See cross-domain parallels below.
 
 **Gamble registry:** 76 problems — 17 base diagnostic gambles (certainty effect, common ratio, fourfold pattern, loss aversion, risk premium, PH-specific) + 59 parametric variants (cert-vs-risky, mixed, risky pairs). 7 gamble groups for EIG computation.
 
@@ -767,7 +769,39 @@ To test whether the implicit-prior / complementary-bias findings generalize beyo
 - Strict improvement required: tolerance=0.0 with `<` (not `<=`) to reject neutral revisions.
 - Calibration: learning_rate=0.01, n_subjects=30, 7 gamble groups.
 
-Scripts: `scripts/validation/validate_decision_m15_live.py`. Tests: `tests/test_decision_debate.py` (16 tests), `tests/test_decision_models.py` (17), `tests/test_decision_eig.py` (23), `tests/test_decision_agents.py` (18).
+Scripts: `scripts/validation/validate_decision_m15_live.py`. Tests: `tests/test_decision_debate.py` (34 tests), `tests/test_decision_models.py` (17), `tests/test_decision_eig.py` (26), `tests/test_decision_agents.py` (18).
+
+### 3.34 Decision domain arbiter: complexity bias replicates cross-domain
+
+The arbiter layer (crux protocol + meta-agents + crux-directed EIG) was ported from the categorization pipeline to the decision domain and validated live. Implementation reuses the domain-agnostic `Crux` and `MetaAgentConfig` dataclasses from the categorization pipeline, with decision-specific prompts referencing CPT/EU/PH mechanisms.
+
+**Arbiter results (GPT-4o, 10 cycles, misspecified params):**
+
+| GT | No-debate | Debate (10 cyc) | Arbiter (10 cyc) |
+|---|---|---|---|
+| CPT | Wrong (→PH) | Wrong (→PH) | **Wrong** (→PH, 12.0% recovery) |
+| EU | Wrong (→CPT) | **Correct** (75%) | **Wrong** (→CPT, 37.5% recovery) |
+| PH | Wrong (→CPT) | **Correct** (100%) | **Correct** (78.2% recovery) |
+| Score | 0/3 | 2/3 | **1/3** |
+
+**The arbiter bias replicates cross-domain.** Debate achieves 2/3 correct; adding the arbiter degrades to 1/3. EU flips from correct (debate) to wrong (arbiter) — crux-directed selection steered toward CPT-favoring gambles (loss_aversion group selected 4 times). PH weakened but survived. CPT remains wrong under all conditions.
+
+**The bias is toward complexity, not just similarity.** In categorization, the arbiter helped similarity models (SUSTAIN, GCM) at the expense of rule models (RULEX). In decisions, it helps CPT (the most parameterically complex model, 5 params) at the expense of simpler models (EU 1 param, PH 3 params). The underlying mechanism: cruxes ask "where do models disagree most?" → models with more free parameters produce more distinctive predictions across the gamble space → crux-directed experiments systematically probe where complex models excel. This is a general property of crux-directed selection, not a domain-specific artifact.
+
+**Cross-domain parallel (updated through arbiter):**
+- CPT ↔ SUSTAIN: abstract params resist in all conditions (debate and arbiter)
+- EU ↔ GCM: arbiter effect differs — categorization arbiter helped GCM (+5pp), decision arbiter breaks EU (-37.5pp). The difference: GCM is similarity-based (aligned with arbiter bias) while EU is the simplest model (most hurt by complexity bias)
+- PH ↔ RULEX: arbiter weakens recovery in both domains (categorization: -55pp wrong winner; decision: -22pp but still correct)
+
+**Three-layer implicit prior framework (the main takeaway):**
+
+| Layer | Bias mechanism | Categorization | Decisions |
+|---|---|---|---|
+| Computation (EIG) | Model-agnostic | ~Neutral | ~Neutral |
+| Debate (interpretation) | Linguistic accessibility | Favors interpretable params | Favors interpretable params |
+| Arbiter (cruxes + meta) | Prediction distinctiveness | Favors similarity models | Favors complex models |
+
+Each layer adds an implicit prior. Computation is approximately neutral. Debate biases toward models with linguistically interpretable parameters (rule thresholds, sensitivity parameters). The arbiter biases toward models with the most distinctive predictions (which correlates with parametric complexity). More sophisticated LLM coordination makes things worse, not better — the optimal architecture is computation for inference/selection with LLMs restricted to semantic interpretation.
 
 ---
 
@@ -823,7 +857,7 @@ M16 revealed that every intervention carries an implicit model-type prior: the a
 
 R-IDeA showed that complementary biases must use orthogonal information channels. Diversifying experiment selection is antagonistic to debate's parameter recovery mechanism — debate needs maximally informative experiments to see prediction failures.
 
-The decision domain replication confirms the finding is domain-general: the representational-format principle (recovery depends on parameter interpretability, not domain content) holds across categorization and decision-making under risk.
+The decision domain replication confirms the finding is domain-general: the representational-format principle (recovery depends on parameter interpretability, not domain content) holds across categorization and decision-making under risk. The decision arbiter experiment extends this further: the arbiter's model-type bias also replicates (debate 2/3 → arbiter 1/3), and reveals the bias is toward *complexity* (models with more parameters), not just similarity — a more general mechanism than the categorization-only result suggested.
 
 ### 4.5 Posterior collapse: diagnosis and treatment
 
@@ -845,7 +879,7 @@ The combined M7+M8+M9 solution (tempering + Thompson + crux-directed mixture) ke
 
 5. **Three models per domain.** Categorization: GCM, SUSTAIN, RULEX. Decisions: EU, CPT, PH. Generalization to larger model sets or other domains is architecturally straightforward but untested.
 
-6. **Arbiter has uncorrected model-type bias.** The arbiter systematically favors similarity-based models (Section 3.30). Open design partially counteracts this (Section 3.31) but is itself biased toward rule models. No debiasing mechanism has been implemented.
+6. **Arbiter has uncorrected model-type bias.** The arbiter systematically favors complex models — those with more parameters producing more distinctive predictions (Sections 3.30, 3.34). In categorization this manifests as similarity-model bias; in decisions as CPT bias. Open design partially counteracts this (Section 3.31) but is itself biased toward rule models. No debiasing mechanism has been implemented.
 
 7. **Single LLM backbone for M15–M17.** All misspecification and decision-domain results use GPT-4o only. Cross-LLM comparison (Section 3.6) showed LLM-agnostic convergence under correct specification, but this has not been verified under misspecification where debate is causally active.
 
@@ -868,9 +902,8 @@ The combined M7+M8+M9 solution (tempering + Thompson + crux-directed mixture) ke
 - Cross-domain generalization (decision M15) — 0/3→2/3, representational-format principle confirmed
 
 **Open:**
-1. **NeurIPS paper** — write up the two-domain replication. The core contribution: implicit priors in hybrid AI systems, demonstrated across categorization and decision-making under risk.
-2. **Decision domain arbiter experiment** — mirrors M16/M17 in categorization. Tests whether the arbiter's similarity-model bias replicates in decisions.
-3. **Prompt enrichment for abstract parameters** — CPT alpha/beta and SUSTAIN cluster dynamics are the holdouts in both domains. Testing whether explicit parameter-to-prediction guidance breaks through the representational-format boundary.
+1. **NeurIPS paper** — write up the two-domain replication. The core contribution: implicit priors in hybrid AI systems, demonstrated across categorization and decision-making under risk. Both debate replication (0/3→2/3) and arbiter bias replication (complexity bias, 2/3→1/3) confirmed.
+2. **Prompt enrichment for abstract parameters** — CPT alpha/beta and SUSTAIN cluster dynamics are the holdouts in both domains. Testing whether explicit parameter-to-prediction guidance breaks through the representational-format boundary.
 4. **Arbiter debiasing** — the arbiter's model-type bias is documented (M16) but uncorrected. Learning curve selection or falsification-directed selection could target underserved models.
 5. **Real data integration** — AutoRA + Prolific for closing the loop with human participants. The current framework validates identifiability in principle; real data tests whether the models are correct accounts of human behavior.
 6. **Non-myopic experiment selection** — full Myopic Posterior Sampling (Kandasamy et al. 2019) or deep adaptive design (Foster et al. 2021) could replace the current simplified Thompson implementation.
@@ -878,9 +911,9 @@ The combined M7+M8+M9 solution (tempering + Thompson + crux-directed mixture) ke
 
 ---
 
-## 5. Conclusion (revised through M17 + decision domain)
+## 5. Conclusion (revised through M17 + decision domain arbiter)
 
-Antagonistic collaboration via LLM debate identifies the correct model in 47/48 factorial conditions across two scientific domains. The project's trajectory reveals a clear division of labor between computation and language in hybrid AI systems.
+Antagonistic collaboration via LLM debate identifies the correct model in 47/48 factorial conditions across two scientific domains. The project's trajectory reveals a clear division of labor between computation and language in hybrid AI systems — and a counterintuitive finding about the cost of sophisticated LLM coordination.
 
 **Phase 1 (M1–M13): Computation is sufficient.** Under correct model specification, Bayesian EIG experiment selection + likelihood tempering + Thompson sampling identifies the correct model without any LLM involvement. The M13 ablation (18/18 correct, no-debate best RMSE) confirmed that debate is epiphenomenal when parameters are correct. Successive milestones (M5–M12) progressively strengthened the debate→computation feedback loop, but none changed the outcome. The system operates as a falsification engine (44:1 falsified-to-confirmed ratio), and agents reproduce Lakatos's auxiliary hypothesis shielding without being programmed to do so.
 
@@ -888,11 +921,15 @@ Antagonistic collaboration via LLM debate identifies the correct model in 47/48 
 
 M16 revealed that every intervention in the system carries an implicit model-type prior: the arbiter favors similarity models (+8pp SUSTAIN, -22pp RULEX), open design favors rule models (+24pp RULEX, -24pp SUSTAIN), and EIG is approximately agnostic. M17 showed these biases compose non-additively: synergy for GCM (87.8%, best ever), rescue for RULEX (arbiter catastrophe averted by open design). R-IDeA showed that complementary biases must operate through orthogonal information channels — diversifying the same channel (experiment informativeness) is antagonistic to debate's parameter recovery mechanism.
 
-**Phase 3 (Decision domain): The finding is domain-general.** A second domain (decision-making under risk: EU, CPT, Priority Heuristic) replicates the categorization M15 result exactly: 0/3 no-debate → 2/3 debate at 10 cycles. The cross-domain parallels are clean: PH↔RULEX (rule-based, strongest recovery), EU↔GCM (recovered with more data), CPT↔SUSTAIN (abstract parameters resist diagnosis). The representational-format principle holds: parameter recovery depends on whether the parameter-to-behavior mapping is linguistically describable, not on domain content.
+**Phase 3 (Decision domain): The finding is domain-general.** A second domain (decision-making under risk: EU, CPT, Priority Heuristic) replicates both findings:
 
-**The architecture thesis, revised:** The optimal hybrid AI system separates computation (experiment selection, evidence accumulation, posterior updating) from language (interpretation, parameter diagnosis, hypothesis generation), with the division of labor shifting based on specification quality. Under correct specification, computation is sufficient and debate adds noise. Under misspecification, debate provides the parameter estimation that computation lacks. The key design principle: informativeness and semantic diagnosis are synergistic — debate needs maximally informative experiments (EIG) to observe the prediction failures that drive parameter recovery.
+1. *Debate replication:* 0/3 no-debate → 2/3 debate at 10 cycles, matching categorization exactly. Cross-domain parallels: PH↔RULEX (strongest recovery), EU↔GCM (recovered with more data), CPT↔SUSTAIN (abstract parameters resist). The representational-format principle holds: recovery depends on parameter interpretability, not domain content.
 
-64 lessons on LLM-mediated scientific debate are documented in [Notes/LESSONS_LEARNED.md](../LESSONS_LEARNED.md).
+2. *Arbiter replication:* Debate 2/3 → arbiter 1/3. EU flips from correct to wrong. The arbiter bias is toward *complexity* — models with more parameters produce more distinctive predictions, attracting crux-directed experiments. In categorization this manifested as similarity-model bias; in decisions it manifests as CPT bias (5 params). More sophisticated LLM coordination (cruxes + meta-agents) makes things worse, not better.
+
+**The architecture thesis, revised:** The optimal hybrid AI system separates computation (experiment selection, evidence accumulation, posterior updating) from language (interpretation, parameter diagnosis, hypothesis generation), with the division of labor shifting based on specification quality. Under correct specification, computation is sufficient and debate adds noise. Under misspecification, debate provides the parameter estimation that computation lacks — but the arbiter (crux-directed selection + meta-agents) introduces a complexity bias that degrades performance in both domains. The key design principles: (1) informativeness and semantic diagnosis are synergistic — debate needs maximally informative experiments (EIG) to observe the prediction failures that drive parameter recovery; (2) each layer of LLM involvement adds an implicit prior — the more sophisticated the coordination mechanism, the stronger and more directional the bias.
+
+68 lessons on LLM-mediated scientific debate are documented in [Notes/LESSONS_LEARNED.md](../LESSONS_LEARNED.md).
 
 ---
 

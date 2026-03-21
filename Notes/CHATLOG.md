@@ -1085,6 +1085,20 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 - CPT: **Wrong** (12.0% recovery) — still wrong in all conditions
 - Arbiter: 1/3 vs Debate: 2/3 — arbiter bias replicates cross-domain
 
+**Scientific analysis:**
+- Arbiter bias is toward *complexity* (models with more params produce more distinctive
+  predictions), not just *similarity* — a more general mechanism than categorization alone suggested
+- Three-layer implicit prior framework: computation (neutral) → debate (interpretability) → arbiter (complexity)
+- More sophisticated LLM coordination makes things worse, not better
+- 68 lessons documented in LESSONS_LEARNED.md (Phase 26 added)
+
+**Docs updated (continuation session):**
+- CURRENT_STATE.md — decision arbiter section, updated scientific conclusions, revised "What's next"
+- ROADMAP.md — decision domain marked COMPLETE, updated cross-domain arbiter findings
+- SCRATCHPAD.md — decision domain marked COMPLETE, added complexity-bias finding
+- REPORT.md — abstract updated, section 3.34 (decision arbiter) added, discussion/conclusion revised
+- LESSONS_LEARNED.md — Phase 26 with lessons 65-68 on arbiter complexity bias
+
 **What's next:**
 - Write up two-domain arbiter results for NeurIPS paper
 

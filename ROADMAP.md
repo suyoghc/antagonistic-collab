@@ -1,6 +1,6 @@
 # Roadmap
 
-## In Progress: Decision-Making Domain Extension
+## Complete: Decision-Making Domain Extension
 
 Extending the framework to a second domain (decision-making under risk) to test
 whether the implicit-prior / complementary-bias findings generalize. Three models
@@ -245,18 +245,20 @@ is weakest. Adaptive per-cycle, systematically anti-confirmatory.
 **Random injection** (Dubova-inspired): small probability of random experiment each cycle
 breaks systematic bias. Theoretically grounded, trivial to implement.
 
-### Conditions where debate causally matters (updated through M17)
-- Model misspecification — **confirmed (M15).** Debate improves gap by +3.5pp (GCM),
-  +22.4pp (RULEX) via parameter recovery. Neutral when misspecification is invisible (SUSTAIN).
+### Conditions where debate causally matters (updated through decision arbiter)
+- Model misspecification — **confirmed (M15, decision M15).** Debate improves gap by +3.5pp (GCM),
+  +22.4pp (RULEX) via parameter recovery. Replicates cross-domain (0/3→2/3 in both domains).
 - Non-enumerated design space — **partially confirmed (M16).** Agent proposals help RULEX
   (+24pp over closed_debate) when registry lacks diagnostic structures. But hurt SUSTAIN (-24pp).
-- Arbiter as model-biased tool — **confirmed as bias, not noise (M16).** Crux machinery
-  helps similarity models (SUSTAIN +8pp, GCM +2pp), hurts rule models (RULEX -22pp).
+- Arbiter as complexity-biased tool — **confirmed cross-domain.** Crux machinery
+  favors complex models (more params → more distinctive predictions). Categorization:
+  helps similarity models, hurts RULEX. Decisions: helps CPT posterior, hurts EU/PH.
+  Debate 2/3 → arbiter 1/3 in decision domain.
 - Composition under double stress — **confirmed (M17).** Misspec + open design + arbiter
   produces best-ever GCM (87.8%) via synergy. Open design rescues RULEX from arbiter
   catastrophe (3.2% wrong → 42.2% correct). Complementary biases partially cancel.
 - Ambiguous data (real human data with noise, individual differences) — untested
 - Explanation for humans (goal is understanding, not just identification) — untested
 
-See [Notes/LESSONS_LEARNED.md](Notes/LESSONS_LEARNED.md) for 64 lessons
+See [Notes/LESSONS_LEARNED.md](Notes/LESSONS_LEARNED.md) for 68 lessons
 on LLM-mediated scientific debate.

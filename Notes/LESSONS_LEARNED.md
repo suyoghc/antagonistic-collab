@@ -1469,3 +1469,59 @@ This connects to Broomell et al.'s (2019) argument that stimulus selection biase
 **63. Rule-based models benefit most from debate-driven recovery across domains.** PH in decisions (81.8% recovery, wrong→correct) parallels RULEX in categorization (60.3% recovery, +22pp gap). Both are rule-based models with discrete, interpretable parameters. LLMs excel at reasoning about rules and thresholds. This is not a domain effect but a representational-format effect: the LLM's linguistic capabilities align naturally with rule-based model parameters. (Phase 25, D51)
 
 **64. Cross-domain replication matches at sufficient cycle count.** Categorization M15: 0/3→2/3 debate correct. Decision M15 at 5 cycles: 0/3→1/3 (only PH). Decision M15 at 10 cycles: 0/3→**2/3** — exact match. EU needed 10 cycles because its predictions under misspecification are less distinctive, requiring more evidence exposure. CPT (5 params, alpha/beta outside LLM diagnostic capability) remains the holdout in both domains. The core principle replicates in full: recovery depends on parameter interpretability (representational format), not domain content. PH↔RULEX (strongest), EU↔GCM (needs more data), CPT↔SUSTAIN (resists). (Phase 25, D51)
+
+---
+
+## Phase 26: Decision domain arbiter — complexity bias replicates cross-domain (2026-03-21)
+
+### 26.1 The arbiter bias is toward complexity, not just similarity
+
+**Expected:** The arbiter's similarity-model bias from categorization (helps SUSTAIN/GCM, hurts RULEX) would replicate in the decision domain as a bias toward whichever models are similarity-based.
+
+**Actual:** The bias replicates but the mechanism is more general than "similarity." In decisions, the arbiter helps CPT (the most parameterically complex model, 5 params) at the expense of simpler models (EU 1 param, PH 3 params). EU flipped from correct (debate 75% recovery) to wrong (arbiter 37.5% recovery). The underlying mechanism: cruxes ask "where do models disagree most?" → models with more free parameters produce more distinctive predictions across the design space → crux-directed experiments systematically probe where complex models excel.
+
+**Implication:** The arbiter bias is a general property of crux-directed experiment selection, not a domain-specific artifact. Any crux-based system will bias toward the most parameterically complex model in the competition set. In categorization, SUSTAIN and GCM happened to be both more complex and more similarity-based than RULEX, conflating complexity with similarity. The decision domain disentangles these: CPT is complex but not similarity-based.
+
+### 26.2 More sophisticated LLM coordination makes things worse
+
+**Expected:** Adding cruxes + meta-agents to the decision debate (as done in categorization) would improve or at least maintain debate's 2/3 correct.
+
+**Actual:** Debate achieves 2/3 correct; arbiter degrades to 1/3. The arbiter's crux-directed selection mechanism actively undermined the debate's parameter recovery by steering experiments away from where simpler models (EU, PH) could demonstrate their fit. EU's flipped result is the clearest evidence: debate correctly recovered EU's risk aversion parameter, but the arbiter's CPT-favoring experiment selection overwhelmed this with CPT-favorable evidence.
+
+**Implication:** Each layer of LLM involvement adds an implicit prior. Computation is approximately neutral. Debate adds an interpretability bias (helps models with linguistically accessible parameters). The arbiter adds a complexity bias (helps models with more distinctive predictions). These biases compound — the optimal architecture is not "add every mechanism available" but "add only mechanisms whose biases are known and compensated."
+
+### 26.3 Crux-directed selection has a systematic experiment selection bias
+
+**Expected:** Crux-directed experiment selection would probe the most scientifically diagnostic gamble groups, distributing across the design space.
+
+**Actual:** The loss_aversion gamble group was selected 4 times in the arbiter condition. Loss aversion gambles are where CPT makes its most distinctive predictions (lambda_ parameter directly visible) and where simpler models (EU, PH) cannot compete. Cruxes identified real theoretical disagreement — but the disagreement they identified was systematically where the complex model excels, not where simpler models might.
+
+**Implication:** Crux identification is not model-agnostic. Agents proposing cruxes tend to propose experiments where models disagree most — and models with more parameters disagree more, creating a systematic pull toward the complex model's home turf. This is analogous to confirmation bias in human science: researchers design experiments that probe where their preferred theory makes distinctive predictions, inadvertently biasing the evidence base.
+
+### 26.4 The three-layer implicit prior framework is the project's main architectural finding
+
+**Expected:** The system architecture (computation → debate → arbiter) would be a pipeline where each layer improves on the last.
+
+**Actual:** Each layer introduces a specific, identifiable bias. The biases are not noise — they are systematic priors that favor particular model types. The framework is:
+
+| Layer | Bias mechanism | Effect |
+|---|---|---|
+| Computation (EIG) | Model-agnostic selection | ~Neutral |
+| Debate (interpretation) | Linguistic accessibility of parameters | Favors interpretable params (rules, thresholds) |
+| Arbiter (cruxes + meta) | Prediction distinctiveness | Favors complex models (more params) |
+
+This replicates across both domains. The optimal architecture is not the full pipeline but depends on the setting: computation alone under correct specification, computation + debate under misspecification, and the arbiter only when its complexity bias is counteracted (e.g., by open design in M17).
+
+**Implication:** Any hybrid AI system that layers multiple LLM reasoning mechanisms will accumulate implicit priors. Understanding and documenting these priors is more valuable than trying to eliminate them. The R-IDeA result (Phase 24) and the arbiter result (this phase) both demonstrate that adding coordination mechanisms without understanding their biases degrades performance.
+
+### Emerging Principles (continued)
+
+### On arbiter bias and complexity (Decision arbiter)
+
+**65. The arbiter bias is toward complexity, not similarity — a domain-general mechanism.** Crux-directed selection asks "where do models disagree most?" Models with more parameters produce more distinctive predictions, attracting experiment selection to their home turf. In categorization this looked like similarity-model bias (SUSTAIN/GCM are more complex); in decisions it's clearly complexity bias (CPT has 5 params). The bias is structural to how cruxes work, not to any specific domain. (Phase 26, Decision arbiter)
+
+**66. Each layer of LLM involvement adds an implicit prior.** Computation is approximately neutral. Debate biases toward models with linguistically interpretable parameters. The arbiter biases toward models with the most distinctive predictions (correlated with parametric complexity). These priors compound — the full pipeline (computation + debate + arbiter) is not universally better than a subset. The optimal architecture depends on which biases are helpful for the specific model competition. (Phase 26, Decision arbiter)
+
+**67. More sophisticated LLM coordination can make things worse.** Debate (2/3) > Arbiter (1/3) in the decision domain. The arbiter's crux-directed selection undermined debate's parameter recovery by steering experiments away from where simpler models demonstrate their fit. Adding mechanisms without understanding their biases is not just unhelpful but actively harmful. (Phase 26, Decision arbiter)
+
+**68. Crux identification is not model-agnostic.** Agents proposing cruxes tend to propose experiments where models disagree most, which systematically favors complex models. This is analogous to confirmation bias in human science: researchers design experiments that probe where their preferred theory makes distinctive predictions. Loss_aversion was selected 4× because CPT makes its most distinctive predictions there — a correct identification of disagreement that nonetheless biases the evidence base. (Phase 26, Decision arbiter)

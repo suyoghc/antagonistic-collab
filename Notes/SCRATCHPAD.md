@@ -8,9 +8,9 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 M14–M17 factorial complete (categorization). 47/48 correct.
 R-IDeA tested — negative result in all regimes.
-Decision-making domain implementation **in progress**.
+Decision-making domain **COMPLETE** — debate + arbiter both replicated cross-domain.
 
-### Decision-Making Domain — IN PROGRESS
+### Decision-Making Domain — COMPLETE
 
 **Goal:** Replicate the implicit-prior/complementary-bias findings in a second
 domain (decision-making under risk) to elevate the paper from CogSci to NeurIPS.
@@ -122,8 +122,14 @@ expense of all simpler models. The bias is toward *complexity*, not just
 *similarity* — crux-directed experiments probe where complex models make
 distinctive predictions, disadvantaging simpler models.
 
+**Key finding: Arbiter bias is toward complexity, not just similarity.**
+The arbiter asks "where do models disagree most?" → complex models (more params)
+produce more distinctive predictions → complexity bias in experiment selection.
+In categorization this manifested as similarity-model bias; in decisions it
+manifests as CPT bias (5 params). The underlying mechanism is the same.
+
 **What's next:**
-- Write up two-domain arbiter results for NeurIPS
+- Write up two-domain results (debate + arbiter replication) for NeurIPS
 - CPT could be a target for prompt enrichment study (separate from main result)
 
 Calibration notes:

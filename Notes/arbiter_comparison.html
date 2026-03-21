@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; max-width: 1400px; margin: 40px auto; padding: 0 20px; }
+  h1 { font-size: 1.4em; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th { background: #24292e; color: white; padding: 10px 12px; text-align: left; position: sticky; top: 0; }
+  td { border: 1px solid #d0d7de; padding: 10px 12px; vertical-align: top; }
+  tr:nth-child(even) { background: #f6f8fa; }
+  td:first-child { font-weight: 600; white-space: nowrap; width: 180px; }
+  ul { margin: 4px 0; padding-left: 18px; }
+  ul ul { margin: 2px 0; padding-left: 16px; }
+  li { margin-bottom: 3px; }
+  .delta { display: block; margin-top: 12px; padding-top: 10px; border-top: 1px dashed #b0b0b0; color: #6a3d9a; font-size: 13px; }
+  .delta b { color: #4a2d7a; }
+  .section-header td { background: #e1e4e8; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; }
+</style>
+</head>
+<body>
+<h1>Arbiter Comparison: George's Original → Our Categorization → Decision Domain (Complete)</h1>
+<table>
+<tr>
+  <th>Component</th>
+  <th>George's Original (ARBITER/Crucible)</th>
+  <th>Our Categorization Implementation</th>
+  <th>Decision Domain (Complete)</th>
+</tr>
+
+<!-- ===== FRAMING ===== -->
+<tr class="section-header"><td colspan="4">Framing &amp; Goals</td></tr>
+
+<tr>
+  <td>Core Question</td>
+  <td>
+    <ul>
+      <li><b>How</b> should you structure LLM-mediated scientific debate so it's productive?</li>
+      <li>Builds a <em>tool for scientists to use</em>
+        <ul>
+          <li>Orchestration framework for resolving disputes</li>
+          <li>Assumes debate is valuable; designs the best way to conduct it</li>
+        </ul>
+      </li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li><b>Does</b> LLM debate actually help beyond computation alone — and if so, when?</li>
+      <li>Treats George's framework as a <em>hypothesis to test</em> rather than a tool to deploy</li>
+      <li>Testing this required specific infrastructure:
+        <ul>
+          <li>Synthetic data → known ground truth</li>
+          <li>Bayesian scoring → automated measurement</li>
+          <li>Factorial ablation → causal isolation</li>
+        </ul>
+      </li>
+      <li>These requirements drive most architectural differences below</li>
+    </ul>
+    <span class="delta"><b>Δ:</b> George asks "how should debate work?" — we ask "does debate work?" Testing the hypothesis required infrastructure (ground truth, measurement, ablation) that a deployment tool doesn't need.</span>
+  </td>
+  <td>
+    <ul>
+      <li><b>Is it general?</b> Does the answer to "when does debate help?" hold across domains?</li>
+      <li>Treats categorization findings as a <em>principle to validate</em>
+        <ul>
+          <li>Same testing infrastructure</li>
+          <li>Structurally different scientific content</li>
+        </ul>
+      </li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> Moves from "does debate work in categorization?" to "does debate work in general?" — the step from finding to principle.</span>
+  </td>
+</tr>
+
+<tr>
+  <td>Key Takeaway</td>
+  <td>
+    <ul>
+      <li>Debate is valuable; the question is how to structure it well</li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li><b>Debate is conditionally valuable</b> — epiphenomenal under correct specification, causally necessary under misspecification</li>
+      <li><b>Every component carries an implicit prior:</b> computation is neutral, debate favors interpretability, the arbiter favors complexity</li>
+      <li><b>More sophisticated LLM coordination makes things worse</b> — the arbiter degrades performance in both domains</li>
+    </ul>
+    <span class="delta"><b>Δ:</b> George assumes debate is generally beneficial. We show it's conditionally beneficial — and that each layer of LLM involvement introduces a systematic bias.</span>
+  </td>
+  <td>
+    <ul>
+      <li><b>Both findings replicate cross-domain</b> — debate value under misspec and arbiter bias are domain-general</li>
+      <li><b>The arbiter bias is toward complexity</b>, not just similarity — revealed only by the second domain</li>
+      <li><b>Recovery depends on parameter interpretability</b>, not domain content — the representational-format principle</li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> Cross-domain replication elevates from finding to principle. One domain = finding, two domains = principle.</span>
+  </td>
+</tr>
+
+<tr>
+  <td>Implications</td>
+  <td>
+    <ul>
+      <li><b>For hybrid AI systems:</b> LLM-computation orchestration is a viable paradigm for automated science</li>
+      <li><b>For model selection:</b> OED can be augmented with natural-language reasoning about theories</li>
+      <li><b>For philosophy of science:</b> Adversarial collaboration can be structured and automated</li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li><b>For hybrid AI systems:</b> Each LLM layer adds an implicit prior — characterize your biases before deploying. The optimal architecture is not "all layers active" but depends on specification quality.</li>
+      <li><b>For model selection / OED:</b> Standard EIG fails under misspecification. LLM semantic diagnosis provides parameter estimation OED lacks — but only for linguistically describable parameters. Experiment selection methods carry implicit model-type biases.</li>
+      <li><b>For philosophy of science:</b> Lakatos emerges without career incentives (agents protect core theories via auxiliary modifications ~85% of the time — the "protective belt" is structural, not psychological). "Impartial" experiment selection carries implicit epistemic values. More structured methodology can degrade convergence.</li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li><b>For hybrid AI systems:</b> The implicit prior framework is domain-general, not a categorization artifact. Arbiter bias is toward complexity (more params), not just similarity. Design principle: diversify information channels, not weightings.</li>
+      <li><b>For model selection / OED:</b> The representational-format principle — recovery depends on parameter interpretability, not domain. Cross-domain replication validates that EIG + debate is the optimal regime under misspecification. Formal diversification (R-IDeA) is antagonistic to diagnosis.</li>
+      <li><b>For philosophy of science:</b> The coordination paradox replicates: seeking decisive experiments privileges complex theories in both domains. Implicit epistemic values in methodology are structural, not domain-contingent. Falsification dominance and auxiliary shielding are robust features of competitive theory evaluation.</li>
+    </ul>
+  </td>
+</tr>
+
+<tr>
+  <td>Practical Aim</td>
+  <td>
+    <ul>
+      <li>Resolve scientific disputes between competing theories</li>
+      <li>Produce structured report:
+        <ul>
+          <li>Areas of agreement</li>
+          <li>Areas of disagreement</li>
+          <li>Next steps</li>
+        </ul>
+      </li>
+      <li>General-purpose adversarial collaboration framework</li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li>Determine which cognitive model best explains categorization behavior</li>
+      <li>Quantify model fit via Bayesian posterior</li>
+      <li>Characterize when debate is causally necessary vs. epiphenomenal</li>
+    </ul>
+    <span class="delta"><b>Δ:</b> Narrowed from general dispute resolution to specific model comparison with quantitative outcome. The practical aim is subordinate to the core question above.</span>
+  </td>
+  <td>
+    <ul>
+      <li>Determine which decision model best explains risky choice</li>
+      <li>Test cross-domain generality of debate value</li>
+      <li>Replicate categorization findings in a structurally different domain</li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> Adds replication as primary goal. Individual model comparison is secondary to the cross-domain principle.</span>
+  </td>
+</tr>
+
+<tr>
+  <td>Scientific Domain</td>
+  <td>
+    <ul>
+      <li>Domain-agnostic — designed for any scientific controversy</li>
+      <li>Example instantiation: developmental psychology (nativist vs empiricist)</li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li>Category learning (Shepard et al., 1961 structures)
+        <ul>
+          <li>6 category types (Type I–VI), varying difficulty</li>
+          <li>Rich computational tradition (Nosofsky, Love, Nosofsky &amp; Palmeri)</li>
+        </ul>
+      </li>
+    </ul>
+    <span class="delta"><b>Δ:</b> Instantiated to a specific domain with known ground truth and established computational models.</span>
+  </td>
+  <td>
+    <ul>
+      <li>Decision-making under risk (gambles, lotteries)
+        <ul>
+          <li>76 gamble problems (certainty effect, common ratio, fourfold pattern, etc.)</li>
+          <li>Rich computational tradition (von Neumann, Kahneman &amp; Tversky, Brandstätter)</li>
+        </ul>
+      </li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> Different domain, same structure: established models with known ground truth. Choice probabilities replace category responses.</span>
+  </td>
+</tr>
+
+<tr>
+  <td>Models Under Comparison</td>
+  <td>
+    <ul>
+      <li>Any competing theories — specified at session setup</li>
+      <li>Example: 2 theories with qualitative predictions</li>
+      <li>Framework supports both qualitative and quantitative theories</li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li>Three computational models, all with quantitative predictions:
+        <ul>
+          <li>GCM (exemplar similarity) — 3 params</li>
+          <li>SUSTAIN (cluster-based) — 4 params</li>
+          <li>RULEX (rule-plus-exception) — 2 params</li>
+        </ul>
+      </li>
+      <li>Three representational formats: similarity, clusters, rules</li>
+    </ul>
+    <span class="delta"><b>Δ:</b> Fixed to 3 specific computational models, all with quantitative predictions. George's framework also supports qualitative theories; ours requires numerical output for Bayesian scoring.</span>
+  </td>
+  <td>
+    <ul>
+      <li>Three decision models:
+        <ul>
+          <li>EU (Expected Utility) — 1 param, normative baseline</li>
+          <li>CPT (Cumulative Prospect Theory) — 5 params, dominant descriptive</li>
+          <li>Priority Heuristic — 0–1 params, lexicographic rules</li>
+        </ul>
+      </li>
+      <li>Chosen partly for field-role parallels (EU≈SUSTAIN as baseline, CPT≈GCM as dominant, PH≈RULEX as heuristic)</li>
+      <li>Empirical recovery parallels turned out different: PH↔RULEX, EU↔GCM, CPT↔SUSTAIN — based on parameter interpretability, not field role</li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> Two distinct cross-domain mappings: by field role (EU≈SUSTAIN, CPT≈GCM) and by empirical recovery (EU↔GCM, CPT↔SUSTAIN). PH↔RULEX is consistent across both. The divergence is itself informative — recovery depends on representational format, not theoretical status.</span>
+  </td>
+</tr>
+
+<tr>
+  <td>Theory of Debate Value</td>
+  <td>
+    <ul>
+      <li>Adversarial collaboration surfaces hidden assumptions</li>
+      <li>Structured disagreement is more productive than unstructured</li>
+      <li>Human moderator ensures fairness</li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li>Debate enables parameter recovery that EIG alone cannot do
+        <ul>
+          <li>LLMs diagnose <em>why</em> predictions are wrong, not just <em>that</em> they're wrong</li>
+          <li>Complementary biases: EIG finds informative experiments, debate fixes parameters</li>
+        </ul>
+      </li>
+      <li>Debate is epiphenomenal under correct specification (M13–M14)</li>
+    </ul>
+    <span class="delta"><b>Δ:</b> George's framework posits debate as generally beneficial. Our findings narrow this to a specific causal claim: debate matters for parameter recovery under misspecification, and is epiphenomenal otherwise.</span>
+  </td>
+  <td>
+    <ul>
+      <li>Same causal claim — debate enables param recovery</li>
+      <li>Prediction: recovery depends on representational format
+        <ul>
+          <li>Linguistic interpretability, not domain, determines success</li>
+          <li>PH (rule-like) should recover best</li>
+          <li>CPT (abstract transforms) should resist</li>
+        </ul>
+      </li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> Tests the <em>representational-format principle</em> — the theoretical contribution of the paper.</span>
+  </td>
+</tr>
+
+<!-- ===== ARCHITECTURE ===== -->
+<tr class="section-header"><td colspan="4">Architecture &amp; Pipeline</td></tr>
+
+<tr>
+  <td>Overall Architecture</td>
+  <td>
+    <ul>
+      <li><code>CrucibleSession</code> orchestrates 6 sequential phases</li>
+      <li>Moderator agent controls flow</li>
+      <li>Fully LLM-driven with HITL checkpoints</li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li><code>run_debate_cycle()</code> — EIG computation + LLM debate rounds</li>
+      <li>Crux negotiation replaces free-form debate</li>
+      <li>Arbiter is optional layer on top</li>
+      <li>Deterministic orchestration replaces Moderator agent</li>
+    </ul>
+    <span class="delta"><b>Δ:</b> Replaced free-form phases with structured crux protocol. Computation (EIG) drives experiment selection. HITL checkpoints removed — fully automated.</span>
+  </td>
+  <td>
+    <ul>
+      <li><code>decision_debate_runner.py</code> + arbiter layer</li>
+      <li>Same computation-first architecture as categorization</li>
+      <li>Gamble-specific crux types</li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> Minimal — swap category structures for gamble groups, model predictions for choice probabilities.</span>
+  </td>
+</tr>
+
+<tr>
+  <td>Agent Roles</td>
+  <td>
+    <ul>
+      <li>4 agent types:
+        <ul>
+          <li><b>Theory Agent</b> — one per model, advocates for its theory</li>
+          <li><b>Moderator</b> — orchestrates debate, ensures fairness</li>
+          <li><b>Integrator</b> — finds common ground, proposes syntheses</li>
+          <li><b>Critic</b> — stress-tests claims, identifies weaknesses</li>
+        </ul>
+      </li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li>3 agent types:
+        <ul>
+          <li><b>Model Agent</b> — one per model, with computational model access</li>
+          <li><b>Integrator</b> — meta-agent, synthesizes crux map (arbiter only)</li>
+          <li><b>Critic</b> — meta-agent, challenges leading model (arbiter only)</li>
+        </ul>
+      </li>
+      <li>Moderator role replaced by deterministic orchestration code</li>
+    </ul>
+    <span class="delta"><b>Δ:</b> Moderator → code. Theory agents enhanced with computational model access. Integrator/Critic scoped to arbiter layer only, rather than active across all phases.</span>
+  </td>
+  <td>
+    <ul>
+      <li>Same 3 types
+        <ul>
+          <li>Model agents access EU, CPT, PH computation</li>
+          <li>System prompts reference gamble predictions</li>
+        </ul>
+      </li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> System prompt content only — architecture identical.</span>
+  </td>
+</tr>
+
+<tr>
+  <td>Number of Phases / Cycle Structure</td>
+  <td>
+    <ul>
+      <li>6 sequential phases:
+        <ul>
+          <li>Setup → Structured Debate → Integration → Synthesis → Report → Research Program</li>
+        </ul>
+      </li>
+      <li>Single pass</li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li>1 cycle =
+        <ul>
+          <li>EIG select → data gen → posterior update → debate round (→ optional arbiter)</li>
+        </ul>
+      </li>
+      <li>Repeat for N cycles (typically 5)</li>
+      <li>Iterative rather than single-pass</li>
+    </ul>
+    <span class="delta"><b>Δ:</b> Collapsed 6 sequential phases into a tight iterative compute-debate loop. Report and research-program phases handled outside the system.</span>
+  </td>
+  <td>
+    <ul>
+      <li>Same cycle structure</li>
+      <li>N=10 cycles (decision models need more evidence)</li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> More cycles — decision models have subtler prediction differences.</span>
+  </td>
+</tr>
+
+<tr>
+  <td>Debate Format</td>
+  <td>
+    <ul>
+      <li>Free-form natural language debate
+        <ul>
+          <li>Moderator poses questions, agents respond</li>
+          <li>Unstructured argumentation across multiple rounds</li>
+        </ul>
+      </li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li>Structured crux negotiation: propose → accept/reject/counter</li>
+      <li>Each round provides:
+        <ul>
+          <li>Prediction errors per model on each structure</li>
+          <li>Prompt for parameter revisions</li>
+        </ul>
+      </li>
+      <li>JSON-formatted responses parsed into:
+        <ul>
+          <li>Crux proposals</li>
+          <li>Parameter change proposals</li>
+        </ul>
+      </li>
+    </ul>
+    <span class="delta"><b>Δ:</b> Free-form debate → structured protocol. Agents make specific, testable claims. Concrete per-model prediction data rather than narrative argument.</span>
+  </td>
+  <td>
+    <ul>
+      <li><b>Implemented:</b> debate rounds with prediction errors + param revision prompts</li>
+      <li>Shows gamble choice probability errors</li>
+      <li>Param proposals validated against <code>model.default_params</code></li>
+      <li><b>Implemented:</b> formal crux protocol (propose/accept/reject/counter) for gamble groups</li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> Full crux protocol ported. Cruxes target gamble groups (7 groups) rather than category structures. Choice probabilities replace category responses.</span>
+  </td>
+</tr>
+
+<tr>
+  <td>Experimental Conditions</td>
+  <td>
+    <ul>
+      <li>Single mode: full pipeline runs end-to-end</li>
+      <li>All components always active</li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li>Three conditions tested as independent variables:
+        <ul>
+          <li><b>No-debate:</b> computation only (EIG + posterior)</li>
+          <li><b>Debate:</b> adds crux negotiation + parameter recovery</li>
+          <li><b>Debate + arbiter:</b> adds Integrator/Critic meta-agents</li>
+        </ul>
+      </li>
+      <li>Factorial design across M15–M17
+        <ul>
+          <li>Also crossed with misspecification (correct/wrong params)</li>
+          <li>Also crossed with design space (open/closed)</li>
+        </ul>
+      </li>
+    </ul>
+    <span class="delta"><b>Δ:</b> George's pipeline is monolithic. We decomposed it into independently toggleable components, enabling ablation and causal attribution via factorial design.</span>
+  </td>
+  <td>
+    <ul>
+      <li>All three conditions run:
+        <ul>
+          <li>No-debate: 0/3 correct</li>
+          <li>Debate (10 cycles): <b>2/3 correct</b> (PH 100%, EU 75% recovery)</li>
+          <li>Arbiter (10 cycles): <b>1/3 correct</b> (EU flipped to wrong)</li>
+        </ul>
+      </li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> Same factorial structure. Arbiter bias replicates — debate 2/3 → arbiter 1/3. Matches categorization pattern (arbiter degrades under misspec).</span>
+  </td>
+</tr>
+
+<!-- ===== MECHANISMS ===== -->
+<tr class="section-header"><td colspan="4">Key Mechanisms</td></tr>
+
+<tr>
+  <td>Experiment Selection</td>
+  <td>
+    <ul>
+      <li>LLM-proposed via Moderator</li>
+      <li>No computational optimization</li>
+      <li>Experiments emerge from debate</li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li>EIG (Bayesian Expected Information Gain) — primary
+        <ul>
+          <li>Computationally optimized for model discrimination</li>
+          <li>Thompson sampling to balance exploration/exploitation</li>
+        </ul>
+      </li>
+      <li>Crux-directed mixture (30% crux weight)</li>
+      <li>Open design: LLM proposals as supplement (M16)</li>
+    </ul>
+    <span class="delta"><b>Δ:</b> Computational optimization (EIG) replaces LLM-proposed experiments. LLM proposals retained as an optional supplement in open-design mode.</span>
+  </td>
+  <td>
+    <ul>
+      <li><b>Implemented:</b> Decision EIG over 7 gamble groups + Thompson sampling</li>
+      <li><b>Implemented:</b> crux-directed mixture (crux_weight=0.3) for gamble-group cruxes</li>
+      <li>Arbiter condition: loss_aversion group selected 4× via crux-directed selection</li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> Full crux-directed selection ported. Crux bias steered toward CPT-favoring gambles (loss aversion), paralleling categorization's similarity-structure bias.</span>
+  </td>
+</tr>
+
+<tr>
+  <td>Crux Mechanism</td>
+  <td>
+    <ul>
+      <li>No formal crux system</li>
+      <li>Disagreements emerge organically in Phases 2–3</li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li>Formal crux protocol: propose → accept/reject/counter</li>
+      <li>Each crux has:
+        <ul>
+          <li>Type (prediction, parameter, mechanism)</li>
+          <li>Target structure</li>
+          <li>Confidence level</li>
+        </ul>
+      </li>
+      <li>Auto-resolve against new experimental data</li>
+      <li>Crux map tracks all active disagreements</li>
+    </ul>
+    <span class="delta"><b>Δ:</b> Entirely new mechanism with no counterpart in George's design. Formalizes disagreement into typed, testable claims that resolve automatically against experimental data.</span>
+  </td>
+  <td>
+    <ul>
+      <li><b>Implemented</b> — same protocol, adapted to decision vocabulary:
+        <ul>
+          <li>Prediction cruxes on gamble outcomes</li>
+          <li>Parameter cruxes on model params</li>
+          <li>Mechanism cruxes (e.g., "probability weighting matters")</li>
+        </ul>
+      </li>
+      <li>Target = gamble group, not category structure</li>
+      <li>Cruxes stored as plain list (not EpistemicState — standalone per D49)</li>
+      <li><b>Result:</b> crux-directed selection steered toward CPT-favoring gambles</li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> Full crux protocol ported. Reuses domain-agnostic <code>Crux</code> dataclass. Crux bias favors complexity (CPT 5 params) rather than similarity — revealing the general mechanism.</span>
+  </td>
+</tr>
+
+<tr>
+  <td>Parameter Recovery</td>
+  <td>
+    <ul>
+      <li>Not addressed — framework focuses on model comparison rather than parameter estimation</li>
+      <li>Assumes models are correctly specified throughout</li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li>Pipeline: <code>sync_params_from_theory()</code> + <code>validate_param_revision()</code>
+        <ul>
+          <li>Agents propose param changes during debate</li>
+          <li>Gated by per-cycle RMSE improvement</li>
+        </ul>
+      </li>
+      <li>Results: 60–86% recovery under misspecification (M15)</li>
+    </ul>
+    <span class="delta"><b>Δ:</b> Entirely new mechanism. George's framework assumes correct specification; ours adds parameter recovery as a debate capability. This turns out to be what makes debate causally necessary.</span>
+  </td>
+  <td>
+    <ul>
+      <li>Pipeline: <code>filter_valid_params()</code> validates against <code>model.default_params</code>
+        <ul>
+          <li>Accumulated RMSE gate (strict, tolerance=0.0)</li>
+        </ul>
+      </li>
+      <li>Results: 100% PH, 75% EU, 28% CPT recovery</li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> <code>default_params</code> dict instead of <code>inspect.signature</code>. Accumulated gate stricter than cat.'s per-cycle gate.</span>
+  </td>
+</tr>
+
+<tr>
+  <td>Meta-Agents (Integrator / Critic)</td>
+  <td>
+    <ul>
+      <li><b>Integrator:</b>
+        <ul>
+          <li>Finds common ground</li>
+          <li>Proposes syntheses</li>
+        </ul>
+      </li>
+      <li><b>Critic:</b>
+        <ul>
+          <li>Stress-tests claims</li>
+          <li>Identifies weaknesses</li>
+        </ul>
+      </li>
+      <li>Both active across all phases</li>
+      <li>Operate in natural language</li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li><b>Integrator:</b>
+        <ul>
+          <li>Synthesizes crux map → experiment suggestions</li>
+        </ul>
+      </li>
+      <li><b>Critic:</b>
+        <ul>
+          <li>Challenges leader, proposes falsification experiments</li>
+        </ul>
+      </li>
+      <li>Active only in arbiter condition (vs. across all phases in George's)</li>
+      <li>Output feeds into crux-directed experiment selection (vs. open-ended debate participation)</li>
+      <li><b>Key finding:</b> meta-agents are biased
+        <ul>
+          <li>Help similarity models (SUSTAIN +8pp)</li>
+          <li>Hurt rule models (RULEX −22pp)</li>
+        </ul>
+      </li>
+    </ul>
+    <span class="delta"><b>Δ:</b> Scoped from free-form participants to crux-focused advisors. Empirically discovered they introduce a model-type bias rather than uniform improvement.</span>
+  </td>
+  <td>
+    <ul>
+      <li><b>Implemented</b> — decision-domain Integrator + Critic
+        <ul>
+          <li>Prompts reference CPT/EU/PH mechanisms</li>
+          <li>Read-only (no param revisions)</li>
+        </ul>
+      </li>
+      <li><b>Result: bias replicates cross-domain</b>
+        <ul>
+          <li>Helps CPT posterior (complexity bias)</li>
+          <li>Hurts EU (flipped from correct to wrong)</li>
+          <li>Weakens PH (−22pp but still correct)</li>
+        </ul>
+      </li>
+      <li><b>Key insight:</b> bias is toward <em>complexity</em>, not just similarity
+        <ul>
+          <li>CPT (5 params) produces most distinctive predictions → attracts crux-directed experiments</li>
+        </ul>
+      </li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> Meta-agent bias confirmed cross-domain. The bias is toward <em>complexity</em> (more params → more distinctive predictions), not just <em>similarity</em> — a more general mechanism than categorization alone suggested.</span>
+  </td>
+</tr>
+
+<tr>
+  <td>Conflict Resolution</td>
+  <td>
+    <ul>
+      <li>Moderator-mediated dialogue
+        <ul>
+          <li>Integrator proposes resolutions</li>
+          <li>Critic challenges proposals</li>
+        </ul>
+      </li>
+      <li>Human makes final call at checkpoints</li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li>Crux auto-resolution against experimental data
+        <ul>
+          <li>New data addresses crux → auto-confirm or auto-refute</li>
+          <li>Cruxes are testable empirical claims, designed to be resolvable by data</li>
+        </ul>
+      </li>
+      <li>No human in loop</li>
+    </ul>
+    <span class="delta"><b>Δ:</b> Data-driven auto-resolution replaces human-mediated negotiation. George's human checkpoints ensure fairness; our data gates ensure empirical grounding.</span>
+  </td>
+  <td>
+    <ul>
+      <li><b>Implemented</b> — same auto-resolution</li>
+      <li>Gamble outcome data resolves prediction cruxes</li>
+      <li>Crux finalization: min 2 supporters required</li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> Identical mechanism, ported successfully.</span>
+  </td>
+</tr>
+
+<tr>
+  <td>Open Design Space</td>
+  <td>
+    <ul>
+      <li>All experiments are LLM-proposed</li>
+      <li>Design space is always "open" (unconstrained)</li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li>Two modes:
+        <ul>
+          <li><b>Closed:</b> registry only, EIG selects</li>
+          <li><b>Open:</b> agents can propose novel structures beyond registry</li>
+        </ul>
+      </li>
+      <li>M16 tested both as controlled experimental conditions</li>
+      <li>Open helps RULEX (+24pp), hurts SUSTAIN (−24pp)</li>
+    </ul>
+    <span class="delta"><b>Δ:</b> Added a registry-bounded mode alongside open design. George's framework is always open; ours treats openness as a manipulable experimental variable.</span>
+  </td>
+  <td>
+    <ul>
+      <li>Closed only (7 gamble groups)</li>
+      <li>Open mode not tested — gamble space more constrained than category space</li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> Closed only — open design not ported to decision domain. M16/M17 open results are categorization-only.</span>
+  </td>
+</tr>
+
+<!-- ===== INFRASTRUCTURE ===== -->
+<tr class="section-header"><td colspan="4">Infrastructure &amp; Methodology</td></tr>
+
+<tr>
+  <td>Data Source</td>
+  <td>
+    <ul>
+      <li>Designed for real experimental data</li>
+      <li>Theories evaluated against empirical literature</li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li>Synthetic data from ground-truth model
+        <ul>
+          <li>n=30 simulated subjects per structure</li>
+          <li>Known correct answer enables automated validation at scale</li>
+        </ul>
+      </li>
+      <li>Real human data untested (listed as future work)</li>
+    </ul>
+    <span class="delta"><b>Δ:</b> George's framework is designed for real data; ours uses synthetic data to enable automated validation. Trades ecological validity for experimental control and scalability.</span>
+  </td>
+  <td>
+    <ul>
+      <li>Synthetic data from ground-truth model
+        <ul>
+          <li>n=30 simulated subjects per gamble group</li>
+          <li>Choice probabilities, not binary choices</li>
+        </ul>
+      </li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> Same synthetic approach. Different data format (choice probabilities vs category responses).</span>
+  </td>
+</tr>
+
+<tr>
+  <td>LLM Backbone</td>
+  <td>
+    <ul>
+      <li>OpenAI API (GPT-4 assumed)</li>
+      <li>Each agent is a separate system prompt + conversation</li>
+      <li>LLM handles reasoning, scoring, and experiment design</li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li>GPT-4o via OpenAI API</li>
+      <li>LLM does:
+        <ul>
+          <li>Interpretation and diagnosis</li>
+          <li>Parameter proposals</li>
+          <li>Crux negotiation</li>
+        </ul>
+      </li>
+      <li>LLM does NOT do:
+        <ul>
+          <li>Scoring</li>
+          <li>Experiment selection</li>
+          <li>Predictions — these are all computational</li>
+        </ul>
+      </li>
+      <li>Single backbone — multi-LLM untested</li>
+    </ul>
+    <span class="delta"><b>Δ:</b> Strict division of labor — LLM for semantics, computation for numerics. George's LLM handles the full pipeline; ours restricts LLM to tasks where it has comparative advantage. Largest single architectural departure.</span>
+  </td>
+  <td>
+    <ul>
+      <li>GPT-4o (same as categorization)</li>
+      <li>Same division of labor</li>
+      <li>Decision-domain system prompts</li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> Identical LLM usage. System prompt content changes only.</span>
+  </td>
+</tr>
+
+<tr>
+  <td>Scoring / Model Comparison</td>
+  <td>
+    <ul>
+      <li>Qualitative evaluation
+        <ul>
+          <li>Integrator synthesizes arguments</li>
+          <li>Panel evaluates "consilience" and "predictive accuracy" narratively</li>
+        </ul>
+      </li>
+      <li>No formal metric</li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li>Bayesian posterior over models
+        <ul>
+          <li>Learning-curve RMSE + LOO cross-validation</li>
+          <li>Winner = highest posterior after N cycles</li>
+          <li>Gap metric = margin between winner and runner-up</li>
+        </ul>
+      </li>
+    </ul>
+    <span class="delta"><b>Δ:</b> Quantitative Bayesian scoring replaces narrative evaluation. George's approach captures nuances that numbers miss; ours enables automated, reproducible comparison.</span>
+  </td>
+  <td>
+    <ul>
+      <li>Bayesian posterior over models
+        <ul>
+          <li>RMSE over gamble choice probabilities</li>
+          <li>Direct posterior updating (no LOO — unlike categorization)</li>
+        </ul>
+      </li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> Same posterior framework. Uses direct RMSE scoring rather than LOO cross-validation (decision models predict choice probabilities directly, no self-similarity bias to guard against).</span>
+  </td>
+</tr>
+
+<tr>
+  <td>HITL Checkpoints</td>
+  <td>
+    <ul>
+      <li>6 checkpoints:
+        <ul>
+          <li>Initial Review</li>
+          <li>Evidence Evaluation</li>
+          <li>Integration Review</li>
+          <li>Final Synthesis Review</li>
+          <li>Report Approval</li>
+          <li>Research Program Approval</li>
+        </ul>
+      </li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li>None — fully automated</li>
+      <li>Human reviews results post-hoc</li>
+    </ul>
+    <span class="delta"><b>Δ:</b> All 6 checkpoints removed to enable automated experimentation at scale. George's checkpoints serve quality control and fairness; ours trades that for throughput and reproducibility.</span>
+  </td>
+  <td>
+    <ul>
+      <li>None — same as categorization</li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> Identical.</span>
+  </td>
+</tr>
+
+<tr>
+  <td>Convergence / Stopping Rule</td>
+  <td>
+    <ul>
+      <li>Moderator decides when to advance phases</li>
+      <li>Human approves at checkpoints</li>
+      <li>No formal convergence criterion</li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li>Fixed N cycles (typically 5)
+        <ul>
+          <li>No early stopping — run all cycles</li>
+          <li>Posterior convergence observable but not used as stopping rule</li>
+        </ul>
+      </li>
+    </ul>
+    <span class="delta"><b>Δ:</b> Fixed cycle budget replaces adaptive human stopping. Simpler and more reproducible, though may waste cycles or stop too early.</span>
+  </td>
+  <td>
+    <ul>
+      <li>Fixed N=10 cycles
+        <ul>
+          <li>5 cycles insufficient for EU (needed more evidence)</li>
+          <li>10 cycles matches categorization M15 results</li>
+        </ul>
+      </li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> More cycles needed — decision models have subtler prediction differences. 10 vs 5 cycles.</span>
+  </td>
+</tr>
+
+<tr>
+  <td>Validation Method</td>
+  <td>
+    <ul>
+      <li>Human expert evaluation of final report</li>
+      <li>No automated validation</li>
+      <li>Success = "useful report produced"</li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li>Automated metrics:
+        <ul>
+          <li>Correct winner identified? (binary)</li>
+          <li>Gap: winner's posterior margin</li>
+          <li>Parameter recovery %: closeness to ground truth</li>
+        </ul>
+      </li>
+      <li>Ablation: debate vs no-debate vs arbiter</li>
+      <li>47/48 correct across M14–M17</li>
+    </ul>
+    <span class="delta"><b>Δ:</b> Automated validation with known ground truth, plus ablation design to isolate causal contribution of each component. George's expert evaluation captures richer judgments; ours scales.</span>
+  </td>
+  <td>
+    <ul>
+      <li>Same automated validation</li>
+      <li>Additional: cross-domain parallel comparison
+        <ul>
+          <li>PH↔RULEX, EU↔GCM, CPT↔SUSTAIN</li>
+        </ul>
+      </li>
+      <li>Current: 0/3 → 2/3 (matches categorization M15)</li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> Adds cross-domain comparison as validation dimension.</span>
+  </td>
+</tr>
+
+<!-- ===== RESULTS ===== -->
+<tr class="section-header"><td colspan="4">Results &amp; Findings</td></tr>
+
+<tr>
+  <td>Key Results</td>
+  <td>
+    <ul>
+      <li>Framework and codebase published</li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li>Correct specification (M13–M14):
+        <ul>
+          <li>18/18 correct — debate adds no value</li>
+        </ul>
+      </li>
+      <li>Misspecification (M15):
+        <ul>
+          <li>8/9 correct — debate causally helps</li>
+          <li>+3.5pp GCM, +22.4pp RULEX</li>
+        </ul>
+      </li>
+      <li>Arbiter (M16):
+        <ul>
+          <li>15/15 correct — arbiter is biased (helps SUSTAIN, hurts RULEX)</li>
+        </ul>
+      </li>
+      <li>Composition (M17):
+        <ul>
+          <li>6/6 correct — non-additive; open design rescues RULEX from arbiter catastrophe</li>
+        </ul>
+      </li>
+      <li>R-IDeA: negative result — diversification antagonistic to debate</li>
+      <li><b>Overall: 47/48 correct</b></li>
+    </ul>
+    <span class="delta"><b>Δ:</b> Ran extensive empirical validation (47+ runs). Key finding: debate is conditionally valuable — specifically under misspecification — rather than universally beneficial.</span>
+  </td>
+  <td>
+    <ul>
+      <li>Debate replication (D51):
+        <ul>
+          <li>0/3 no-debate → <b>2/3 debate</b> (10 cycles)</li>
+          <li>Matches categorization M15 exactly</li>
+        </ul>
+      </li>
+      <li>Arbiter replication (D53):
+        <ul>
+          <li>Debate 2/3 → <b>arbiter 1/3</b></li>
+          <li>EU flipped from correct to wrong</li>
+          <li>Complexity bias confirmed cross-domain</li>
+        </ul>
+      </li>
+      <li>Cross-domain parallels:
+        <ul>
+          <li>PH ↔ RULEX (rule-based, strongest recovery)</li>
+          <li>EU ↔ GCM (recovered with more data)</li>
+          <li>CPT ↔ SUSTAIN (abstract params resist)</li>
+        </ul>
+      </li>
+      <li><b>Three-layer implicit prior framework confirmed:</b>
+        <ul>
+          <li>Computation: neutral</li>
+          <li>Debate: interpretability bias</li>
+          <li>Arbiter: complexity bias</li>
+        </ul>
+      </li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> Both findings replicate. The arbiter bias is toward complexity (not just similarity) — a more general mechanism revealed by the cross-domain comparison. 68 lessons documented.</span>
+  </td>
+</tr>
+
+<tr>
+  <td>Known Failure Modes</td>
+  <td>
+    <ul>
+      <li>Anticipated risks:
+        <ul>
+          <li>LLM confabulation</li>
+          <li>Unfair moderation</li>
+        </ul>
+      </li>
+      <li>Empirical characterization pending</li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li>Arbiter-related:
+        <ul>
+          <li>Arbiter + RULEX: meta-agents distort divergence mapping → wrong winner (3.2%, M15)</li>
+        </ul>
+      </li>
+      <li>Parameter-related:
+        <ul>
+          <li>SUSTAIN misspec: invisible to debate — not enough prediction error (0% recovery)</li>
+          <li>Abstract params: LLMs can't diagnose without linguistic interpretation (SUSTAIN eta, r)</li>
+        </ul>
+      </li>
+      <li>Selection-related:
+        <ul>
+          <li>Greedy EIG: picks same structure repeatedly → Thompson sampling fixes</li>
+        </ul>
+      </li>
+      <li>LLM type instability: params arrive as wrong types (scalar vs list, dict vs string)</li>
+    </ul>
+    <span class="delta"><b>Δ:</b> Empirically discovered through 47+ runs. Each failure mode led to a specific architectural fix or documented limitation.</span>
+  </td>
+  <td>
+    <ul>
+      <li>Arbiter-related:
+        <ul>
+          <li>Crux-directed selection steered toward CPT-favoring gambles (loss_aversion 4×)</li>
+          <li>EU flipped correct→wrong under arbiter</li>
+        </ul>
+      </li>
+      <li>Parameter-related:
+        <ul>
+          <li>CPT alpha/beta outside LLM diagnostic capability (28.4% recovery)</li>
+          <li>lambda_ (loss aversion) recovered — linguistically interpretable</li>
+        </ul>
+      </li>
+      <li>RMSE gate:
+        <ul>
+          <li>Local-only gate let agents game revisions (D50)</li>
+          <li>Fixed with accumulated observations gate</li>
+        </ul>
+      </li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> Same failure pattern — arbiter hurts simpler models, abstract params resist. Accumulated RMSE gate was a decision-domain-specific fix.</span>
+  </td>
+</tr>
+
+<tr>
+  <td>Output / Final Product</td>
+  <td>
+    <ul>
+      <li>Structured report:
+        <ul>
+          <li>Areas of agreement</li>
+          <li>Remaining disagreements</li>
+          <li>Confidence assessments</li>
+          <li>Proposed research program</li>
+        </ul>
+      </li>
+      <li>Human-readable document</li>
+    </ul>
+  </td>
+  <td>
+    <ul>
+      <li>Numerical outputs:
+        <ul>
+          <li>Posterior distribution over models</li>
+          <li>Gap metric (winner margin)</li>
+          <li>Parameter recovery %</li>
+        </ul>
+      </li>
+      <li>Debate transcript (logged but not synthesized into narrative)</li>
+    </ul>
+    <span class="delta"><b>Δ:</b> Numerical output rather than narrative report. George's output is richer for human consumption; ours is designed for automated analysis across many runs.</span>
+  </td>
+  <td>
+    <ul>
+      <li>Same numerical outputs:
+        <ul>
+          <li>Posterior over EU/CPT/PH</li>
+          <li>Gap metric</li>
+          <li>Parameter recovery %</li>
+        </ul>
+      </li>
+      <li>Debate + arbiter transcripts logged</li>
+    </ul>
+    <span class="delta"><b>Δ from cat.:</b> Identical output format.</span>
+  </td>
+</tr>
+
+</table>
+</body>
+</html>
