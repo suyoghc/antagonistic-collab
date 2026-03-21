@@ -302,23 +302,27 @@ def run_debate_round(
 
         # Always create a record with interpretation, even without revision
         if revision is None:
-            records.append({
-                "agent_name": config.name,
-                "interpretation": interpretation,
-                "accepted": False,
-                "has_revision": False,
-            })
+            records.append(
+                {
+                    "agent_name": config.name,
+                    "interpretation": interpretation,
+                    "accepted": False,
+                    "has_revision": False,
+                }
+            )
             continue
 
         # Validate params via inspect.signature
         new_params = filter_valid_params(config.model_class, revision["new_params"])
         if not new_params:
-            records.append({
-                "agent_name": config.name,
-                "interpretation": interpretation,
-                "accepted": False,
-                "has_revision": False,
-            })
+            records.append(
+                {
+                    "agent_name": config.name,
+                    "interpretation": interpretation,
+                    "accepted": False,
+                    "has_revision": False,
+                }
+            )
             continue
 
         # Validate via RMSE against accumulated observations (if available)
@@ -470,9 +474,7 @@ def run_decision_crux_negotiation(
         for c in cruxes
     )
 
-    crux_counter = max(
-        int(c.id.replace("crux_", "")) for c in cruxes
-    )
+    crux_counter = max(int(c.id.replace("crux_", "")) for c in cruxes)
 
     for config in configs:
         prompt = (
@@ -704,7 +706,8 @@ def run_decision_arbiter_round(
 
     # Build posterior summary
     post_lines = "\n".join(
-        f"  {name}: {prob:.3f}" for name, prob in sorted(posterior.items(), key=lambda x: -x[1])
+        f"  {name}: {prob:.3f}"
+        for name, prob in sorted(posterior.items(), key=lambda x: -x[1])
     )
 
     responses = []
@@ -737,14 +740,16 @@ def run_decision_arbiter_round(
         if not isinstance(confounds, list):
             confounds = [str(confounds)] if confounds else []
 
-        responses.append({
-            "agent": meta_agent.name,
-            "role": meta_agent.role,
-            "interpretation": parsed.get("interpretation", ""),
-            "hypothesis": hypothesis,
-            "confounds": confounds,
-            "meta_agent": True,
-        })
+        responses.append(
+            {
+                "agent": meta_agent.name,
+                "role": meta_agent.role,
+                "interpretation": parsed.get("interpretation", ""),
+                "hypothesis": hypothesis,
+                "confounds": confounds,
+                "meta_agent": True,
+            }
+        )
 
     return responses
 
@@ -878,27 +883,39 @@ def run_decision_debate(
                 agent_params=current_params,
                 all_observed=accumulated_observed,
             )
-            cycle_revisions = [r for r in debate_records if r.get("has_revision", False)]
+            cycle_revisions = [
+                r for r in debate_records if r.get("has_revision", False)
+            ]
             all_revisions.extend(debate_records)
 
         # 5. Arbiter round (if enabled, after cycle 0)
         cycle_cruxes = []
         cycle_meta_responses = []
-        if enable_arbiter and enable_debate and (call_fn is not None or client is not None):
+        if (
+            enable_arbiter
+            and enable_debate
+            and (call_fn is not None or client is not None)
+        ):
             posterior_dict = dict(zip(DECISION_AGENTS, posterior.probs.tolist()))
 
             # 5a. Crux protocol (cycle > 0 — need data first)
             if cycle > 0:
                 cycle_cruxes_raw = run_decision_crux_identification(
-                    configs, client=client, call_fn=call_fn,
-                    cycle=cycle, crux_counter=crux_counter,
+                    configs,
+                    client=client,
+                    call_fn=call_fn,
+                    cycle=cycle,
+                    crux_counter=crux_counter,
                 )
                 crux_counter += len(cycle_cruxes_raw)
 
                 if cycle_cruxes_raw:
                     cycle_cruxes_raw = run_decision_crux_negotiation(
-                        configs, cycle_cruxes_raw, client=client,
-                        call_fn=call_fn, cycle=cycle,
+                        configs,
+                        cycle_cruxes_raw,
+                        client=client,
+                        call_fn=call_fn,
+                        cycle=cycle,
                     )
 
                     accepted = finalize_decision_cruxes(cycle_cruxes_raw)
@@ -938,8 +955,11 @@ def run_decision_debate(
         }
         if enable_arbiter:
             cycle_entry["cruxes"] = [
-                {"id": c.id, "description": c.description,
-                 "target": c.discriminating_experiment}
+                {
+                    "id": c.id,
+                    "description": c.description,
+                    "target": c.discriminating_experiment,
+                }
                 for c in cycle_cruxes
             ]
             cycle_entry["meta_agent_responses"] = cycle_meta_responses
@@ -1018,8 +1038,12 @@ def run_decision_debate(
 
     if enable_arbiter:
         result["cruxes"] = [
-            {"id": c.id, "description": c.description,
-             "target": c.discriminating_experiment, "supporters": c.supporters}
+            {
+                "id": c.id,
+                "description": c.description,
+                "target": c.discriminating_experiment,
+                "supporters": c.supporters,
+            }
             for c in all_cruxes
         ]
         result["meta_agent_responses"] = all_meta_responses

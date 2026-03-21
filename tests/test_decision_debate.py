@@ -398,7 +398,10 @@ class TestInterpretationPreservation:
         assert len(records) == 3
         for rec in records:
             assert "interpretation" in rec
-            assert "Loss aversion" in rec["interpretation"] or "loss aversion" in rec["interpretation"].lower()
+            assert (
+                "Loss aversion" in rec["interpretation"]
+                or "loss aversion" in rec["interpretation"].lower()
+            )
 
 
 # ── Crux Protocol (Phase 1) ──
@@ -520,7 +523,11 @@ class TestDecisionCruxProtocol:
 
         configs = default_decision_agent_configs()
         cruxes = run_decision_crux_identification(
-            configs, client=None, call_fn=self._mock_crux_call_two, cycle=1, crux_counter=0
+            configs,
+            client=None,
+            call_fn=self._mock_crux_call_two,
+            cycle=1,
+            crux_counter=0,
         )
 
         ids = [c.id for c in cruxes]
@@ -560,7 +567,11 @@ class TestDecisionCruxProtocol:
         initial_count = len(cruxes)
 
         updated = run_decision_crux_negotiation(
-            configs, cruxes, client=None, call_fn=self._mock_negotiation_counter, cycle=1
+            configs,
+            cruxes,
+            client=None,
+            call_fn=self._mock_negotiation_counter,
+            cycle=1,
         )
 
         assert len(updated) > initial_count
@@ -685,9 +696,9 @@ class TestDecisionMetaAgents:
 
         for ma in create_decision_meta_agents():
             # Should reference decision models
-            assert any(m in ma.system_prompt for m in ["CPT", "EU", "PH", "Prospect"]), (
-                f"{ma.name} prompt doesn't reference decision models"
-            )
+            assert any(
+                m in ma.system_prompt for m in ["CPT", "EU", "PH", "Prospect"]
+            ), f"{ma.name} prompt doesn't reference decision models"
             # Should NOT reference categorization models
             assert "GCM" not in ma.system_prompt
             assert "SUSTAIN" not in ma.system_prompt
@@ -700,7 +711,9 @@ class TestDecisionMetaAgents:
         return json.dumps(
             {
                 "interpretation": "CPT and EU both struggle with certainty effects, but for different reasons.",
-                "confounds_flagged": ["Sample size may be too small to distinguish models"],
+                "confounds_flagged": [
+                    "Sample size may be too small to distinguish models"
+                ],
                 "hypothesis": "Test with mixed gambles to expose loss aversion differences",
                 "claims": [],
             }
@@ -829,7 +842,11 @@ class TestDecisionArbiterIntegration:
         """Mock LLM that handles all prompt types."""
         import json
 
-        if "crux identification" in user.lower() or "crux" in user.lower() and "propose" in user.lower():
+        if (
+            "crux identification" in user.lower()
+            or "crux" in user.lower()
+            and "propose" in user.lower()
+        ):
             return json.dumps(
                 {
                     "cruxes": [
@@ -884,9 +901,20 @@ class TestDecisionArbiterIntegration:
             learning_rate=0.01,
             selection_strategy="thompson",
             agent_params={
-                "CPT_Agent": {"alpha": 0.7, "beta": 0.7, "lambda_": 1.5, "gamma_pos": 0.5, "gamma_neg": 0.5, "temperature": 1.0},
+                "CPT_Agent": {
+                    "alpha": 0.7,
+                    "beta": 0.7,
+                    "lambda_": 1.5,
+                    "gamma_pos": 0.5,
+                    "gamma_neg": 0.5,
+                    "temperature": 1.0,
+                },
                 "EU_Agent": {"r": 0.3, "temperature": 1.0},
-                "PH_Agent": {"outcome_threshold_frac": 0.15, "prob_threshold": 0.15, "phi": 0.5},
+                "PH_Agent": {
+                    "outcome_threshold_frac": 0.15,
+                    "prob_threshold": 0.15,
+                    "phi": 0.5,
+                },
             },
             call_fn=self._mock_call,
             enable_debate=True,
@@ -912,9 +940,20 @@ class TestDecisionArbiterIntegration:
             learning_rate=0.01,
             selection_strategy="thompson",
             agent_params={
-                "CPT_Agent": {"alpha": 0.7, "beta": 0.7, "lambda_": 1.5, "gamma_pos": 0.5, "gamma_neg": 0.5, "temperature": 1.0},
+                "CPT_Agent": {
+                    "alpha": 0.7,
+                    "beta": 0.7,
+                    "lambda_": 1.5,
+                    "gamma_pos": 0.5,
+                    "gamma_neg": 0.5,
+                    "temperature": 1.0,
+                },
                 "EU_Agent": {"r": 0.3, "temperature": 1.0},
-                "PH_Agent": {"outcome_threshold_frac": 0.15, "prob_threshold": 0.15, "phi": 0.5},
+                "PH_Agent": {
+                    "outcome_threshold_frac": 0.15,
+                    "prob_threshold": 0.15,
+                    "phi": 0.5,
+                },
             },
             call_fn=self._mock_call,
             enable_debate=True,
@@ -940,9 +979,20 @@ class TestDecisionArbiterIntegration:
             learning_rate=0.01,
             selection_strategy="thompson",
             agent_params={
-                "CPT_Agent": {"alpha": 0.7, "beta": 0.7, "lambda_": 1.5, "gamma_pos": 0.5, "gamma_neg": 0.5, "temperature": 1.0},
+                "CPT_Agent": {
+                    "alpha": 0.7,
+                    "beta": 0.7,
+                    "lambda_": 1.5,
+                    "gamma_pos": 0.5,
+                    "gamma_neg": 0.5,
+                    "temperature": 1.0,
+                },
                 "EU_Agent": {"r": 0.3, "temperature": 1.0},
-                "PH_Agent": {"outcome_threshold_frac": 0.15, "prob_threshold": 0.15, "phi": 0.5},
+                "PH_Agent": {
+                    "outcome_threshold_frac": 0.15,
+                    "prob_threshold": 0.15,
+                    "phi": 0.5,
+                },
             },
             call_fn=self._mock_call,
             enable_debate=True,
