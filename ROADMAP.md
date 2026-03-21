@@ -13,13 +13,23 @@ No-debate baseline results:
 - Misspecified params: 0/3 (all wrong — stronger penalty than categorization)
 
 Standalone decision debate runner built (D49 — Option C): `decision_debate_runner.py`
-with 14 tests. Components: LLM debate round, param validation via
-model.default_params, RMSE gate, full cycle loop. Arbiter layer not yet added.
+with 16 tests. Components: LLM debate round, param validation via
+model.default_params, accumulated RMSE gate (D50), full cycle loop.
 
-Next: live LLM experiments under misspecification to test debate recovery.
+First live results (D51, GPT-4o, 5 cycles):
+- No-debate: 0/3 (all wrong under misspecification)
+- Debate: 1/3 (PH recovered via 81.8% param recovery)
+- CPT: 51% recovery (lambda_ exact, alpha/beta stuck)
+- EU: 0% recovery (too similar to CPT under misspec)
 
-If the same bias pattern replicates → NeurIPS paper on implicit priors in hybrid
-AI systems as a domain-general principle.
+Partial replication of categorization M15 (0/3→2/3). The core mechanism
+(debate recovers rule-based models) replicates; magnitude is weaker.
+Key finding: recovery depends on parameter interpretability, not domain.
+
+Next steps:
+- Try 10-cycle runs, enriched prompts, arbiter layer
+- Write up partial replication for NeurIPS framing
+- Even partial replication supports the representational-format principle
 
 ### R-IDeA — tested, negative result
 

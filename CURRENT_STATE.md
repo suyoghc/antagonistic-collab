@@ -278,11 +278,14 @@ fully-specified models. 18/18 correct across ablation conditions.
 
 ## What's next
 
-1. **Decision-making domain (debate runner built, needs live testing)** — Full pipeline
-   complete: models (17/17), gamble registry (76), EIG adapter (23 tests), agent configs
-   (18 tests), validation script, standalone debate runner (14 tests). No-debate baseline:
-   3/3 correct, 0/3 misspec. Next: run live LLM experiments under misspecification to
-   test whether debate recovers 0/3 → 2-3/3. NeurIPS target.
+1. **Decision-making domain — first live results (partial replication).**
+   Full pipeline complete + live LLM experiment run. Decision M15 results
+   (GPT-4o, 5 cycles): 0/3 no-debate → 1/3 debate (PH recovered via 81.8%
+   param recovery). Weaker than categorization M15 (0/3→2/3). CPT partially
+   recovered (51%, lambda_ exact but alpha/beta stuck). EU 0% recovery.
+   Key finding: parameter recovery depends on intuitive interpretability —
+   rule params recovered, abstract mathematical params didn't. This is a
+   representational-format principle, not domain-specific. See D50-D51.
 2. Write up two-domain results as NeurIPS submission
 3. GeCCo forks (gecco-core, gecco-supplement) — model discovery + adjudication
 4. Real data integration (human participants via Prolific/AutoRA)

@@ -1272,4 +1272,89 @@ Domain-agnostic pieces (reusable without changes):
 
 **Alternatives considered:** Options A and B above.
 
-**Status:** In progress. Building standalone decision debate runner.
+**Status:** Complete. Runner built, tested (16 tests), and validated live.
+
+## D50: Accumulated RMSE gate for decision debate — 2026-03-21
+
+**Problem:** First live experiment (decision M15) showed 0/3 no-debate → 1/3
+debate, but the debate mechanism was unhealthy. Competitor agents were gaming
+the RMSE gate by proposing revisions that improved fit on the current 2-3
+gambles while hurting global fit. EU-GT debate run was perversely worse than
+no-debate: PH_Agent won at 77% (vs CPT at 61% without debate) because PH
+accepted 8/8 revisions that improved local RMSE but didn't represent genuine
+parameter recovery. Additionally, neutral revisions (identical RMSE) were
+being accepted, letting agents change params without proving improvement.
+
+**Root cause:** Two compounding issues:
+1. RMSE validation used only current cycle's 2-3 gambles, not accumulated data
+2. `tolerance=0.01` with `<=` accepted equal or nearly-equal RMSE
+
+**Decision:** Two fixes:
+1. Thread accumulated observations through `run_decision_debate()` →
+   `run_debate_round()`. RMSE gate now validates against ALL gambles observed
+   across all cycles, preventing local overfitting.
+2. Changed to strict improvement: `revised_rmse < baseline_rmse` (tolerance=0.0,
+   `<` instead of `<=`).
+
+**Results after fix:**
+- Acceptance rate dropped from 79% to 49% (much more selective)
+- EU debate no longer perverse (PH 77% → CPT 50%, matching no-debate)
+- CPT lambda_ recovery improved: 1.2→1.9 (before) → 1.2→2.25 exact GT (after)
+- PH win stronger: 58% → 75.3% posterior
+- Still 1/3 debate correct (PH via 81.8% param recovery)
+
+**Key lesson:** "Calibrate against real pipeline quantities, not toy tests"
+(CLAUDE.md) applies to RMSE gates too. Validating against 2-3 gambles is the
+decision-domain equivalent of unit-testing individual phases — only end-to-end
+validation catches the real failure mode.
+
+**Alternatives considered:**
+- Only revise losing agents: rejected — we don't know who's GT
+- Minimum RMSE improvement threshold (e.g., 5%): simpler but less principled
+  than accumulated validation. Could revisit if accumulated gate proves too strict.
+
+## D51: Decision M15 first results — debate partially replicates — 2026-03-21
+
+**Problem:** Does the categorization M15 finding (debate recovers misspecification
+via parameter diagnosis) replicate in the decision-making domain?
+
+**Results (GPT-4o, 5 cycles, with D50 accumulated RMSE gate):**
+
+| GT | No-debate | Debate | Recovery | Correct? |
+|---|---|---|---|---|
+| CPT | PH wins (wrong) | PH wins (wrong) | 51.0% | No |
+| EU | CPT wins (wrong) | CPT wins (wrong) | 0.0% | No |
+| PH | CPT wins (wrong) | **PH wins (correct)** | **81.8%** | Yes |
+
+**Overall: 0/3 → 1/3.** Partial replication. Compare to categorization M15:
+0/3 → 2/3 (RULEX +22pp, GCM +3.5pp).
+
+**Diagnosis per model:**
+- **PH (success):** Rule-based model with 3 discrete params. LLM diagnosed
+  errors and recovered `outcome_threshold_frac` (0.3→0.1, exact GT) and
+  `prob_threshold` (0.25→0.1, exact GT). `phi` partially recovered (1.5→1.0,
+  GT 0.5). Parallels RULEX in categorization — rule-based models are easiest
+  for LLMs to diagnose because the parameter-to-behavior mapping is intuitive.
+- **CPT (partial):** 5-param model. `lambda_` recovered exactly (1.2→2.25),
+  `gamma_pos/neg` moved toward GT, but `alpha/beta` (value function curvature)
+  never diagnosed. LLMs can articulate "more loss aversion needed" but struggle
+  with "the value function should be less concave" — the parameter-to-prediction
+  mapping is too abstract.
+- **EU (failure):** 2-param model but no revisions accepted on accumulated data.
+  EU's misspecification (r=0.1 vs 0.5) makes its predictions too similar to
+  CPT, so it never generates enough prediction error for the LLM to diagnose.
+
+**Scientific conclusion:** Debate's parameter recovery mechanism depends on
+the LLM's ability to map prediction errors to parameter changes. This works
+for parameters with intuitive behavioral interpretations (loss aversion,
+threshold levels) but fails for abstract mathematical parameters (value
+function curvature, risk aversion). This is a domain-general principle about
+the representational format of parameters, not domain content.
+
+**Open questions:**
+- Would more cycles (10-15) give CPT enough evidence to diagnose alpha/beta?
+- Would richer prompts explaining the alpha→prediction mapping help?
+- Would an arbiter layer (crux identification) change the experiment selection
+  to expose CPT's alpha/beta misspecification?
+
+**Status:** First results documented. Additional experiments may follow.

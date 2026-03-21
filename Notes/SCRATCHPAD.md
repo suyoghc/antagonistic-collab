@@ -52,20 +52,36 @@ Components built:
    data → posterior update → debate round → param revision → repeat
 4. **Arbiter round** — NOT YET IMPLEMENTED (can add later as optional layer)
 
-**What's next: Live LLM experiments under misspecification**
+**First live results — PARTIAL REPLICATION (D50, D51)**
+
+Decision M15 results (GPT-4o, 5 cycles, accumulated RMSE gate):
+
+| GT | No-debate | Debate | Recovery |
+|---|---|---|---|
+| CPT | PH (wrong) | PH (wrong) | 51.0% |
+| EU | CPT (wrong) | CPT (wrong) | 0.0% |
+| PH | CPT (wrong) | **PH (correct)** | **81.8%** |
+
+**0/3 no-debate → 1/3 debate.** Compare categorization: 0/3 → 2/3.
+
+Key findings:
+- PH (rule-based) recovered, paralleling RULEX — rule params are LLM-diagnosable
+- CPT lambda_ recovered exactly (1.2→2.25) but alpha/beta stuck (value function
+  curvature too abstract for LLM diagnosis)
+- EU 0% recovery — too similar to CPT under misspecification, insufficient
+  prediction error to trigger useful revision
+- Accumulated RMSE gate (D50) was critical — local-only gate let competitors
+  game the system
+
+**What's next:**
+- Try 10-cycle runs to give CPT more recovery time
+- Consider enriching CPT prompt with alpha→prediction mapping explanation
+- Arbiter layer for experiment selection steering
+- Write up partial replication for NeurIPS framing
 
 Calibration notes:
-- learning_rate=0.01 (calibrated: converges over 3-5 cycles, leaves room
-  for debate; lr=0.1 collapses after cycle 0)
-- n_subjects=30 per gamble
-- 7 gamble groups as candidate experiments
-
-**Predictions to test:**
-- Debate should recover misspec (0/3 → 2-3/3) via parameter diagnosis
-- Arbiter should bias toward CPT/EU (smooth gradients) over PH (discrete rules)
-- LLM proposals should favor PH (easy to articulate lexicographic rules)
-- If pattern replicates across both domains → principle about representational
-  format, not domain content → NeurIPS paper
+- learning_rate=0.01, n_subjects=30, 7 gamble groups
+- RMSE gate: strict improvement, accumulated observations
 
 **Key files:**
 - `antagonistic_collab/models/expected_utility.py` — EU model
