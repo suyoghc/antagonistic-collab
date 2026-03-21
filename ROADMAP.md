@@ -25,15 +25,25 @@ Live results (D51, GPT-4o, 10 cycles): **REPLICATION CONFIRMED**
 Matches categorization M15 exactly (0/3→2/3). The representational-format principle
 holds: parameter recovery depends on interpretability, not domain.
 
-**Arbiter layer implemented** — crux protocol (identification, negotiation,
-finalization), crux-directed EIG selection, decision-domain meta-agents
-(Integrator + Critic), wired into `run_decision_debate(enable_arbiter=True)`.
-Validation script extended with `--arbiter` / `--arbiter-only` flags.
-34 debate tests + 26 EIG tests pass.
+**Arbiter layer implemented and validated live.**
+
+Arbiter results (GPT-4o, 10 cycles, misspecified params):
+
+| GT | No-debate | Debate | Arbiter |
+|---|---|---|---|
+| CPT | Wrong | Wrong | **Wrong** (12.0% recovery) |
+| EU | Wrong | **Correct** (75%) | **Wrong** (37.5% recovery) |
+| PH | Wrong | **Correct** (100%) | **Correct** (78.2% recovery) |
+| Score | 0/3 | 2/3 | **1/3** |
+
+The arbiter bias replicates cross-domain: crux-directed selection steers toward
+complex-model-favoring experiments (loss_aversion × 4 for CPT). EU flipped from
+correct (debate) to wrong (arbiter). PH weakened but survived. The arbiter
+biases toward *complexity* in the decision domain, analogous to the *similarity*
+bias in categorization.
 
 Next steps:
-- **Run arbiter live validation** (`python scripts/validation/validate_decision_m15_live.py --arbiter`)
-- Write up two-domain replication for NeurIPS
+- Write up two-domain arbiter results for NeurIPS
 - CPT could be a target for prompt enrichment study (separate from main result)
 
 ### R-IDeA — tested, negative result

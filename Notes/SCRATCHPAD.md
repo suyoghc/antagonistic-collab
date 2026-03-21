@@ -83,7 +83,9 @@ Key findings:
 - CPT alpha/beta genuinely outside LLM diagnostic capability (no prompt help given,
   matching categorization where no special prompt help was given either)
 
-**Arbiter layer implemented (5 phases):**
+**Arbiter layer implemented (5 phases) and validated live:**
+
+Implementation:
 1. Phase 0: Interpretation text preserved in debate records (was silently discarded)
 2. Phase 1: Crux protocol — identification, negotiation, finalization (reuses Crux dataclass)
 3. Phase 2: Crux-directed EIG selection — crux_indices + crux_weight params
@@ -93,9 +95,35 @@ Key findings:
 
 Tests: 34 debate tests, 26 EIG tests, 561 total suite (all pass).
 
+**Live arbiter results (GPT-4o, 10 cycles):**
+
+| GT | No-debate | Debate (10cyc) | Arbiter (10cyc) |
+|---|---|---|---|
+| CPT | Wrong (→PH) | Wrong (→PH) | **Wrong** (→PH, 12.0% recovery) |
+| EU | Wrong (→CPT) | **Correct** (75%) | **Wrong** (→CPT, 37.5% recovery) |
+| PH | Wrong (→CPT) | **Correct** (100%) | **Correct** (78.2% recovery) |
+| Score | 0/3 | 2/3 | **1/3** |
+
+**Key finding: Arbiter bias replicates cross-domain.**
+The arbiter hurts the decision domain even more than categorization (1/3 vs 8/9).
+EU flipped from correct (debate) to wrong (arbiter) — crux-directed selection
+steered toward CPT-favoring gambles (loss_aversion selected 4 times). PH
+weakened but survived. CPT still wrong under all conditions.
+
+Cross-domain parallel holds:
+- CPT ↔ SUSTAIN: abstract params resist in all conditions
+- EU ↔ GCM: arbiter hurts (categorization: arbiter helped GCM +5pp; decision: arbiter breaks EU)
+- PH ↔ RULEX: arbiter weakens recovery (cat: -55pp wrong winner; decision: -22pp but still correct)
+
+**Nuance vs categorization:** In categorization, the arbiter helped similarity
+models (GCM, SUSTAIN) and hurt rule models (RULEX). In the decision domain,
+the arbiter helps the complex descriptive model (CPT posterior rises) at the
+expense of all simpler models. The bias is toward *complexity*, not just
+*similarity* — crux-directed experiments probe where complex models make
+distinctive predictions, disadvantaging simpler models.
+
 **What's next:**
-- **Run arbiter live validation** to test meta-agent bias pattern replication
-- Write up two-domain replication for NeurIPS
+- Write up two-domain arbiter results for NeurIPS
 - CPT could be a target for prompt enrichment study (separate from main result)
 
 Calibration notes:

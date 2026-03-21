@@ -1079,9 +1079,14 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 - Kept crux state as plain list (not EpistemicState) per D49 standalone principle
 - Arbiter condition label differentiates from debate/no_debate in results
 
+**Live arbiter results (D53):**
+- PH: **Correct** (78.2% recovery) — weaker than debate (100%)
+- EU: **Wrong** (37.5% recovery) — flipped from correct (debate) to wrong (arbiter)
+- CPT: **Wrong** (12.0% recovery) — still wrong in all conditions
+- Arbiter: 1/3 vs Debate: 2/3 — arbiter bias replicates cross-domain
+
 **What's next:**
-- Run live validation: `python scripts/validation/validate_decision_m15_live.py --arbiter`
-- Test whether meta-agent bias pattern (helps similarity ↔ EU, hurts rules ↔ PH) replicates
+- Write up two-domain arbiter results for NeurIPS paper
 
 ---
 

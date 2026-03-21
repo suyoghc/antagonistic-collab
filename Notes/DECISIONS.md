@@ -1393,3 +1393,47 @@ but lacks the arbiter layer. Does the bias pattern replicate?
 all 561 tests pass. Ready for live validation.
 
 **Status:** Implemented. Live validation not yet run.
+
+## D53: Decision arbiter live results — bias replicates cross-domain — 2026-03-21
+
+**Question:** Does the meta-agent bias pattern (helps similarity, hurts rules)
+replicate in the decision domain?
+
+**Results (GPT-4o, 10 cycles, misspecified params):**
+
+| GT | No-debate | Debate (10cyc) | Arbiter (10cyc) |
+|---|---|---|---|
+| CPT | Wrong (→PH) | Wrong (→PH) | Wrong (→PH, 12.0% recovery) |
+| EU | Wrong (→CPT) | Correct (75% recovery) | Wrong (→CPT, 37.5% recovery) |
+| PH | Wrong (→CPT) | Correct (100% recovery) | Correct (78.2% recovery) |
+| Score | 0/3 | 2/3 | **1/3** |
+
+**Finding: The arbiter bias replicates and is even stronger in the decision domain.**
+
+The arbiter went from 2/3 (debate) to 1/3 (arbiter). EU flipped from correct
+to wrong — crux-directed selection steered experiments toward CPT-favoring
+gambles (loss_aversion selected 4 of 10 cycles for CPT ground truth).
+PH survived but weakened (100% → 78.2% recovery). CPT remained wrong in
+all conditions (alpha/beta outside LLM diagnostic capability).
+
+**Cross-domain parallel:**
+- CPT ↔ SUSTAIN: abstract params resist diagnosis in all conditions
+- EU ↔ GCM: debate helps, arbiter hurts (cat: +5pp; decision: flipped to wrong)
+- PH ↔ RULEX: debate helps strongly, arbiter weakens (cat: -55pp wrong; decision: -22pp correct)
+
+**Refinement over categorization:** In categorization, the arbiter bias is toward
+*similarity-based* structures (continuous, distance-based). In the decision
+domain, the bias is toward *complexity* — crux-directed experiments probe where
+complex models (CPT, 5 params) make distinctive predictions, systematically
+disadvantaging simpler models (EU, 1 param; PH, 0-1 params). The underlying
+mechanism is the same: cruxes ask "where do models disagree most?", and models
+with more parameters naturally disagree more, getting more diagnostic attention.
+
+**Implication for NeurIPS paper:** The arbiter bias is domain-general. It
+emerges from the crux protocol's selection mechanism, not from domain-specific
+properties. This supports the "implicit priors in hybrid AI" framing:
+computation is neutral, debate adds domain-appropriate bias, but the arbiter
+adds a systematic bias toward model complexity that can overwhelm debate's
+benefits.
+
+**Status:** Live results saved to `runs/decision_m15/decision_m15_results.json`.
