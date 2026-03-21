@@ -4,7 +4,7 @@ Working notes, open questions, and in-progress plans. Clean out when work is com
 
 ---
 
-## Current status (2026-03-20)
+## Current status (2026-03-21)
 
 M14–M17 factorial complete (categorization). 47/48 correct.
 R-IDeA tested — negative result in all regimes.
@@ -52,7 +52,7 @@ Components built:
    data → posterior update → debate round → param revision → repeat
 4. **Arbiter round** — NOT YET IMPLEMENTED (can add later as optional layer)
 
-**First live results — PARTIAL REPLICATION (D50, D51)**
+**Live results — REPLICATION CONFIRMED (D50, D51)**
 
 Decision M15 results (GPT-4o, 5 cycles, accumulated RMSE gate):
 

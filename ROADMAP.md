@@ -242,5 +242,5 @@ breaks systematic bias. Theoretically grounded, trivial to implement.
 - Ambiguous data (real human data with noise, individual differences) — untested
 - Explanation for humans (goal is understanding, not just identification) — untested
 
-See [Notes/archive/LESSONS_LEARNED.md](Notes/archive/LESSONS_LEARNED.md) for 40 theses
+See [Notes/archive/LESSONS_LEARNED.md](Notes/archive/LESSONS_LEARNED.md) for 64 lessons
 on LLM-mediated scientific debate.
