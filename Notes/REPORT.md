@@ -1,7 +1,7 @@
 # Antagonistic Collaboration via LLM Debate: Can AI Agents Resolve Scientific Disputes?
 
-**Phase: M13 — Debate Ablation Study (updated)**
-**Date: 2026-03-16** (originally 2026-03-14; updated through M12 implementation)
+**Phase: M17 + Decision Domain Replication (updated)**
+**Date: 2026-03-21** (originally 2026-03-14; updated through decision domain replication)
 
 ---
 

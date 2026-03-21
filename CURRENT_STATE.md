@@ -291,4 +291,4 @@ fully-specified models. 18/18 correct across ablation conditions.
 
 ## Full history
 
-See [Notes/archive/INDEX.md](Notes/archive/INDEX.md) for development docs across 14 milestones.
+See [Notes/archive/INDEX.md](Notes/archive/INDEX.md) for historical development docs.
