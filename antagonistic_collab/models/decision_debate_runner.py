@@ -361,6 +361,238 @@ def run_debate_round(
     return records
 
 
+# ── Crux Protocol ──
+
+
+def run_decision_crux_identification(
+    configs: list,
+    client,
+    call_fn: Callable | None = None,
+    cycle: int = 1,
+    crux_counter: int = 0,
+) -> list:
+    """Each decision agent proposes 1-2 cruxes targeting gamble groups.
+
+    Args:
+        configs: list of DecisionAgentConfig.
+        client: LLM client (used if call_fn is None).
+        call_fn: mock LLM function. Signature: (system, user) -> str.
+        cycle: current cycle number.
+        crux_counter: starting counter for crux IDs.
+
+    Returns:
+        List of Crux objects.
+    """
+    from antagonistic_collab.epistemic_state import Crux
+
+    group_names = list(GAMBLE_GROUPS.keys())
+    all_cruxes = []
+
+    for config in configs:
+        prompt = (
+            "PHASE: Crux Identification\n\n"
+            "A 'crux' is a decisive question: a gamble group whose outcome "
+            "would genuinely change your mind about which theory is correct.\n\n"
+            "Propose 1-2 cruxes. For each, specify:\n"
+            "- What gamble group would be decisive\n"
+            "- What outcome would change your mind\n"
+            "- Why this is a genuine crux\n\n"
+            "AVAILABLE GAMBLE GROUPS:\n"
+            f"  {', '.join(group_names)}\n\n"
+            "Use EXACTLY one of the group names above.\n\n"
+            "Output a JSON block:\n"
+            '{"cruxes": [{"description": "...", '
+            '"discriminating_experiment": "gamble_group_name", '
+            '"resolution_criterion": "what outcome would be decisive"}]}\n'
+        )
+
+        if call_fn is not None:
+            raw = call_fn(config.system_prompt, prompt)
+        else:
+            from antagonistic_collab.runner import call_agent
+
+            raw = call_agent(client, config.system_prompt, prompt)
+
+        parsed = extract_json_from_text(raw) if isinstance(raw, str) else raw
+        if parsed is None:
+            continue
+
+        cruxes_raw = parsed.get("cruxes", [])
+        if not isinstance(cruxes_raw, list):
+            cruxes_raw = []
+
+        for c in cruxes_raw:
+            if not isinstance(c, dict) or not c.get("description"):
+                continue
+            crux_counter += 1
+            crux_id = f"crux_{crux_counter:03d}"
+            crux = Crux(
+                id=crux_id,
+                proposer=config.name,
+                description=c["description"],
+                discriminating_experiment=c.get("discriminating_experiment"),
+                resolution_criterion=c.get("resolution_criterion"),
+                cycle_proposed=cycle,
+                supporters=[config.name],
+            )
+            all_cruxes.append(crux)
+
+    return all_cruxes
+
+
+def run_decision_crux_negotiation(
+    configs: list,
+    cruxes: list,
+    client,
+    call_fn: Callable | None = None,
+    cycle: int = 1,
+) -> list:
+    """Agents respond to cruxes: accept, reject, or counter-propose.
+
+    Args:
+        configs: list of DecisionAgentConfig.
+        cruxes: list of Crux objects from identification.
+        client: LLM client (used if call_fn is None).
+        call_fn: mock LLM function.
+        cycle: current cycle number.
+
+    Returns:
+        Updated list of Crux objects (may include counter-proposals).
+    """
+    from antagonistic_collab.epistemic_state import Crux
+
+    if not cruxes:
+        return cruxes
+
+    crux_text = "\n".join(
+        f"  {c.id}: {c.description} (targets: {c.discriminating_experiment}, "
+        f"proposed by: {c.proposer})"
+        for c in cruxes
+    )
+
+    crux_counter = max(
+        int(c.id.replace("crux_", "")) for c in cruxes
+    )
+
+    for config in configs:
+        prompt = (
+            "PHASE: Crux Negotiation\n\n"
+            "Review the proposed cruxes below. For each, decide:\n"
+            "- 'accept': this is a genuine crux that would change your mind too\n"
+            "- 'reject': this is not decisive (explain why)\n"
+            "- 'counter': propose a better crux instead\n\n"
+            f"PROPOSED CRUXES:\n{crux_text}\n\n"
+            "Output a JSON block:\n"
+            '{"responses": [{"crux_id": "...", "action": "accept|reject|counter", '
+            '"reason": "...", '
+            '"counter_crux": {"description": "...", '
+            '"discriminating_experiment": "gamble_group_name"}}]}\n'
+        )
+
+        if call_fn is not None:
+            raw = call_fn(config.system_prompt, prompt)
+        else:
+            from antagonistic_collab.runner import call_agent
+
+            raw = call_agent(client, config.system_prompt, prompt)
+
+        parsed = extract_json_from_text(raw) if isinstance(raw, str) else raw
+        if parsed is None:
+            continue
+
+        responses_raw = parsed.get("responses", [])
+        if not isinstance(responses_raw, list):
+            responses_raw = []
+
+        for r in responses_raw:
+            if not isinstance(r, dict):
+                continue
+            crux_id = r.get("crux_id", "")
+            action = r.get("action", "")
+
+            matching = [c for c in cruxes if c.id == crux_id]
+            if not matching:
+                continue
+
+            crux = matching[0]
+
+            if action == "accept":
+                if config.name not in crux.supporters:
+                    crux.supporters.append(config.name)
+            elif action == "counter":
+                counter = r.get("counter_crux", {})
+                if isinstance(counter, dict) and counter.get("description"):
+                    crux_counter += 1
+                    new_id = f"crux_{crux_counter:03d}"
+                    new_crux = Crux(
+                        id=new_id,
+                        proposer=config.name,
+                        description=counter["description"],
+                        discriminating_experiment=counter.get(
+                            "discriminating_experiment"
+                        ),
+                        resolution_criterion=counter.get("resolution_criterion"),
+                        cycle_proposed=cycle,
+                        supporters=[config.name],
+                    )
+                    cruxes.append(new_crux)
+
+    return cruxes
+
+
+def finalize_decision_cruxes(
+    cruxes: list,
+    min_supporters: int = 2,
+) -> list:
+    """Accept cruxes with enough support, reject others.
+
+    Only operates on 'proposed' cruxes (not already accepted/resolved/rejected).
+
+    Args:
+        cruxes: list of Crux objects.
+        min_supporters: minimum supporters to accept.
+
+    Returns:
+        List of newly accepted Crux objects.
+    """
+    accepted = []
+    for crux in cruxes:
+        if crux.status != "proposed":
+            continue
+        if len(crux.supporters) >= min_supporters:
+            crux.status = "accepted"
+            accepted.append(crux)
+        else:
+            crux.status = "rejected"
+    return accepted
+
+
+def decision_cruxes_to_boost_indices(
+    cruxes: list,
+    group_names: list[str],
+) -> list[int]:
+    """Map accepted cruxes to gamble group indices for EIG boosting.
+
+    Args:
+        cruxes: list of Crux objects (should be accepted).
+        group_names: ordered list of gamble group names.
+
+    Returns:
+        List of indices into the candidates/group_names list.
+    """
+    group_set = set(group_names)
+    indices = []
+    for crux in cruxes:
+        if crux.status != "accepted":
+            continue
+        target = crux.discriminating_experiment
+        if target and target in group_set:
+            idx = group_names.index(target)
+            if idx not in indices:
+                indices.append(idx)
+    return indices
+
+
 # ── Full Debate Loop ──
 
 

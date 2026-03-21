@@ -399,3 +399,257 @@ class TestInterpretationPreservation:
         for rec in records:
             assert "interpretation" in rec
             assert "Loss aversion" in rec["interpretation"] or "loss aversion" in rec["interpretation"].lower()
+
+
+# ── Crux Protocol (Phase 1) ──
+
+
+class TestDecisionCruxProtocol:
+    """Test crux identification, negotiation, and finalization for decision domain."""
+
+    def _mock_crux_call(self, system, user):
+        """Mock LLM that proposes cruxes targeting gamble groups."""
+        import json
+
+        return json.dumps(
+            {
+                "cruxes": [
+                    {
+                        "description": "Certainty effect gambles should distinguish CPT from EU",
+                        "discriminating_experiment": "certainty_effect",
+                        "resolution_criterion": "RMSE < 0.10 for winner",
+                    }
+                ]
+            }
+        )
+
+    def _mock_crux_call_two(self, system, user):
+        """Mock that proposes two cruxes."""
+        import json
+
+        return json.dumps(
+            {
+                "cruxes": [
+                    {
+                        "description": "Loss aversion distinguishes CPT",
+                        "discriminating_experiment": "loss_aversion",
+                        "resolution_criterion": "loss aversion index > 2",
+                    },
+                    {
+                        "description": "PH diagnostic gambles test lexicographic rules",
+                        "discriminating_experiment": "ph_diagnostic",
+                        "resolution_criterion": "PH predicts correctly",
+                    },
+                ]
+            }
+        )
+
+    def _mock_negotiation_accept(self, system, user):
+        """Mock LLM that accepts all cruxes."""
+        import json
+
+        return json.dumps(
+            {
+                "responses": [
+                    {"crux_id": "crux_001", "action": "accept", "reason": "Agreed"},
+                ]
+            }
+        )
+
+    def _mock_negotiation_counter(self, system, user):
+        """Mock LLM that counter-proposes."""
+        import json
+
+        return json.dumps(
+            {
+                "responses": [
+                    {
+                        "crux_id": "crux_001",
+                        "action": "counter",
+                        "reason": "Better test exists",
+                        "counter_crux": {
+                            "description": "Fourfold gain pattern is more diagnostic",
+                            "discriminating_experiment": "fourfold_gain",
+                        },
+                    },
+                ]
+            }
+        )
+
+    def test_crux_identification_returns_crux_objects(self):
+        """Crux identification should return list of Crux dataclass objects."""
+        from antagonistic_collab.models.decision_debate_runner import (
+            run_decision_crux_identification,
+        )
+        from antagonistic_collab.epistemic_state import Crux
+
+        configs = default_decision_agent_configs()
+        cruxes = run_decision_crux_identification(
+            configs, client=None, call_fn=self._mock_crux_call, cycle=1, crux_counter=0
+        )
+
+        assert len(cruxes) > 0
+        for crux in cruxes:
+            assert isinstance(crux, Crux)
+            assert crux.proposer in [c.name for c in configs]
+
+    def test_crux_identification_targets_gamble_groups(self):
+        """Crux discriminating_experiment should reference valid gamble groups."""
+        from antagonistic_collab.models.decision_debate_runner import (
+            run_decision_crux_identification,
+        )
+        from antagonistic_collab.models.decision_eig import GAMBLE_GROUPS
+
+        configs = default_decision_agent_configs()
+        cruxes = run_decision_crux_identification(
+            configs, client=None, call_fn=self._mock_crux_call, cycle=1, crux_counter=0
+        )
+
+        valid_groups = set(GAMBLE_GROUPS.keys())
+        for crux in cruxes:
+            if crux.discriminating_experiment:
+                assert crux.discriminating_experiment in valid_groups, (
+                    f"Crux targets '{crux.discriminating_experiment}' which is not a valid gamble group"
+                )
+
+    def test_crux_identification_assigns_unique_ids(self):
+        """Each crux should have a unique ID."""
+        from antagonistic_collab.models.decision_debate_runner import (
+            run_decision_crux_identification,
+        )
+
+        configs = default_decision_agent_configs()
+        cruxes = run_decision_crux_identification(
+            configs, client=None, call_fn=self._mock_crux_call_two, cycle=1, crux_counter=0
+        )
+
+        ids = [c.id for c in cruxes]
+        assert len(ids) == len(set(ids)), "Crux IDs are not unique"
+
+    def test_crux_negotiation_updates_supporters(self):
+        """Accepting a crux should add the agent to supporters."""
+        from antagonistic_collab.models.decision_debate_runner import (
+            run_decision_crux_identification,
+            run_decision_crux_negotiation,
+        )
+
+        configs = default_decision_agent_configs()
+        cruxes = run_decision_crux_identification(
+            configs, client=None, call_fn=self._mock_crux_call, cycle=1, crux_counter=0
+        )
+
+        updated = run_decision_crux_negotiation(
+            configs, cruxes, client=None, call_fn=self._mock_negotiation_accept, cycle=1
+        )
+
+        # At least one crux should have multiple supporters
+        multi_support = [c for c in updated if len(c.supporters) > 1]
+        assert len(multi_support) > 0
+
+    def test_crux_negotiation_counter_adds_new_crux(self):
+        """Counter-proposing should add a new crux to the list."""
+        from antagonistic_collab.models.decision_debate_runner import (
+            run_decision_crux_identification,
+            run_decision_crux_negotiation,
+        )
+
+        configs = default_decision_agent_configs()
+        cruxes = run_decision_crux_identification(
+            configs, client=None, call_fn=self._mock_crux_call, cycle=1, crux_counter=0
+        )
+        initial_count = len(cruxes)
+
+        updated = run_decision_crux_negotiation(
+            configs, cruxes, client=None, call_fn=self._mock_negotiation_counter, cycle=1
+        )
+
+        assert len(updated) > initial_count
+
+    def test_finalize_cruxes_accepts_with_enough_support(self):
+        """Cruxes with >= min_supporters should be accepted."""
+        from antagonistic_collab.models.decision_debate_runner import (
+            finalize_decision_cruxes,
+        )
+        from antagonistic_collab.epistemic_state import Crux
+
+        cruxes = [
+            Crux(
+                id="crux_001",
+                proposer="CPT_Agent",
+                description="Test crux",
+                supporters=["CPT_Agent", "EU_Agent"],
+                cycle_proposed=1,
+            ),
+            Crux(
+                id="crux_002",
+                proposer="PH_Agent",
+                description="Lonely crux",
+                supporters=["PH_Agent"],
+                cycle_proposed=1,
+            ),
+        ]
+
+        accepted = finalize_decision_cruxes(cruxes, min_supporters=2)
+        assert len(accepted) == 1
+        assert accepted[0].id == "crux_001"
+        assert accepted[0].status == "accepted"
+        assert cruxes[1].status == "rejected"
+
+    def test_cruxes_to_boost_indices(self):
+        """Accepted cruxes should map to valid gamble group indices."""
+        from antagonistic_collab.models.decision_debate_runner import (
+            decision_cruxes_to_boost_indices,
+        )
+        from antagonistic_collab.epistemic_state import Crux
+        from antagonistic_collab.models.decision_eig import GAMBLE_GROUPS
+
+        group_names = list(GAMBLE_GROUPS.keys())
+        cruxes = [
+            Crux(
+                id="crux_001",
+                proposer="CPT_Agent",
+                description="Test crux",
+                discriminating_experiment="certainty_effect",
+                status="accepted",
+                supporters=["CPT_Agent", "EU_Agent"],
+                cycle_proposed=1,
+            ),
+            Crux(
+                id="crux_002",
+                proposer="PH_Agent",
+                description="PH crux",
+                discriminating_experiment="ph_diagnostic",
+                status="accepted",
+                supporters=["PH_Agent", "EU_Agent"],
+                cycle_proposed=1,
+            ),
+        ]
+
+        indices = decision_cruxes_to_boost_indices(cruxes, group_names)
+        assert len(indices) == 2
+        assert group_names[indices[0]] == "certainty_effect"
+        assert group_names[indices[1]] == "ph_diagnostic"
+
+    def test_cruxes_to_boost_indices_ignores_invalid_groups(self):
+        """Cruxes targeting non-existent groups should be skipped."""
+        from antagonistic_collab.models.decision_debate_runner import (
+            decision_cruxes_to_boost_indices,
+        )
+        from antagonistic_collab.epistemic_state import Crux
+        from antagonistic_collab.models.decision_eig import GAMBLE_GROUPS
+
+        group_names = list(GAMBLE_GROUPS.keys())
+        cruxes = [
+            Crux(
+                id="crux_001",
+                proposer="CPT_Agent",
+                description="Bad target",
+                discriminating_experiment="nonexistent_group",
+                status="accepted",
+                supporters=["CPT_Agent", "EU_Agent"],
+                cycle_proposed=1,
+            ),
+        ]
+
+        indices = decision_cruxes_to_boost_indices(cruxes, group_names)
+        assert len(indices) == 0
