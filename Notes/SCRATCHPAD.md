@@ -27,13 +27,24 @@ domain (decision-making under risk) to elevate the paper from CogSci to NeurIPS.
 
 **Synthetic runner working:** 3/3 correct on base registry with clear gaps.
 
-**What remains to wire into the full pipeline:**
-1. **EIG adapter** — make `compute_eig()` work with gamble predictions
-   (treat each gamble as an "item", P(choose A) as "accuracy")
-2. **Validation script** — `validate_decision_m14.py` running the same
-   no-debate/debate/arbiter factorial as categorization
-3. **Agent configs** — CPT_Agent, EU_Agent, PH_Agent with system prompts
-   encoding each theory's core claims and known weaknesses
+**Pipeline wiring — ALL THREE COMPLETE:**
+1. ~~**EIG adapter**~~ ✓ — `decision_eig.py` bridges gamble predictions to
+   `compute_eig()`. 7 gamble groups as candidate experiments. 3/3 correct
+   winners after 5 EIG cycles. 23 tests.
+2. ~~**Validation script (no-debate)**~~ ✓ — `validate_decision_m14.py`
+   running computation-only baseline. Results:
+   - Correct params: 3/3 (converges cycle 0-1)
+   - Misspecified params: 0/3 (all wrong — stronger penalty than categorization)
+3. ~~**Agent configs**~~ ✓ — `decision_agents.py` with CPT_Agent, EU_Agent,
+   PH_Agent system prompts. 18 tests.
+
+**What's next:**
+- Wire debate/arbiter conditions into validation script (requires adapting
+  DebateProtocol for decision domain OR writing a lightweight decision debate loop)
+- Run live LLM experiments: no-debate vs debate vs arbiter, correct vs misspec
+- Prediction: debate helps under misspec (0/3 → ?) via parameter recovery,
+  arbiter biases toward CPT/EU (smooth gradients), PH proposals should be favored
+  by LLM agents (lexicographic rules are easy to articulate)
 
 **Key files:**
 - `antagonistic_collab/models/expected_utility.py` — EU model
@@ -41,7 +52,12 @@ domain (decision-making under risk) to elevate the paper from CogSci to NeurIPS.
 - `antagonistic_collab/models/priority_heuristic.py` — Priority Heuristic model
 - `antagonistic_collab/models/gamble_structures.py` — registry (76 gambles)
 - `antagonistic_collab/models/decision_runner.py` — synthetic data + scoring
+- `antagonistic_collab/models/decision_eig.py` — EIG adapter (7 groups, selection, posterior update)
+- `antagonistic_collab/models/decision_agents.py` — agent configs + system prompts
+- `scripts/validation/validate_decision_m14.py` — validation script
 - `tests/test_decision_models.py` — 17 tests
+- `tests/test_decision_eig.py` — 23 tests
+- `tests/test_decision_agents.py` — 18 tests
 
 **Predictions to test:**
 - Arbiter should favor CPT/EU (smooth gradients) over PH (discrete rules)

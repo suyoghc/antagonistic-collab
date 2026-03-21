@@ -5,8 +5,14 @@
 Extending the framework to a second domain (decision-making under risk) to test
 whether the implicit-prior / complementary-bias findings generalize. Three models
 implemented: Expected Utility (↔ SUSTAIN), Cumulative Prospect Theory (↔ GCM),
-Priority Heuristic (↔ RULEX). Gamble registry (76 problems) and synthetic runner
-working (3/3 correct). Remaining: EIG adapter, validation script, agent configs.
+Priority Heuristic (↔ RULEX). Full computational pipeline wired: gamble registry
+(76 problems), EIG adapter (7 groups), agent configs, validation script.
+
+No-debate baseline results:
+- Correct params: 3/3 (all identified by cycle 0-1)
+- Misspecified params: 0/3 (all wrong — stronger penalty than categorization)
+
+Remaining: wire debate/arbiter into validation, run live LLM experiments.
 
 If the same bias pattern replicates → NeurIPS paper on implicit priors in hybrid
 AI systems as a domain-general principle.

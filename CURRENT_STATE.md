@@ -278,10 +278,11 @@ fully-specified models. 18/18 correct across ablation conditions.
 
 ## What's next
 
-1. **Decision-making domain (in progress)** — EU, CPT, Priority Heuristic implemented
-   and tested (17/17). Gamble registry (76 problems) and synthetic runner working
-   (3/3 correct). Remaining: EIG adapter, validation script, agent configs.
-   Tests whether implicit-prior pattern replicates across domains (NeurIPS target).
+1. **Decision-making domain (pipeline wired)** — EU, CPT, Priority Heuristic models
+   (17/17 tests), gamble registry (76 problems), EIG adapter (23 tests), agent configs
+   (18 tests), validation script all complete. No-debate baseline: 3/3 correct (correct
+   params), 0/3 correct (misspecified params). Remaining: wire debate/arbiter conditions,
+   run live LLM experiments. NeurIPS target.
 2. Write up two-domain results as NeurIPS submission
 3. GeCCo forks (gecco-core, gecco-supplement) — model discovery + adjudication
 4. Real data integration (human participants via Prolific/AutoRA)
