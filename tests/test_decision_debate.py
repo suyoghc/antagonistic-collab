@@ -653,3 +653,167 @@ class TestDecisionCruxProtocol:
 
         indices = decision_cruxes_to_boost_indices(cruxes, group_names)
         assert len(indices) == 0
+
+
+# ── Meta-Agents (Phase 3) ──
+
+
+class TestDecisionMetaAgents:
+    """Test meta-agent creation and arbiter round for decision domain."""
+
+    def test_create_decision_meta_agents(self):
+        """Should create Integrator and Critic MetaAgentConfig objects."""
+        from antagonistic_collab.models.decision_debate_runner import (
+            create_decision_meta_agents,
+        )
+        from antagonistic_collab.debate_protocol import MetaAgentConfig
+
+        meta_agents = create_decision_meta_agents()
+        assert len(meta_agents) == 2
+        names = {ma.name for ma in meta_agents}
+        assert "Integrator" in names
+        assert "Critic" in names
+        for ma in meta_agents:
+            assert isinstance(ma, MetaAgentConfig)
+            assert "CPT" in ma.system_prompt or "decision" in ma.system_prompt.lower()
+
+    def test_meta_agent_prompts_reference_decision_models(self):
+        """Meta-agent system prompts should reference CPT/EU/PH, not GCM/SUSTAIN/RULEX."""
+        from antagonistic_collab.models.decision_debate_runner import (
+            create_decision_meta_agents,
+        )
+
+        for ma in create_decision_meta_agents():
+            # Should reference decision models
+            assert any(m in ma.system_prompt for m in ["CPT", "EU", "PH", "Prospect"]), (
+                f"{ma.name} prompt doesn't reference decision models"
+            )
+            # Should NOT reference categorization models
+            assert "GCM" not in ma.system_prompt
+            assert "SUSTAIN" not in ma.system_prompt
+            assert "RULEX" not in ma.system_prompt
+
+    def _mock_meta_agent_call(self, system, user):
+        """Mock LLM call returning meta-agent JSON."""
+        import json
+
+        return json.dumps(
+            {
+                "interpretation": "CPT and EU both struggle with certainty effects, but for different reasons.",
+                "confounds_flagged": ["Sample size may be too small to distinguish models"],
+                "hypothesis": "Test with mixed gambles to expose loss aversion differences",
+                "claims": [],
+            }
+        )
+
+    def test_arbiter_round_returns_meta_agent_responses(self):
+        """Arbiter round should return structured responses from meta-agents."""
+        from antagonistic_collab.models.decision_debate_runner import (
+            create_decision_meta_agents,
+            run_decision_arbiter_round,
+        )
+
+        meta_agents = create_decision_meta_agents()
+        debate_records = [
+            {
+                "agent_name": "CPT_Agent",
+                "interpretation": "Loss aversion param is too high",
+                "accepted": False,
+                "has_revision": False,
+            },
+            {
+                "agent_name": "EU_Agent",
+                "interpretation": "Risk aversion parameter fits well",
+                "accepted": False,
+                "has_revision": False,
+            },
+            {
+                "agent_name": "PH_Agent",
+                "interpretation": "Lexicographic rules match the pattern",
+                "accepted": False,
+                "has_revision": False,
+            },
+        ]
+        posterior = {"CPT_Agent": 0.4, "EU_Agent": 0.35, "PH_Agent": 0.25}
+
+        responses = run_decision_arbiter_round(
+            meta_agents=meta_agents,
+            debate_records=debate_records,
+            observed={"certainty_effect_1": 0.85},
+            posterior=posterior,
+            cycle=1,
+            client=None,
+            call_fn=self._mock_meta_agent_call,
+        )
+
+        assert len(responses) == 2  # Integrator + Critic
+        for resp in responses:
+            assert "agent" in resp
+            assert "interpretation" in resp
+            assert resp["meta_agent"] is True
+
+    def test_arbiter_round_does_not_modify_params(self):
+        """Meta-agents should never trigger parameter revisions."""
+        from antagonistic_collab.models.decision_debate_runner import (
+            create_decision_meta_agents,
+            run_decision_arbiter_round,
+        )
+
+        meta_agents = create_decision_meta_agents()
+        configs = default_decision_agent_configs()
+        original_params = {c.name: dict(c.default_params) for c in configs}
+
+        debate_records = [
+            {
+                "agent_name": c.name,
+                "interpretation": "Some analysis",
+                "accepted": False,
+                "has_revision": False,
+            }
+            for c in configs
+        ]
+
+        run_decision_arbiter_round(
+            meta_agents=meta_agents,
+            debate_records=debate_records,
+            observed={"certainty_effect_1": 0.85},
+            posterior={"CPT_Agent": 0.4, "EU_Agent": 0.3, "PH_Agent": 0.3},
+            cycle=1,
+            client=None,
+            call_fn=self._mock_meta_agent_call,
+        )
+
+        # Params should be unchanged
+        for c in configs:
+            assert c.default_params == original_params[c.name]
+
+    def test_arbiter_round_includes_hypotheses_and_confounds(self):
+        """Responses should include hypotheses and confounds from meta-agents."""
+        from antagonistic_collab.models.decision_debate_runner import (
+            create_decision_meta_agents,
+            run_decision_arbiter_round,
+        )
+
+        meta_agents = create_decision_meta_agents()
+        debate_records = [
+            {
+                "agent_name": "CPT_Agent",
+                "interpretation": "Analysis of CPT predictions",
+                "accepted": False,
+                "has_revision": False,
+            },
+        ]
+
+        responses = run_decision_arbiter_round(
+            meta_agents=meta_agents,
+            debate_records=debate_records,
+            observed={"certainty_effect_1": 0.85},
+            posterior={"CPT_Agent": 0.4, "EU_Agent": 0.3, "PH_Agent": 0.3},
+            cycle=1,
+            client=None,
+            call_fn=self._mock_meta_agent_call,
+        )
+
+        for resp in responses:
+            assert "hypothesis" in resp
+            assert "confounds" in resp

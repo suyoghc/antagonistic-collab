@@ -593,6 +593,162 @@ def decision_cruxes_to_boost_indices(
     return indices
 
 
+# ── Meta-Agents ──
+
+
+DECISION_INTEGRATOR_PROMPT = """You are the Integrator — a meta-agent who synthesizes across all decision theories.
+
+YOUR ROLE:
+- Read all theory agents' interpretations and find common ground.
+- Identify where CPT (Cumulative Prospect Theory), EU (Expected Utility), and PH (Priority Heuristic) converge despite surface-level disagreement.
+- Propose unified explanations that account for evidence from multiple perspectives.
+- Highlight when two theories are making the same prediction for different reasons (e.g., CPT's probability weighting and PH's probability threshold both distort small probabilities).
+
+YOU DO NOT:
+- Advocate for any single theory.
+- Have a computational model or make quantitative predictions.
+- Propose parameter revisions for any model.
+
+OUTPUT FORMAT:
+Respond with a JSON block:
+{"interpretation": "your synthesis across theories",
+ "confounds_flagged": ["cross-cutting issues all theories should address"],
+ "hypothesis": "what gamble group should come next",
+ "claims": []}
+"""
+
+DECISION_CRITIC_PROMPT = """You are the Critic — a meta-agent who challenges the weakest argument from any decision theory agent.
+
+YOUR ROLE:
+- Read all theory agents' interpretations and identify the weakest argument.
+- Challenge unsupported claims about CPT parameters, EU risk aversion, or PH thresholds.
+- Point out when an agent is ignoring disconfirming evidence (e.g., loss aversion gambles contradicting their interpretation).
+- Flag when agents are arguing past each other rather than engaging on the same gamble predictions.
+
+YOU DO NOT:
+- Advocate for any single theory.
+- Have a computational model or make quantitative predictions.
+- Propose parameter revisions for any model.
+
+OUTPUT FORMAT:
+Respond with a JSON block:
+{"interpretation": "your critique of the weakest argument(s)",
+ "confounds_flagged": ["methodological issues you spotted"],
+ "hypothesis": "what gamble group would expose the weakness you identified",
+ "claims": []}
+"""
+
+
+def create_decision_meta_agents() -> list:
+    """Create Integrator and Critic meta-agents for the decision domain.
+
+    Returns list of MetaAgentConfig (from debate_protocol.py).
+    """
+    from antagonistic_collab.debate_protocol import MetaAgentConfig
+
+    return [
+        MetaAgentConfig(
+            name="Integrator",
+            role="integrator",
+            system_prompt=DECISION_INTEGRATOR_PROMPT,
+        ),
+        MetaAgentConfig(
+            name="Critic",
+            role="critic",
+            system_prompt=DECISION_CRITIC_PROMPT,
+        ),
+    ]
+
+
+def run_decision_arbiter_round(
+    meta_agents: list,
+    debate_records: list[dict],
+    observed: dict[str, float],
+    posterior: dict[str, float],
+    cycle: int,
+    client,
+    call_fn: Callable | None = None,
+) -> list[dict]:
+    """Run the arbiter round: Integrator + Critic respond to theory agents' debate.
+
+    Called after run_debate_round() within each cycle. Meta-agents see the
+    theory agents' interpretation text and provide synthesis/critique.
+    They do NOT propose parameter revisions.
+
+    Args:
+        meta_agents: list of MetaAgentConfig.
+        debate_records: records from run_debate_round() (must include 'interpretation').
+        observed: {gamble_name: observed P(choose A)} for current cycle.
+        posterior: {agent_name: probability}.
+        cycle: current cycle number.
+        client: LLM client (used if call_fn is None).
+        call_fn: mock LLM function. Signature: (system, user) -> str.
+
+    Returns:
+        List of meta-agent response dicts with interpretation, hypothesis, confounds.
+    """
+    if call_fn is None and client is None:
+        raise ValueError("Must provide either call_fn or client")
+
+    # Build context from theory agents' interpretations
+    theory_interps = "\n".join(
+        f"  {rec['agent_name']}: {rec.get('interpretation', '')[:500]}"
+        for rec in debate_records
+        if not rec.get("meta_agent", False)
+    )
+
+    # Build observed data summary
+    obs_lines = "\n".join(
+        f"  {gname}: P(A) = {pval:.3f}" for gname, pval in sorted(observed.items())
+    )
+
+    # Build posterior summary
+    post_lines = "\n".join(
+        f"  {name}: {prob:.3f}" for name, prob in sorted(posterior.items(), key=lambda x: -x[1])
+    )
+
+    responses = []
+    for meta_agent in meta_agents:
+        meta_prompt = (
+            f"PHASE: Interpretation Debate (Meta-Agent), Cycle {cycle}\n\n"
+            f"OBSERVED DATA:\n{obs_lines}\n\n"
+            f"CURRENT POSTERIOR:\n{post_lines}\n\n"
+            f"THEORY AGENT INTERPRETATIONS:\n{theory_interps}\n\n"
+            f"You MUST output a JSON block with:\n"
+            f'{{"interpretation": "your analysis", '
+            f'"confounds_flagged": ["list any issues"], '
+            f'"hypothesis": "what gamble group should come next", '
+            f'"claims": []}}\n'
+        )
+
+        if call_fn is not None:
+            raw = call_fn(meta_agent.system_prompt, meta_prompt)
+        else:
+            from antagonistic_collab.runner import call_agent
+
+            raw = call_agent(client, meta_agent.system_prompt, meta_prompt)
+
+        parsed = extract_json_from_text(raw) if isinstance(raw, str) else raw
+        if parsed is None:
+            parsed = {}
+
+        hypothesis = parsed.get("hypothesis", "")
+        confounds = parsed.get("confounds_flagged", [])
+        if not isinstance(confounds, list):
+            confounds = [str(confounds)] if confounds else []
+
+        responses.append({
+            "agent": meta_agent.name,
+            "role": meta_agent.role,
+            "interpretation": parsed.get("interpretation", ""),
+            "hypothesis": hypothesis,
+            "confounds": confounds,
+            "meta_agent": True,
+        })
+
+    return responses
+
+
 # ── Full Debate Loop ──
 
 
