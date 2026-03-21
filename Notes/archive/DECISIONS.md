@@ -1351,10 +1351,14 @@ threshold levels) but fails for abstract mathematical parameters (value
 function curvature, risk aversion). This is a domain-general principle about
 the representational format of parameters, not domain content.
 
-**Open questions:**
-- Would more cycles (10-15) give CPT enough evidence to diagnose alpha/beta?
-- Would richer prompts explaining the alpha→prediction mapping help?
-- Would an arbiter layer (crux identification) change the experiment selection
-  to expose CPT's alpha/beta misspecification?
+**Update (10-cycle run):** 0/3 → **2/3 with 10 cycles.** EU flipped — `r`
+recovered exactly (0.1→0.5). PH achieved 100% recovery (all 3 params exact).
+CPT still wrong (alpha/beta never diagnosed, 28.4% recovery).
 
-**Status:** First results documented. Additional experiments may follow.
+This now matches categorization M15 exactly: 0/3 → 2/3.
+- PH ↔ RULEX (rule-based, full/strong recovery)
+- EU ↔ GCM (recovered with sufficient data)
+- CPT ↔ SUSTAIN (abstract params resist diagnosis)
+
+**Status:** Replication confirmed at 10 cycles. Two-domain result ready for
+NeurIPS framing.

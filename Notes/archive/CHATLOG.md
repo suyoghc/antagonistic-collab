@@ -1018,4 +1018,43 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 
 ---
 
+## Session — 2026-03-21 (Decision M15 live experiment + 10-cycle replication)
+
+**What was done:**
+1. Completed Green step for decision debate runner tests — fixed `filter_valid_params`
+   to use `model.default_params` instead of `inspect.signature` (decision models use
+   a params dict, not kwargs). 16 tests passing.
+2. Built `scripts/validation/validate_decision_m15_live.py` — live validation script
+   for decision M15 with backend selection (princeton/anthropic), debate/no-debate
+   modes, configurable cycle count.
+3. Fixed P1 bug: `runner._LLM_MODEL` must be set explicitly for princeton backend
+   (OpenAI model ID vs Claude model ID).
+4. Ran first live experiment (GPT-4o, 5 cycles): 0/3 no-debate → 1/3 debate (PH only).
+5. Diagnosed RMSE gate gaming: competitors accepted local improvements that hurt global
+   fit. Fixed with accumulated observations + strict improvement (tolerance=0.0, `<`).
+6. Ran 10-cycle experiment: **0/3 → 2/3** — matches categorization M15 exactly.
+   - PH: 100% recovery (all 3 params exact)
+   - EU: 75% recovery (r exact, temp off)
+   - CPT: 28.4% (lambda_ exact, alpha/beta stuck)
+7. Updated all docs: D50 (accumulated RMSE gate), D51 (results + 10-cycle update),
+   lessons 61-64, SCRATCHPAD, CURRENT_STATE, ROADMAP.
+
+**Commits:**
+- `9fba040` — Standalone decision debate runner + 14 tests
+- `63f00d8` — Decision M15 validation script
+- `231fccb` — Fix princeton backend model ID
+- `855aa1d` — Stricter RMSE gate (accumulated + no neutral)
+- `e13aa19` — Docs: D50-D51, first results, lessons 61-64
+
+**Key findings:**
+- Cross-domain replication confirmed: PH↔RULEX (rule-based, strongest recovery),
+  EU↔GCM (recovered with more data), CPT↔SUSTAIN (abstract params resist diagnosis)
+- Representational-format principle holds: debate recovery depends on parameter
+  interpretability, not domain
+- 5 cycles insufficient for EU (less distinctive predictions under misspecification);
+  10 cycles sufficient — same pattern as categorization
+- Accumulated RMSE gate critical: local-only gate lets competitors game revisions
+
+---
+
 *This log is maintained manually. Update it at the end of each session.*

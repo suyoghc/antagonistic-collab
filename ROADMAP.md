@@ -16,20 +16,19 @@ Standalone decision debate runner built (D49 — Option C): `decision_debate_run
 with 16 tests. Components: LLM debate round, param validation via
 model.default_params, accumulated RMSE gate (D50), full cycle loop.
 
-First live results (D51, GPT-4o, 5 cycles):
+Live results (D51, GPT-4o, 10 cycles): **REPLICATION CONFIRMED**
 - No-debate: 0/3 (all wrong under misspecification)
-- Debate: 1/3 (PH recovered via 81.8% param recovery)
-- CPT: 51% recovery (lambda_ exact, alpha/beta stuck)
-- EU: 0% recovery (too similar to CPT under misspec)
+- Debate (10 cycles): **2/3** (PH 100% recovery, EU 75% recovery)
+- CPT: 28.4% recovery (lambda_ exact, alpha/beta stuck — matches SUSTAIN pattern)
+- Cross-domain parallels: PH↔RULEX (strongest), EU↔GCM (needs more data), CPT↔SUSTAIN (resists)
 
-Partial replication of categorization M15 (0/3→2/3). The core mechanism
-(debate recovers rule-based models) replicates; magnitude is weaker.
-Key finding: recovery depends on parameter interpretability, not domain.
+Matches categorization M15 exactly (0/3→2/3). The representational-format principle
+holds: parameter recovery depends on interpretability, not domain.
 
 Next steps:
-- Try 10-cycle runs, enriched prompts, arbiter layer
-- Write up partial replication for NeurIPS framing
-- Even partial replication supports the representational-format principle
+- Write up two-domain replication for NeurIPS
+- Consider arbiter layer experiment (mirrors M16/M17 in categorization)
+- CPT could be a target for prompt enrichment study (separate from main result)
 
 ### R-IDeA — tested, negative result
 

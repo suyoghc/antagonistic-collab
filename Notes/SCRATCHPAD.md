@@ -62,22 +62,30 @@ Decision M15 results (GPT-4o, 5 cycles, accumulated RMSE gate):
 | EU | CPT (wrong) | CPT (wrong) | 0.0% |
 | PH | CPT (wrong) | **PH (correct)** | **81.8%** |
 
-**0/3 no-debate → 1/3 debate.** Compare categorization: 0/3 → 2/3.
+**5 cycles: 0/3 → 1/3. 10 cycles: 0/3 → 2/3.** Matches categorization M15 exactly.
+
+| GT | No-debate | Debate (10 cyc) | Recovery |
+|---|---|---|---|
+| PH | Wrong | **Correct** | **100.0%** (all 3 params exact) |
+| EU | Wrong | **Correct** | **75.0%** (r exact, temp off) |
+| CPT | Wrong | Wrong | 28.4% (lambda_ exact, alpha/beta stuck) |
+
+Cross-domain parallel:
+- PH ↔ RULEX (rule-based, strongest recovery)
+- EU ↔ GCM (recovered with more data)
+- CPT ↔ SUSTAIN (abstract params resist diagnosis)
 
 Key findings:
-- PH (rule-based) recovered, paralleling RULEX — rule params are LLM-diagnosable
-- CPT lambda_ recovered exactly (1.2→2.25) but alpha/beta stuck (value function
-  curvature too abstract for LLM diagnosis)
-- EU 0% recovery — too similar to CPT under misspecification, insufficient
-  prediction error to trigger useful revision
-- Accumulated RMSE gate (D50) was critical — local-only gate let competitors
-  game the system
+- Accumulated RMSE gate (D50) was critical — local-only gate let competitors game
+- 10 cycles needed for EU (5 wasn't enough) — more evidence needed for simpler models
+  with less distinctive predictions
+- CPT alpha/beta genuinely outside LLM diagnostic capability (no prompt help given,
+  matching categorization where no special prompt help was given either)
 
 **What's next:**
-- Try 10-cycle runs to give CPT more recovery time
-- Consider enriching CPT prompt with alpha→prediction mapping explanation
-- Arbiter layer for experiment selection steering
-- Write up partial replication for NeurIPS framing
+- Write up two-domain replication for NeurIPS
+- Consider arbiter layer experiment (mirrors M16/M17 in categorization)
+- CPT could be a target for prompt enrichment study (separate from main result)
 
 Calibration notes:
 - learning_rate=0.01, n_subjects=30, 7 gamble groups

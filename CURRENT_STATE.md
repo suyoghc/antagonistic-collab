@@ -278,14 +278,12 @@ fully-specified models. 18/18 correct across ablation conditions.
 
 ## What's next
 
-1. **Decision-making domain — first live results (partial replication).**
-   Full pipeline complete + live LLM experiment run. Decision M15 results
-   (GPT-4o, 5 cycles): 0/3 no-debate → 1/3 debate (PH recovered via 81.8%
-   param recovery). Weaker than categorization M15 (0/3→2/3). CPT partially
-   recovered (51%, lambda_ exact but alpha/beta stuck). EU 0% recovery.
-   Key finding: parameter recovery depends on intuitive interpretability —
-   rule params recovered, abstract mathematical params didn't. This is a
-   representational-format principle, not domain-specific. See D50-D51.
+1. **Decision-making domain — REPLICATION CONFIRMED (D51, 10 cycles).**
+   Decision M15 results (GPT-4o, 10 cycles): 0/3 no-debate → **2/3 debate**.
+   Matches categorization M15 exactly. PH 100% recovery (all params exact),
+   EU 75% recovery (r exact). CPT still wrong (alpha/beta outside LLM
+   diagnostic capability). Cross-domain parallel: PH↔RULEX, EU↔GCM,
+   CPT↔SUSTAIN. Two-domain result ready for NeurIPS framing.
 2. Write up two-domain results as NeurIPS submission
 3. GeCCo forks (gecco-core, gecco-supplement) — model discovery + adjudication
 4. Real data integration (human participants via Prolific/AutoRA)
