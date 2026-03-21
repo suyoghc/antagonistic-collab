@@ -326,13 +326,14 @@ class TestFullDecisionCycle:
                 n_chose_a = rng.binomial(30, p_clipped)
                 observed[gname] = n_chose_a / 30
 
-            # Update posterior
+            # Update posterior (lr=0.01 calibrated to converge over 3-5 cycles,
+            # matching categorization's 0.005 with 8-16 items per structure)
             update_decision_posterior(
                 posterior,
                 observed,
                 selected_gambles,
                 n_subjects=30,
-                learning_rate=0.5,
+                learning_rate=0.01,
             )
 
         # Check winner

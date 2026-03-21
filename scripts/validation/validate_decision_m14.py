@@ -276,8 +276,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--learning-rate",
         type=float,
-        default=0.1,
-        help="Likelihood tempering rate (default: 0.1)",
+        default=0.01,
+        help="Likelihood tempering rate (default: 0.01). Calibrated so posterior "
+        "converges over 3-5 cycles, leaving room for debate. Categorization uses "
+        "0.005 with 8-16 items; decision uses 0.01 with 2-3 gambles per group.",
     )
     parser.add_argument(
         "--strategy",
