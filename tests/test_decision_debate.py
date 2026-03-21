@@ -817,3 +817,138 @@ class TestDecisionMetaAgents:
         for resp in responses:
             assert "hypothesis" in resp
             assert "confounds" in resp
+
+
+# ── Arbiter Integration (Phase 4) ──
+
+
+class TestDecisionArbiterIntegration:
+    """Test the full arbiter-enabled debate loop with mocked LLM."""
+
+    def _mock_call(self, system, user):
+        """Mock LLM that handles all prompt types."""
+        import json
+
+        if "crux identification" in user.lower() or "crux" in user.lower() and "propose" in user.lower():
+            return json.dumps(
+                {
+                    "cruxes": [
+                        {
+                            "description": "Certainty effect distinguishes CPT from EU",
+                            "discriminating_experiment": "certainty_effect",
+                            "resolution_criterion": "RMSE < 0.10",
+                        }
+                    ]
+                }
+            )
+        elif "crux negotiation" in user.lower() or "accept|reject|counter" in user:
+            return json.dumps(
+                {
+                    "responses": [
+                        {
+                            "crux_id": "crux_001",
+                            "action": "accept",
+                            "reason": "Agreed",
+                        }
+                    ]
+                }
+            )
+        elif "meta-agent" in user.lower() or "meta" in system.lower():
+            return json.dumps(
+                {
+                    "interpretation": "Theory synthesis across models",
+                    "confounds_flagged": [],
+                    "hypothesis": "Test loss aversion gambles next",
+                    "claims": [],
+                }
+            )
+        else:
+            # Default: debate round response
+            return json.dumps(
+                {
+                    "interpretation": "My predictions show moderate fit.",
+                    "revision": None,
+                }
+            )
+
+    def test_arbiter_mode_runs_without_error(self):
+        """Full loop with enable_arbiter=True should complete without error."""
+        from antagonistic_collab.models.decision_debate_runner import (
+            run_decision_debate,
+        )
+
+        result = run_decision_debate(
+            gt_model="EU",
+            n_cycles=3,
+            n_subjects=30,
+            learning_rate=0.01,
+            selection_strategy="thompson",
+            agent_params={
+                "CPT_Agent": {"alpha": 0.7, "beta": 0.7, "lambda_": 1.5, "gamma_pos": 0.5, "gamma_neg": 0.5, "temperature": 1.0},
+                "EU_Agent": {"r": 0.3, "temperature": 1.0},
+                "PH_Agent": {"outcome_threshold_frac": 0.15, "prob_threshold": 0.15, "phi": 0.5},
+            },
+            call_fn=self._mock_call,
+            enable_debate=True,
+            enable_arbiter=True,
+            verbose=False,
+        )
+
+        assert "condition" in result
+        assert result["condition"] == "arbiter"
+        assert "cruxes" in result
+        assert "meta_agent_responses" in result
+
+    def test_arbiter_returns_cruxes_in_results(self):
+        """Results should include crux data from each cycle."""
+        from antagonistic_collab.models.decision_debate_runner import (
+            run_decision_debate,
+        )
+
+        result = run_decision_debate(
+            gt_model="PH",
+            n_cycles=3,
+            n_subjects=30,
+            learning_rate=0.01,
+            selection_strategy="thompson",
+            agent_params={
+                "CPT_Agent": {"alpha": 0.7, "beta": 0.7, "lambda_": 1.5, "gamma_pos": 0.5, "gamma_neg": 0.5, "temperature": 1.0},
+                "EU_Agent": {"r": 0.3, "temperature": 1.0},
+                "PH_Agent": {"outcome_threshold_frac": 0.15, "prob_threshold": 0.15, "phi": 0.5},
+            },
+            call_fn=self._mock_call,
+            enable_debate=True,
+            enable_arbiter=True,
+            verbose=False,
+        )
+
+        # Cruxes should exist (possibly empty for cycle 0, populated for later)
+        assert isinstance(result["cruxes"], list)
+        # Meta-agent responses should exist
+        assert isinstance(result["meta_agent_responses"], list)
+
+    def test_arbiter_skips_cruxes_on_cycle_zero(self):
+        """Crux identification should not run on cycle 0 (no data yet)."""
+        from antagonistic_collab.models.decision_debate_runner import (
+            run_decision_debate,
+        )
+
+        result = run_decision_debate(
+            gt_model="CPT",
+            n_cycles=1,  # Only cycle 0
+            n_subjects=30,
+            learning_rate=0.01,
+            selection_strategy="thompson",
+            agent_params={
+                "CPT_Agent": {"alpha": 0.7, "beta": 0.7, "lambda_": 1.5, "gamma_pos": 0.5, "gamma_neg": 0.5, "temperature": 1.0},
+                "EU_Agent": {"r": 0.3, "temperature": 1.0},
+                "PH_Agent": {"outcome_threshold_frac": 0.15, "prob_threshold": 0.15, "phi": 0.5},
+            },
+            call_fn=self._mock_call,
+            enable_debate=True,
+            enable_arbiter=True,
+            verbose=False,
+        )
+
+        # With only 1 cycle (cycle 0), no cruxes should be identified
+        assert len(result["cruxes"]) == 0

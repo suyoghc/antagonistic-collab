@@ -762,6 +762,8 @@ def run_decision_debate(
     client=None,
     call_fn: Callable | None = None,
     enable_debate: bool = True,
+    enable_arbiter: bool = False,
+    crux_weight: float = 0.3,
     verbose: bool = True,
 ) -> dict:
     """Run the full decision debate loop.
@@ -776,10 +778,13 @@ def run_decision_debate(
         client: LLM client for debate rounds
         call_fn: mock LLM function (for testing)
         enable_debate: if False, skip debate round (computational only)
+        enable_arbiter: if True, add crux protocol + meta-agents after debate
+        crux_weight: probability of crux-directed selection (default 0.3)
         verbose: print progress
 
     Returns:
         Results dict with winner, correctness, posterior history, revisions, etc.
+        When enable_arbiter=True, also includes 'cruxes' and 'meta_agent_responses'.
     """
     from antagonistic_collab.models.decision_agents import (
         default_decision_agent_configs,
@@ -797,6 +802,13 @@ def run_decision_debate(
     candidates = list(GAMBLE_GROUPS.values())
     group_names = list(GAMBLE_GROUPS.keys())
 
+    # Arbiter state
+    meta_agents = create_decision_meta_agents() if enable_arbiter else []
+    all_cruxes = []
+    all_meta_responses = []
+    crux_counter = 0
+    active_crux_indices = []  # indices for crux-directed EIG
+
     history = []
     all_revisions = []
     accumulated_observed = {}  # all observations across cycles for RMSE validation
@@ -805,7 +817,7 @@ def run_decision_debate(
         # Build current agent_params dict from configs (may have been revised)
         current_params = {c.name: dict(c.default_params) for c in configs}
 
-        # 1. EIG selection
+        # 1. EIG selection (with crux-directed boost if arbiter active)
         idx, eig_scores = select_decision_experiment(
             candidates,
             posterior,
@@ -815,6 +827,8 @@ def run_decision_debate(
             seed=42 + cycle,
             learning_rate=learning_rate,
             selection_strategy=selection_strategy,
+            crux_indices=active_crux_indices if enable_arbiter else None,
+            crux_weight=crux_weight if enable_arbiter else 0.0,
         )
 
         selected_gambles = candidates[idx]
@@ -851,8 +865,9 @@ def run_decision_debate(
 
         # 4. Debate round (if enabled)
         cycle_revisions = []
+        debate_records = []
         if enable_debate and (call_fn is not None or client is not None):
-            cycle_revisions = run_debate_round(
+            debate_records = run_debate_round(
                 configs,
                 observed,
                 selected_gambles,
@@ -863,7 +878,50 @@ def run_decision_debate(
                 agent_params=current_params,
                 all_observed=accumulated_observed,
             )
-            all_revisions.extend(cycle_revisions)
+            cycle_revisions = [r for r in debate_records if r.get("has_revision", False)]
+            all_revisions.extend(debate_records)
+
+        # 5. Arbiter round (if enabled, after cycle 0)
+        cycle_cruxes = []
+        cycle_meta_responses = []
+        if enable_arbiter and enable_debate and (call_fn is not None or client is not None):
+            posterior_dict = dict(zip(DECISION_AGENTS, posterior.probs.tolist()))
+
+            # 5a. Crux protocol (cycle > 0 — need data first)
+            if cycle > 0:
+                cycle_cruxes_raw = run_decision_crux_identification(
+                    configs, client=client, call_fn=call_fn,
+                    cycle=cycle, crux_counter=crux_counter,
+                )
+                crux_counter += len(cycle_cruxes_raw)
+
+                if cycle_cruxes_raw:
+                    cycle_cruxes_raw = run_decision_crux_negotiation(
+                        configs, cycle_cruxes_raw, client=client,
+                        call_fn=call_fn, cycle=cycle,
+                    )
+
+                    accepted = finalize_decision_cruxes(cycle_cruxes_raw)
+                    cycle_cruxes = accepted
+                    all_cruxes.extend(accepted)
+
+                    # Update crux-directed EIG indices for next cycle
+                    active_crux_indices = decision_cruxes_to_boost_indices(
+                        [c for c in all_cruxes if c.status == "accepted"],
+                        group_names,
+                    )
+
+            # 5b. Meta-agent responses
+            cycle_meta_responses = run_decision_arbiter_round(
+                meta_agents=meta_agents,
+                debate_records=debate_records,
+                observed=observed,
+                posterior=posterior_dict,
+                cycle=cycle,
+                client=client,
+                call_fn=call_fn,
+            )
+            all_meta_responses.extend(cycle_meta_responses)
 
         # Record
         cycle_entry = {
@@ -878,6 +936,13 @@ def run_decision_debate(
             "revisions": cycle_revisions,
             "agent_params": {c.name: dict(c.default_params) for c in configs},
         }
+        if enable_arbiter:
+            cycle_entry["cruxes"] = [
+                {"id": c.id, "description": c.description,
+                 "target": c.discriminating_experiment}
+                for c in cycle_cruxes
+            ]
+            cycle_entry["meta_agent_responses"] = cycle_meta_responses
         history.append(cycle_entry)
 
         if verbose:
@@ -888,10 +953,15 @@ def run_decision_debate(
                 if cycle_revisions
                 else ""
             )
+            arbiter_summary = (
+                f", {len(cycle_cruxes)} cruxes, {len(cycle_meta_responses)} meta"
+                if enable_arbiter
+                else ""
+            )
             print(
                 f"  Cycle {cycle}: {selected_group} "
                 f"(EIG={eig_scores[idx]:.4f}) → "
-                f"leader={leader}{rev_summary}"
+                f"leader={leader}{rev_summary}{arbiter_summary}"
             )
 
     # Final analysis
@@ -920,9 +990,17 @@ def run_decision_debate(
             "gt_params": dict(gt_params),
         }
 
-    return {
+    # Determine condition label
+    if enable_arbiter:
+        condition = "arbiter"
+    elif enable_debate:
+        condition = "debate"
+    else:
+        condition = "no_debate"
+
+    result = {
         "ground_truth": gt_model,
-        "condition": "debate" if enable_debate else "no_debate",
+        "condition": condition,
         "n_cycles": n_cycles,
         "winner": winner,
         "expected": expected,
@@ -937,3 +1015,13 @@ def run_decision_debate(
         "n_revisions_accepted": sum(1 for r in all_revisions if r["accepted"]),
         "param_recovery": param_recovery,
     }
+
+    if enable_arbiter:
+        result["cruxes"] = [
+            {"id": c.id, "description": c.description,
+             "target": c.discriminating_experiment, "supporters": c.supporters}
+            for c in all_cruxes
+        ]
+        result["meta_agent_responses"] = all_meta_responses
+
+    return result
