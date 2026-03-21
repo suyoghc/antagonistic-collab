@@ -265,7 +265,7 @@ def run_debate_round(
             preds[gname] = p[gname]
         all_preds[config.name] = preds
 
-    revisions = []
+    records = []
 
     for config in agent_configs:
         my_preds = all_preds[config.name]
@@ -292,13 +292,33 @@ def run_debate_round(
         if parsed is None:
             continue
 
+        interpretation = ""
+        if isinstance(parsed, dict):
+            interpretation = parsed.get("interpretation", "")
+            if not isinstance(interpretation, str):
+                interpretation = str(interpretation)
+
         revision = parse_agent_revision(parsed)
+
+        # Always create a record with interpretation, even without revision
         if revision is None:
+            records.append({
+                "agent_name": config.name,
+                "interpretation": interpretation,
+                "accepted": False,
+                "has_revision": False,
+            })
             continue
 
         # Validate params via inspect.signature
         new_params = filter_valid_params(config.model_class, revision["new_params"])
         if not new_params:
+            records.append({
+                "agent_name": config.name,
+                "interpretation": interpretation,
+                "accepted": False,
+                "has_revision": False,
+            })
             continue
 
         # Validate via RMSE against accumulated observations (if available)
@@ -322,7 +342,9 @@ def run_debate_round(
 
         revision_record = {
             "agent_name": config.name,
+            "interpretation": interpretation,
             "accepted": accepted,
+            "has_revision": True,
             "old_params": dict(config.default_params),
             "proposed_params": new_params,
             "rmse_before": rmse_before,
@@ -334,9 +356,9 @@ def run_debate_round(
             config.default_params.update(new_params)
             revision_record["new_params"] = dict(config.default_params)
 
-        revisions.append(revision_record)
+        records.append(revision_record)
 
-    return revisions
+    return records
 
 
 # ── Full Debate Loop ──

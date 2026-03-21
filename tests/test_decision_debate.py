@@ -315,3 +315,87 @@ class TestDecisionDebateCycle:
             observed, baseline, baseline, tolerance=0.0
         )
         assert not accepted
+
+
+# ── Interpretation Preservation (Phase 0) ──
+
+
+class TestInterpretationPreservation:
+    """Test that debate records include agent interpretations, even without revisions."""
+
+    def _mock_no_revision(self, system, user):
+        """Mock LLM that interprets but proposes no revision."""
+        import json
+
+        return json.dumps(
+            {
+                "interpretation": "The data shows clear risk aversion pattern.",
+                "revision": None,
+            }
+        )
+
+    def _mock_with_revision(self, system, user):
+        """Mock LLM that interprets and proposes a revision."""
+        import json
+
+        return json.dumps(
+            {
+                "interpretation": "Loss aversion parameter is too high for these gambles.",
+                "revision": {
+                    "description": "Reduce loss aversion",
+                    "new_params": {"alpha": 0.85, "lambda_": 2.2},
+                },
+            }
+        )
+
+    def test_interpretation_preserved_without_revision(self):
+        """Agents that don't propose revisions should still have records with interpretation."""
+        from antagonistic_collab.models.decision_debate_runner import (
+            run_debate_round,
+        )
+
+        configs = default_decision_agent_configs()
+        observed = {"certainty_effect_1": 0.85, "certainty_effect_2": 0.80}
+        gamble_names = list(observed.keys())
+
+        records = run_debate_round(
+            configs,
+            observed,
+            gamble_names,
+            posterior_probs={"CPT_Agent": 0.4, "EU_Agent": 0.3, "PH_Agent": 0.3},
+            cycle=0,
+            call_fn=self._mock_no_revision,
+        )
+
+        # Should have a record for each agent, even without revisions
+        assert len(records) == 3
+        for rec in records:
+            assert "interpretation" in rec
+            assert rec["interpretation"] != ""
+
+    def test_interpretation_preserved_with_revision(self):
+        """Agents that propose revisions should have interpretation in their record."""
+        from antagonistic_collab.models.decision_debate_runner import (
+            run_debate_round,
+        )
+
+        configs = default_decision_agent_configs()
+        configs[0].default_params = dict(MISSPEC_DECISION_PARAMS["CPT"])
+
+        observed = {"certainty_effect_1": 0.85, "certainty_effect_2": 0.80}
+        gamble_names = list(observed.keys())
+
+        records = run_debate_round(
+            configs,
+            observed,
+            gamble_names,
+            posterior_probs={"CPT_Agent": 0.4, "EU_Agent": 0.3, "PH_Agent": 0.3},
+            cycle=0,
+            call_fn=self._mock_with_revision,
+        )
+
+        # All agents should have records with interpretations
+        assert len(records) == 3
+        for rec in records:
+            assert "interpretation" in rec
+            assert "Loss aversion" in rec["interpretation"] or "loss aversion" in rec["interpretation"].lower()
