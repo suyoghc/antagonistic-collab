@@ -344,3 +344,98 @@ class TestFullDecisionCycle:
             f"GT={gt_model}: expected {expected}, got {winner}. "
             f"Probs: {dict(zip(DECISION_AGENTS, posterior.probs))}"
         )
+
+
+# ── Crux-Directed Selection (Phase 2) ──
+
+
+class TestCruxDirectedSelection:
+    """Test crux-weighted experiment selection."""
+
+    def test_crux_indices_boost_selection(self):
+        """With high crux_weight, selected index should come from crux_indices."""
+        posterior = ModelPosterior.uniform(DECISION_AGENTS)
+        candidates = list(GAMBLE_GROUPS.values())
+
+        # Force crux to point to last group (index 6 = ph_diagnostic)
+        crux_indices = [6]
+
+        # Run many times with high crux_weight to verify bias
+        crux_selected = 0
+        n_trials = 50
+        for i in range(n_trials):
+            idx, _ = select_decision_experiment(
+                candidates,
+                posterior,
+                n_subjects=30,
+                n_sim=50,
+                seed=100 + i,
+                selection_strategy="thompson",
+                crux_indices=crux_indices,
+                crux_weight=0.9,
+            )
+            if idx == 6:
+                crux_selected += 1
+
+        # With crux_weight=0.9, ~90% should select the crux index
+        assert crux_selected > n_trials * 0.5, (
+            f"Crux index selected only {crux_selected}/{n_trials} times with weight 0.9"
+        )
+
+    def test_zero_crux_weight_ignores_crux_indices(self):
+        """With crux_weight=0.0, crux_indices should have no effect."""
+        posterior = ModelPosterior.uniform(DECISION_AGENTS)
+        candidates = list(GAMBLE_GROUPS.values())
+
+        # Without crux
+        idx_no_crux, scores_no_crux = select_decision_experiment(
+            candidates,
+            posterior,
+            n_subjects=30,
+            n_sim=100,
+            seed=42,
+            selection_strategy="thompson",
+        )
+
+        # With crux_weight=0 (should behave identically)
+        idx_with_crux, scores_with_crux = select_decision_experiment(
+            candidates,
+            posterior,
+            n_subjects=30,
+            n_sim=100,
+            seed=42,
+            selection_strategy="thompson",
+            crux_indices=[6],
+            crux_weight=0.0,
+        )
+
+        assert idx_no_crux == idx_with_crux
+        assert scores_no_crux == scores_with_crux
+
+    def test_crux_weight_only_applies_to_thompson(self):
+        """Greedy strategy should ignore crux_weight and pick highest EIG."""
+        posterior = ModelPosterior.uniform(DECISION_AGENTS)
+        candidates = list(GAMBLE_GROUPS.values())
+
+        idx_greedy, _ = select_decision_experiment(
+            candidates,
+            posterior,
+            n_subjects=30,
+            n_sim=100,
+            seed=42,
+            selection_strategy="greedy",
+            crux_indices=[0],
+            crux_weight=0.9,
+        )
+
+        # Greedy should pick highest EIG regardless of crux
+        idx_greedy_no_crux, scores = select_decision_experiment(
+            candidates,
+            posterior,
+            n_subjects=30,
+            n_sim=100,
+            seed=42,
+            selection_strategy="greedy",
+        )
+
+        assert idx_greedy == idx_greedy_no_crux

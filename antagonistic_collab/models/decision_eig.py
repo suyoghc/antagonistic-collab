@@ -111,6 +111,8 @@ def select_decision_experiment(
     seed: int | None = 42,
     learning_rate: float = 1.0,
     selection_strategy: str = "thompson",
+    crux_indices: list[int] | None = None,
+    crux_weight: float = 0.0,
 ) -> tuple[int, list[float]]:
     """Select the most informative gamble group via EIG.
 
@@ -126,6 +128,10 @@ def select_decision_experiment(
         seed: random seed.
         learning_rate: likelihood tempering parameter.
         selection_strategy: "greedy" or "thompson".
+        crux_indices: indices of candidates matching accepted cruxes.
+        crux_weight: probability of sampling from crux_indices instead of
+            EIG-weighted Thompson. In [0, 1]. Only applies when
+            strategy="thompson" and crux_indices is non-empty.
 
     Returns:
         (best_index, eig_scores) — selected index and EIG for each candidate.
@@ -147,6 +153,15 @@ def select_decision_experiment(
         best_idx = int(np.argmax(eig_scores))
     elif selection_strategy == "thompson":
         rng = np.random.default_rng(seed)
+
+        # Crux-directed mixture: with probability crux_weight, sample
+        # uniformly from crux-matching candidates (same pattern as
+        # categorization's _select_index in bayesian_selection.py)
+        if crux_indices and crux_weight > 0:
+            if rng.random() < crux_weight:
+                best_idx = int(rng.choice(crux_indices))
+                return best_idx, eig_scores
+
         scores = np.array(eig_scores)
         if scores.sum() < 1e-10:
             best_idx = rng.integers(len(scores))
