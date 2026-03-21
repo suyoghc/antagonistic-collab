@@ -66,7 +66,7 @@ def validate_revision_rmse(
     observed: dict[str, float],
     baseline_preds: dict[str, float],
     revised_preds: dict[str, float],
-    tolerance: float = 0.01,
+    tolerance: float = 0.0,
 ) -> tuple[bool, float, float]:
     """Check whether revised predictions improve RMSE over baseline.
 
@@ -74,7 +74,8 @@ def validate_revision_rmse(
         observed: {gamble_name: observed P(choose A)}
         baseline_preds: {gamble_name: baseline prediction}
         revised_preds: {gamble_name: revised prediction}
-        tolerance: accept if revised_rmse <= baseline_rmse + tolerance
+        tolerance: accept if revised_rmse < baseline_rmse - tolerance.
+            Default 0.0 requires strict improvement.
 
     Returns:
         (accepted, baseline_rmse, revised_rmse)
@@ -87,7 +88,7 @@ def validate_revision_rmse(
     baseline_rmse = float(np.sqrt(np.mean((base - obs) ** 2)))
     revised_rmse = float(np.sqrt(np.mean((rev - obs) ** 2)))
 
-    return revised_rmse <= baseline_rmse + tolerance, baseline_rmse, revised_rmse
+    return revised_rmse < baseline_rmse - tolerance, baseline_rmse, revised_rmse
 
 
 # ── Prompt Construction ──
@@ -229,12 +230,13 @@ def run_debate_round(
     call_fn: Callable | None = None,
     client=None,
     agent_params: dict[str, dict] | None = None,
+    all_observed: dict[str, float] | None = None,
 ) -> list[dict]:
     """Run one debate round: show errors to each agent, collect revisions.
 
     Args:
         agent_configs: list of DecisionAgentConfig.
-        observed: {gamble_name: observed P(choose A)}.
+        observed: {gamble_name: observed P(choose A)} for current cycle.
         gamble_names: gambles tested this cycle.
         posterior_probs: {agent_name: probability}.
         cycle: current cycle number.
@@ -242,6 +244,9 @@ def run_debate_round(
             If None, uses client with call_agent from runner.
         client: LLM client (used if call_fn is None).
         agent_params: optional {agent_name: params} for predictions.
+        all_observed: accumulated observations across all cycles. If provided,
+            RMSE validation uses this full set instead of just current cycle.
+            This prevents gaming local RMSE on 2-3 gambles.
 
     Returns:
         List of revision dicts: [{agent_name, accepted, old_params, new_params, rmse_before, rmse_after}]
@@ -296,16 +301,23 @@ def run_debate_round(
         if not new_params:
             continue
 
-        # Validate via RMSE
+        # Validate via RMSE against accumulated observations (if available)
         model_name = DECISION_AGENT_MAP[config.name]
         merged_params = {**config.default_params, **new_params}
-        revised_preds = {}
-        for gname in gamble_names:
-            p = compute_decision_predictions(model_name, gname, params=merged_params)
-            revised_preds[gname] = p[gname]
+        rmse_obs = all_observed if all_observed else observed
+
+        # Compute baseline and revised predictions over the validation set
+        baseline_preds_full = {}
+        revised_preds_full = {}
+        current_p = (agent_params or {}).get(config.name, config.default_params)
+        for gname in rmse_obs:
+            bp = compute_decision_predictions(model_name, gname, params=current_p)
+            baseline_preds_full[gname] = bp[gname]
+            rp = compute_decision_predictions(model_name, gname, params=merged_params)
+            revised_preds_full[gname] = rp[gname]
 
         accepted, rmse_before, rmse_after = validate_revision_rmse(
-            observed, my_preds, revised_preds
+            rmse_obs, baseline_preds_full, revised_preds_full
         )
 
         revision_record = {
@@ -377,6 +389,7 @@ def run_decision_debate(
 
     history = []
     all_revisions = []
+    accumulated_observed = {}  # all observations across cycles for RMSE validation
 
     for cycle in range(n_cycles):
         # Build current agent_params dict from configs (may have been revised)
@@ -413,6 +426,9 @@ def run_decision_debate(
             p_clipped = np.clip(p_a, 0.01, 0.99)
             observed[gname] = rng.binomial(n_subjects, p_clipped) / n_subjects
 
+        # Accumulate observations for RMSE validation
+        accumulated_observed.update(observed)
+
         # 3. Update posterior
         update_decision_posterior(
             posterior,
@@ -435,6 +451,7 @@ def run_decision_debate(
                 call_fn=call_fn,
                 client=client,
                 agent_params=current_params,
+                all_observed=accumulated_observed,
             )
             all_revisions.extend(cycle_revisions)
 

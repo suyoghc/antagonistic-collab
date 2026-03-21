@@ -255,3 +255,63 @@ class TestDecisionDebateCycle:
 
         # At least CPT should have had a revision proposed
         assert len(revisions) > 0
+
+    def test_rmse_validated_against_all_observed(self):
+        """RMSE gate should use accumulated observations, not just current cycle."""
+        from antagonistic_collab.models.decision_debate_runner import (
+            run_debate_round,
+        )
+
+        configs = default_decision_agent_configs()
+        configs[0].default_params = dict(MISSPEC_DECISION_PARAMS["CPT"])
+
+        # Current cycle: 2 gambles where the revision helps
+        observed = {"certainty_effect_1": 0.85, "certainty_effect_2": 0.80}
+        gamble_names = list(observed.keys())
+
+        # Historical observations: 3 gambles where revision might NOT help
+        all_observed = {
+            "certainty_effect_1": 0.85,
+            "certainty_effect_2": 0.80,
+            "common_ratio_high": 0.60,
+            "common_ratio_low": 0.45,
+            "loss_aversion_symmetric": 0.30,
+        }
+
+        revisions_local = run_debate_round(
+            configs,
+            observed,
+            gamble_names,
+            posterior_probs={"CPT_Agent": 0.4, "EU_Agent": 0.3, "PH_Agent": 0.3},
+            cycle=0,
+            call_fn=self._mock_call_agent,
+        )
+
+        revisions_global = run_debate_round(
+            configs,
+            observed,
+            gamble_names,
+            posterior_probs={"CPT_Agent": 0.4, "EU_Agent": 0.3, "PH_Agent": 0.3},
+            cycle=0,
+            call_fn=self._mock_call_agent,
+            all_observed=all_observed,
+        )
+
+        # With accumulated data, acceptance should be same or stricter
+        local_accepted = sum(1 for r in revisions_local if r["accepted"])
+        global_accepted = sum(1 for r in revisions_global if r["accepted"])
+        assert global_accepted <= local_accepted
+
+    def test_neutral_revisions_rejected_with_zero_tolerance(self):
+        """Revisions that don't improve RMSE should be rejected with tolerance=0."""
+        from antagonistic_collab.models.decision_debate_runner import (
+            validate_revision_rmse,
+        )
+
+        observed = {"g1": 0.8, "g2": 0.3}
+        baseline = {"g1": 0.75, "g2": 0.35}
+        # Same predictions = no improvement
+        accepted, _, _ = validate_revision_rmse(
+            observed, baseline, baseline, tolerance=0.0
+        )
+        assert not accepted
