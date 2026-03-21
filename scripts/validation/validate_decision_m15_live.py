@@ -39,7 +39,13 @@ from antagonistic_collab.models.decision_runner import (
     GT_DECISION_PARAMS,
     MISSPEC_DECISION_PARAMS,
 )
+import antagonistic_collab.runner as runner_mod
 from antagonistic_collab.runner import _create_client, call_agent
+
+BACKEND_MODELS = {
+    "princeton": "gpt-4o",
+    "anthropic": "claude-sonnet-4-20250514",
+}
 
 
 def make_call_fn(client):
@@ -254,9 +260,15 @@ if __name__ == "__main__":
     # Create LLM client if running debate conditions
     client = None
     if run_debate:
+        # Set the model name for the chosen backend — runner.call_agent() uses
+        # this global when no model= kwarg is passed.
+        runner_mod._LLM_MODEL = BACKEND_MODELS[args.backend]
         try:
             client = _create_client(args.backend)
-            print(f"LLM client created (backend: {args.backend})")
+            print(
+                f"LLM client created (backend: {args.backend}, "
+                f"model: {runner_mod._LLM_MODEL})"
+            )
         except SystemExit:
             print("ERROR: Could not create LLM client. Check API keys.")
             print("Run with --no-debate-only to skip debate conditions.")
