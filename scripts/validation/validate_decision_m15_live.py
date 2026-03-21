@@ -5,9 +5,10 @@ Tests whether LLM debate can recover from parameter misspecification in the
 decision-making domain. All agents start with calibrated wrong params.
 Ground truth uses correct params for synthetic data generation.
 
-Two conditions per ground truth:
+Three conditions per ground truth:
   - No-debate: params stay fixed, EIG + posterior update only
   - Debate: agents see prediction errors, diagnose + propose param revisions
+  - Arbiter: debate + crux protocol + meta-agents (Integrator + Critic)
 
 This is the NeurIPS experiment: if the same pattern replicates across both
 categorization and decision-making domains, the implicit-prior finding is
@@ -18,6 +19,8 @@ Usage:
     python scripts/validation/validate_decision_m15_live.py CPT
     python scripts/validation/validate_decision_m15_live.py --no-debate-only
     python scripts/validation/validate_decision_m15_live.py --debate-only
+    python scripts/validation/validate_decision_m15_live.py --arbiter
+    python scripts/validation/validate_decision_m15_live.py --arbiter-only
     python scripts/validation/validate_decision_m15_live.py --backend princeton
 """
 
@@ -78,10 +81,16 @@ def run_condition(
     client=None,
     n_cycles=5,
     learning_rate=0.01,
+    enable_arbiter=False,
     verbose=True,
 ):
-    """Run one condition (no_debate or debate) under misspecification."""
-    condition = "debate" if enable_debate else "no_debate"
+    """Run one condition (no_debate, debate, or arbiter) under misspecification."""
+    if enable_arbiter:
+        condition = "arbiter"
+    elif enable_debate:
+        condition = "debate"
+    else:
+        condition = "no_debate"
 
     print(f"\n{'=' * 70}")
     print(f"DECISION M15 [{condition.upper()}] — Ground Truth: {gt_model}")
@@ -115,6 +124,7 @@ def run_condition(
         agent_params=agent_params,
         call_fn=call_fn,
         enable_debate=enable_debate,
+        enable_arbiter=enable_arbiter,
         verbose=verbose,
     )
     elapsed = time.time() - start
@@ -192,21 +202,29 @@ def print_summary_table(results):
     total = sum(1 for r in results.values() if isinstance(r, dict) and "correct" in r)
     print(f"\nCorrect: {n_correct}/{total}")
 
-    # Debate advantage
-    print("\n### Debate Advantage (vs no_debate)")
+    # Debate/arbiter advantage
+    print("\n### Condition Comparison (vs no_debate)")
     for gt in ["CPT", "EU", "PH"]:
         nd_key = f"{gt}_no_debate"
         d_key = f"{gt}_debate"
-        if nd_key in results and d_key in results:
+        a_key = f"{gt}_arbiter"
+        parts = []
+        if nd_key in results:
             nd = results[nd_key]
-            d = results[d_key]
             nd_ok = "correct" if nd.get("correct") else "WRONG"
+            parts.append(f"no_debate={nd_ok}")
+        if d_key in results:
+            d = results[d_key]
             d_ok = "correct" if d.get("correct") else "WRONG"
             recovery = d.get("recovery_pct", 0)
-            print(
-                f"  {gt}: no_debate={nd_ok}, debate={d_ok}, "
-                f"param recovery={recovery:.1f}%"
-            )
+            parts.append(f"debate={d_ok} ({recovery:.1f}% recovery)")
+        if a_key in results:
+            a = results[a_key]
+            a_ok = "correct" if a.get("correct") else "WRONG"
+            a_recovery = a.get("recovery_pct", 0)
+            parts.append(f"arbiter={a_ok} ({a_recovery:.1f}% recovery)")
+        if parts:
+            print(f"  {gt}: {', '.join(parts)}")
 
 
 if __name__ == "__main__":
@@ -244,6 +262,16 @@ if __name__ == "__main__":
         help="Run only debate conditions",
     )
     parser.add_argument(
+        "--arbiter",
+        action="store_true",
+        help="Also run arbiter conditions (debate + crux + meta-agents)",
+    )
+    parser.add_argument(
+        "--arbiter-only",
+        action="store_true",
+        help="Run only arbiter conditions",
+    )
+    parser.add_argument(
         "--backend",
         choices=["anthropic", "princeton"],
         default="princeton",
@@ -254,12 +282,18 @@ if __name__ == "__main__":
     models = [args.model] if args.model else ["CPT", "EU", "PH"]
 
     # Determine which conditions to run
-    run_no_debate = not args.debate_only
-    run_debate = not args.no_debate_only
+    if args.arbiter_only:
+        run_no_debate = False
+        run_debate = False
+        run_arbiter = True
+    else:
+        run_no_debate = not args.debate_only
+        run_debate = not args.no_debate_only
+        run_arbiter = args.arbiter
 
-    # Create LLM client if running debate conditions
+    # Create LLM client if running debate or arbiter conditions
     client = None
-    if run_debate:
+    if run_debate or run_arbiter:
         # Set the model name for the chosen backend — runner.call_agent() uses
         # this global when no model= kwarg is passed.
         runner_mod._LLM_MODEL = BACKEND_MODELS[args.backend]
@@ -302,6 +336,23 @@ if __name__ == "__main__":
                 results[key] = run_condition(
                     gt_model,
                     enable_debate=True,
+                    client=client,
+                    n_cycles=args.n_cycles,
+                    learning_rate=args.learning_rate,
+                )
+            except Exception as e:
+                import traceback
+
+                traceback.print_exc()
+                results[key] = {"error": str(e)}
+
+        if run_arbiter:
+            key = f"{gt_model}_arbiter"
+            try:
+                results[key] = run_condition(
+                    gt_model,
+                    enable_debate=True,
+                    enable_arbiter=True,
                     client=client,
                     n_cycles=args.n_cycles,
                     learning_rate=args.learning_rate,
