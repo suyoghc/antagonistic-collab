@@ -4,8 +4,8 @@
 
 Extending the framework to a second domain (decision-making under risk) to test
 whether the implicit-prior / complementary-bias findings generalize. Three models
-implemented: Expected Utility (↔ SUSTAIN), Cumulative Prospect Theory (↔ GCM),
-Priority Heuristic (↔ RULEX). Full computational pipeline wired: gamble registry
+implemented: Expected Utility (normative baseline), Cumulative Prospect Theory
+(dominant descriptive), Priority Heuristic (heuristic/rule-based). Full computational pipeline wired: gamble registry
 (76 problems), EIG adapter (7 groups), agent configs, validation script.
 
 No-debate baseline results:
@@ -25,9 +25,15 @@ Live results (D51, GPT-4o, 10 cycles): **REPLICATION CONFIRMED**
 Matches categorization M15 exactly (0/3→2/3). The representational-format principle
 holds: parameter recovery depends on interpretability, not domain.
 
+**Arbiter layer implemented** — crux protocol (identification, negotiation,
+finalization), crux-directed EIG selection, decision-domain meta-agents
+(Integrator + Critic), wired into `run_decision_debate(enable_arbiter=True)`.
+Validation script extended with `--arbiter` / `--arbiter-only` flags.
+34 debate tests + 26 EIG tests pass.
+
 Next steps:
+- **Run arbiter live validation** (`python scripts/validation/validate_decision_m15_live.py --arbiter`)
 - Write up two-domain replication for NeurIPS
-- Consider arbiter layer experiment (mirrors M16/M17 in categorization)
 - CPT could be a target for prompt enrichment study (separate from main result)
 
 ### R-IDeA — tested, negative result

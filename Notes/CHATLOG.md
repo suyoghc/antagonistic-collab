@@ -979,10 +979,10 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 **What was done:**
 1. Decided to extend to decision-making domain for NeurIPS-level contribution
    (one domain = finding, two domains = principle)
-2. Identified structurally parallel models:
-   - EU (↔ SUSTAIN): normative baseline, 1 param, smooth
-   - CPT (↔ GCM): dominant descriptive, 5 params, smooth
-   - Priority Heuristic (↔ RULEX): lexicographic rules, 0-1 params, discrete
+2. Identified three decision models:
+   - EU: normative baseline, 1 param, smooth
+   - CPT: dominant descriptive, 5 params, smooth
+   - Priority Heuristic: lexicographic rules, 0-1 params, discrete
 3. Implemented all three models with tests (17/17 pass):
    - `models/expected_utility.py`, `models/prospect_theory.py`,
      `models/priority_heuristic.py`
@@ -1009,7 +1009,8 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 **Key discussion:**
 - NeurIPS framing: not multi-agent coordination paper, but automated science /
   Bayesian OED paper with implicit prior finding
-- Structural parallel: CPT↔GCM (smooth), EU↔SUSTAIN (baseline), PH↔RULEX (rules)
+- Structural roles: CPT = dominant descriptive (like GCM), EU = normative baseline (like SUSTAIN), PH = heuristic rules (like RULEX)
+- Note: the empirical recovery parallels turned out different — PH↔RULEX, EU↔GCM, CPT↔SUSTAIN (see session 2026-03-21)
 - If bias pattern replicates: the principle is about representational format,
   not domain content
 - Tom Griffiths would want resource-rational framing; Jay Myung would want
@@ -1054,6 +1055,33 @@ Correct model wins in 9/9 runs. Framework is LLM-agnostic.
 - 5 cycles insufficient for EU (less distinctive predictions under misspecification);
   10 cycles sufficient — same pattern as categorization
 - Accumulated RMSE gate critical: local-only gate lets competitors game revisions
+
+---
+
+## Session — 2026-03-21 (decision arbiter)
+
+**Transcript:** `9a4e16d2-c1e8-4b40-8e1c-c94de4bc2dfc.jsonl`
+**Commits:** `c367e4f`, `f06340e`, `a29986d`, `8697997`, `b2c1526`, `f07d546`, `933d3fb`
+
+**What was done:**
+- Implemented decision domain arbiter layer across 5 phases (D52)
+- Phase 0: Preserve interpretation text in debate records
+- Phase 1: Crux protocol (identification, negotiation, finalization) for gamble groups
+- Phase 2: Crux-directed EIG selection (crux_indices + crux_weight)
+- Phase 3: Meta-agents (decision-domain Integrator + Critic)
+- Phase 4: Wired into run_decision_debate(enable_arbiter=True)
+- Phase 5: Extended validate_decision_m15_live.py with --arbiter flags
+- 18 new tests (all passing), 561 total suite green
+- Followed TDD (Red → Green) for all 5 phases
+
+**Key discussion:**
+- Reused domain-agnostic Crux + MetaAgentConfig dataclasses
+- Kept crux state as plain list (not EpistemicState) per D49 standalone principle
+- Arbiter condition label differentiates from debate/no_debate in results
+
+**What's next:**
+- Run live validation: `python scripts/validation/validate_decision_m15_live.py --arbiter`
+- Test whether meta-agent bias pattern (helps similarity ↔ EU, hurts rules ↔ PH) replicates
 
 ---
 

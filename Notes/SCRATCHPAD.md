@@ -16,9 +16,10 @@ Decision-making domain implementation **in progress**.
 domain (decision-making under risk) to elevate the paper from CogSci to NeurIPS.
 
 **Three models implemented and tested (17/17 tests pass):**
-- EU (Expected Utility) ↔ SUSTAIN — normative baseline, 1 param (r)
-- CPT (Cumulative Prospect Theory) ↔ GCM — dominant descriptive, 5 params
-- Priority Heuristic ↔ RULEX — lexicographic rules, 0-1 params
+- EU (Expected Utility) — normative baseline, 1 param (r)
+- CPT (Cumulative Prospect Theory) — dominant descriptive, 5 params
+- Priority Heuristic — lexicographic rules, 0-1 params
+- Cross-domain empirical parallels: PH↔RULEX (rule-based), EU↔GCM (moderate recovery), CPT↔SUSTAIN (abstract params resist)
 
 **Gamble structure registry built (76 problems):**
 - 17 base diagnostic problems (certainty effect, common ratio, fourfold pattern,
@@ -82,9 +83,19 @@ Key findings:
 - CPT alpha/beta genuinely outside LLM diagnostic capability (no prompt help given,
   matching categorization where no special prompt help was given either)
 
+**Arbiter layer implemented (5 phases):**
+1. Phase 0: Interpretation text preserved in debate records (was silently discarded)
+2. Phase 1: Crux protocol — identification, negotiation, finalization (reuses Crux dataclass)
+3. Phase 2: Crux-directed EIG selection — crux_indices + crux_weight params
+4. Phase 3: Meta-agents — decision-domain Integrator + Critic (reuses MetaAgentConfig)
+5. Phase 4: Wired into run_decision_debate(enable_arbiter=True), condition="arbiter"
+6. Phase 5: Validation script extended with --arbiter / --arbiter-only flags
+
+Tests: 34 debate tests, 26 EIG tests, 561 total suite (all pass).
+
 **What's next:**
+- **Run arbiter live validation** to test meta-agent bias pattern replication
 - Write up two-domain replication for NeurIPS
-- Consider arbiter layer experiment (mirrors M16/M17 in categorization)
 - CPT could be a target for prompt enrichment study (separate from main result)
 
 Calibration notes:

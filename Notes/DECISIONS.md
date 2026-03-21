@@ -1362,3 +1362,34 @@ This now matches categorization M15 exactly: 0/3 → 2/3.
 
 **Status:** Replication confirmed at 10 cycles. Two-domain result ready for
 NeurIPS framing.
+
+## D52: Decision domain arbiter layer — 2026-03-21
+
+**Problem:** The categorization domain shows the arbiter (crux protocol +
+meta-agents) has a model-type-dependent bias: helps similarity models, hurts
+rule models. The decision domain replicates M15's debate result (0/3→2/3)
+but lacks the arbiter layer. Does the bias pattern replicate?
+
+**Decision:** Port the arbiter layer to the decision domain via 5 phases:
+1. Preserve interpretation text in debate records (meta-agents need it)
+2. Crux protocol (identification, negotiation, finalization) targeting gamble groups
+3. Crux-directed EIG selection (mixture distribution, crux_weight=0.3)
+4. Decision-domain meta-agents (Integrator + Critic) with CPT/EU/PH prompts
+5. Wire into run_decision_debate(enable_arbiter=True), extend validation script
+
+**Key design choices:**
+- Reuse Crux and MetaAgentConfig dataclasses from categorization (domain-agnostic)
+- Keep crux state as plain list, not EpistemicState (keeps decision runner standalone per D49)
+- Crux targets are gamble group names (not structure/condition pairs — decision domain is simpler)
+- Crux identification starts at cycle 1 (need at least one round of data)
+- Single validation script extended, not a new file (matches categorization precedent)
+
+**Alternatives considered:**
+- A: Copy crux protocol into its own module → too much code duplication
+- B: Couple to EpistemicState → violates D49 standalone principle
+- C (chosen): Import domain-agnostic pieces, keep domain-specific logic in decision_debate_runner.py
+
+**Outcome:** 18 new tests (8 crux, 5 meta-agent, 3 integration, 2 interpretation),
+all 561 tests pass. Ready for live validation.
+
+**Status:** Implemented. Live validation not yet run.
