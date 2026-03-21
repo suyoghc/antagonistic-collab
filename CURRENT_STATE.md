@@ -278,11 +278,11 @@ fully-specified models. 18/18 correct across ablation conditions.
 
 ## What's next
 
-1. **Decision-making domain (debate runner in progress)** — Computational pipeline
+1. **Decision-making domain (debate runner built, needs live testing)** — Full pipeline
    complete: models (17/17), gamble registry (76), EIG adapter (23 tests), agent configs
-   (18 tests), validation script. No-debate baseline: 3/3 correct, 0/3 misspec.
-   Now building standalone decision debate runner (D49) to test whether debate recovers
-   misspecification via parameter diagnosis. NeurIPS target.
+   (18 tests), validation script, standalone debate runner (14 tests). No-debate baseline:
+   3/3 correct, 0/3 misspec. Next: run live LLM experiments under misspecification to
+   test whether debate recovers 0/3 → 2-3/3. NeurIPS target.
 2. Write up two-domain results as NeurIPS submission
 3. GeCCo forks (gecco-core, gecco-supplement) — model discovery + adjudication
 4. Real data integration (human participants via Prolific/AutoRA)

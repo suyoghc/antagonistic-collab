@@ -38,26 +38,21 @@ domain (decision-making under risk) to elevate the paper from CogSci to NeurIPS.
 3. ~~**Agent configs**~~ ✓ — `decision_agents.py` with CPT_Agent, EU_Agent,
    PH_Agent system prompts. 18 tests.
 
-**What's next: Standalone decision debate runner (Option C)**
+**Standalone decision debate runner — IMPLEMENTED (D49)**
 
-Architecture decision (D49): standalone runner rather than refactoring or
-subclassing DebateProtocol. Rationale: zero risk to 47/48 categorization
-results, and DebateProtocol is tightly coupled to categorization (LOO,
-STRUCTURE_REGISTRY, learning curves, condition effects).
+`decision_debate_runner.py` committed with 14 tests (all passing, 538/538 full suite).
 
-The standalone runner reuses domain-agnostic pieces:
-- `compute_eig()` and `ModelPosterior` from bayesian_selection.py
-- `decision_predictions_for_eig()` from decision_eig.py
-- `generate_synthetic_choices()` from decision_runner.py
-- Agent configs from decision_agents.py
+Components built:
+1. ~~**LLM debate round**~~ ✓ — `run_debate_round()` shows prediction errors,
+   collects JSON revisions, validates params + RMSE gates
+2. ~~**Parameter validation**~~ ✓ — `filter_valid_params()` validates against
+   `model.default_params` keys (not inspect.signature — decision models use a
+   params dict, not kwargs)
+3. ~~**Cycle loop**~~ ✓ — `run_decision_debate()` wires EIG select → synthetic
+   data → posterior update → debate round → param revision → repeat
+4. **Arbiter round** — NOT YET IMPLEMENTED (can add later as optional layer)
 
-New code needed (~200 lines):
-1. **LLM debate round** — show agents prediction errors, ask for parameter
-   diagnosis + revision proposals
-2. **Parameter validation** — filter revisions through `inspect.signature`
-   (pattern from categorization runner.py)
-3. **Arbiter round** (optional) — identify cruxes, steer experiment selection
-4. **Cycle loop** — wire: EIG select → data → score → debate → param update → repeat
+**What's next: Live LLM experiments under misspecification**
 
 Calibration notes:
 - learning_rate=0.01 (calibrated: converges over 3-5 cycles, leaves room
@@ -84,13 +79,8 @@ Calibration notes:
 - `tests/test_decision_models.py` — 17 tests
 - `tests/test_decision_eig.py` — 23 tests
 - `tests/test_decision_agents.py` — 18 tests
-
-**Predictions to test:**
-- Arbiter should favor CPT/EU (smooth gradients) over PH (discrete rules)
-- LLM proposals should favor PH (easy to describe) over CPT (hard to articulate)
-- EIG should be model-agnostic
-- If pattern replicates across both domains → principle about representational
-  format, not domain content → NeurIPS paper
+- `antagonistic_collab/models/decision_debate_runner.py` — standalone debate runner
+- `tests/test_decision_debate.py` — 14 tests
 
 ### R-IDeA — Complete (negative result)
 
