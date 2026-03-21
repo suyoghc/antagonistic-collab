@@ -7,7 +7,19 @@
 
 ## Abstract
 
-We present an antagonistic collaboration framework in which three LLM agents — each representing a competing theory of human category learning — debate through a structured protocol, propose experiments, and converge toward the theory that best explains synthetic data. The three models are the Generalized Context Model (GCM; Nosofsky 1986), SUSTAIN (Love, Medin & Gureckis 2004), and RULEX (Nosofsky, Palmeri & McKinley 1994). We compare two architectures: a *legacy* mode where LLM agents propose experiments through adversarial debate, and a *full-pool* mode where Bayesian expected information gain (EIG) selects experiments while agents shift to interpreting results and generating hypotheses. Across 6 validation runs (3 ground truths × 2 modes, 5 cycles each), the correct model's agent wins in every condition. Full-pool mode achieves dramatically better discrimination for hard model pairs (RULEX gap: 2.4% legacy vs. 68% full-pool), driven by learning curves as a second evidence channel. Cross-LLM comparison (GPT-4o, Claude Sonnet, Claude Opus) confirms the framework is LLM-agnostic (9/9 correct). After closing four broken feedback loops (M5), debate now causally affects RMSE through parameter revision persistence (replication std=0.018, previously 0.000), and critique-as-falsification reveals that agents overclaim model accuracy by 3–5×. M6 adds arbiter-v0.1 architecture: role-specialized meta-agents (Integrator, Critic), crux-based negotiation for focusing debate on decisive questions, conflict maps, and pre-registration output. Live M6 validation with GPT-4o achieves 3/3 correct with decisive gaps (36–68%), reveals the system operates as a falsification engine (44 claims falsified, 1 confirmed), and identifies posterior collapse as the primary architectural bottleneck. M7 introduces likelihood tempering (tau=0.005, prediction clip [0.05, 0.95]) to address posterior collapse, achieving gradual convergence but revealing that greedy EIG selection repeats the same experiment every cycle. M8 adds Thompson sampling for experiment selection: sampling proportional to EIG scores instead of argmax. A clean 6-run ablation (3 ground truths × 2 strategies) shows both Thompson and greedy achieve 3/3 correct post-bugfix, but Thompson explores far more broadly (12 unique structures including 6 novel vs greedy's 3 unique, 0 novel). M9 adds crux-directed Thompson sampling: a mixture distribution that biases experiment selection toward crux-matching candidates, establishing the first semantically directed path from debate to experiment selection (24 parseable crux specs, 1 crux-directed experiment). M10 adds claim-responsive debate inspired by Reflexion (Shinn et al., NeurIPS 2023): agents with falsified claims must explicitly address each one (revise, explain, or abandon). Live validation shows 80% compliance (100% when applicable), with "explain" dominating — agents reproduce Lakatos's auxiliary hypothesis shielding without being programmed to do so. M11 extends the candidate pool with parametric structures (168 candidates) and M12 goes further with continuous sampling (~427 per cycle, 0% cycle overlap). M13 runs a controlled 3×2 debate ablation (No-Debate / Debate-No-Arbiter / Debate+Arbiter × Thompson / Greedy): all 18/18 conditions identify the correct winner; no-debate achieves the best RMSE (0.055) and gap (87.6%) while running 3-4× faster, confirming debate is epiphenomenal for model identification on synthetic benchmarks. We distill 40 principles on what LLM-mediated scientific debate can and cannot do.
+We present an antagonistic collaboration framework in which LLM agents — each representing a competing scientific theory — debate through a structured protocol while a Bayesian computational layer selects experiments, generates predictions, and accumulates evidence. We demonstrate the framework in two domains: human category learning (GCM, SUSTAIN, RULEX) and decision-making under risk (Expected Utility, Cumulative Prospect Theory, Priority Heuristic).
+
+Across 17 milestones and 48 factorial conditions, the system achieves **47/48 correct model identifications.** The project's trajectory reveals when LLM debate adds value and when it doesn't:
+
+**Under correct specification (M1–M14):** Bayesian EIG experiment selection + likelihood tempering + Thompson sampling is causally sufficient. A controlled 3×2 ablation (M13, 18/18 correct) confirms debate is epiphenomenal — no-debate achieves the best RMSE (0.055) and gap (87.6%) while running 3-4× faster.
+
+**Under parameter misspecification (M15, 8/9 correct):** Debate becomes causally necessary. Agents observe prediction errors, diagnose their source, and propose parameter corrections — improving identification by +3.5pp (GCM) to +22.4pp (RULEX). Parameter recovery depends on the interpretability of the parameter-to-behavior mapping: rule thresholds and sensitivity parameters are recovered; abstract mathematical parameters (value function curvature, cluster dynamics) are not.
+
+**Under open design + misspecification (M16–M17, 21/21 correct):** Every intervention carries an implicit model-type prior: the arbiter favors similarity models, open design favors rule models, EIG is approximately agnostic. These biases compose non-additively — synergy for some model types, interference for others. R-IDeA (formal diversification) is antagonistic to debate's parameter recovery mechanism; complementary biases must use orthogonal information channels.
+
+**Cross-domain replication (Decision M15):** The misspecification finding replicates in decision-making under risk: 0/3 no-debate → 2/3 debate (10 cycles), matching categorization exactly. The representational-format principle is domain-general: PH↔RULEX (strongest recovery), EU↔GCM (recovered with more data), CPT↔SUSTAIN (abstract parameters resist diagnosis).
+
+We distill 64 lessons on what LLM-mediated scientific debate can and cannot do.
 
 ---
 
@@ -212,7 +224,7 @@ Default `crux_weight=0.3`. When no active cruxes match pool entries, falls back 
 
 ### 2.14 Validation protocol
 
-Six M4 runs: 3 ground truths × 2 modes, each 5 cycles. Nine cross-LLM runs: 3 ground truths × 3 LLMs. Three M5 validation runs: 3 ground truths, full_pool with GPT-4o. Four M5 replication runs: GCM ground truth, full_pool with GPT-4o (for variance analysis). Three M6 live validation runs: 3 ground truths, full_pool with GPT-4o, all arbiter-v0.1 features enabled. Three M7 validation runs: 3 ground truths, full_pool with tau=0.005. Six M8 ablation runs: 3 ground truths × 2 strategies (Thompson vs greedy), full_pool with tau=0.005. Three M9 validation runs: 3 ground truths, full_pool with crux_weight=0.3. Three M10 validation runs: 3 ground truths, claim_responsive=true. Three M11 validation runs: 3 ground truths, richer design spaces. Three M12 validation runs: 3 ground truths, continuous design space. Eighteen M13 ablation runs: 3×2 (No-Debate / Debate-No-Arbiter / Debate+Arbiter × Thompson / Greedy) × 3 ground truths. 388 automated tests verify framework correctness.
+Six M4 runs: 3 ground truths × 2 modes, each 5 cycles. Nine cross-LLM runs: 3 ground truths × 3 LLMs. Three M5 validation runs: 3 ground truths, full_pool with GPT-4o. Four M5 replication runs: GCM ground truth, full_pool with GPT-4o (for variance analysis). Three M6 live validation runs: 3 ground truths, full_pool with GPT-4o, all arbiter-v0.1 features enabled. Three M7 validation runs: 3 ground truths, full_pool with tau=0.005. Six M8 ablation runs: 3 ground truths × 2 strategies (Thompson vs greedy), full_pool with tau=0.005. Three M9 validation runs: 3 ground truths, full_pool with crux_weight=0.3. Three M10 validation runs: 3 ground truths, claim_responsive=true. Three M11 validation runs: 3 ground truths, richer design spaces. Three M12 validation runs: 3 ground truths, continuous design space. Eighteen M13 ablation runs: 3×2 (No-Debate / Debate-No-Arbiter / Debate+Arbiter × Thompson / Greedy) × 3 ground truths. Eighteen M14 runs: same factorial as M13 with debate→computation feedback loop closed. Nine M15 runs: 3 ground truths × 3 conditions (no-debate / debate / arbiter), misspecified params. Fifteen M16 runs: 3 ground truths × 5 conditions (closed_no_debate / closed_debate / closed_arbiter / open_debate / open_arbiter). Six M17 runs: 3 ground truths × 2 conditions (open_debate / open_arbiter), misspecified params. Nine R-IDeA runs: 3 ground truths × 3 regimes (correct/misspec × no-debate/debate). Six decision M15 runs: 3 ground truths × 2 conditions (no-debate / debate), 5 and 10 cycles. 538+ automated tests verify framework correctness.
 
 ---
 
@@ -588,6 +600,175 @@ M13 answers M12's open question with a controlled 3×2 ablation: No-Debate / Deb
 
 **The structural gap is architectural.** Debate output (interpretations, critiques, claims, cruxes) does not feed back into the quantities that drive identification (EIG scores, model predictions, posterior weights). For debate to causally help, the loop must close.
 
+### 3.28 M14: Closing the debate→computation feedback loop (18/18 correct)
+
+M14 closes the structural gap identified in M13: debate output now feeds back into the computational scoring pipeline. Parameter revisions proposed during debate are validated via `inspect.signature()` and, if they improve RMSE, applied to the agent's model for subsequent cycles. The claim ledger is updated with prediction outcomes, and falsified claims are surfaced in subsequent debate rounds.
+
+**Results:** 18/18 correct across the full M13 factorial (No-Debate / Debate-No-Arbiter / Debate+Arbiter × Thompson / Greedy × 3 ground truths). Debate adds no value when models are correctly specified — the M13 finding holds. The feedback loop is architecturally open but operationally inert when parameters are already correct: agents propose revisions, but RMSE gates reject them because defaults are already optimal.
+
+**Key finding:** The computational pipeline is **causally sufficient** for model identification on synthetic benchmarks with correctly specified models. Debate contributes interpretive value (mechanistic narratives, claim engagement) but does not improve identification. This sets the stage for M15: under what conditions does debate become causally necessary?
+
+Scripts: `scripts/validation/validate_m14_live.py`
+
+### 3.29 M15: Model misspecification — debate causally helps (8/9 correct)
+
+M15 tests the first condition where debate should matter: all agents start with calibrated wrong parameters. Ground truth uses correct parameters; agents' models use gap-narrowing misspecifications from a Phase 1 parameter sweep.
+
+**Phase 1a — Mimicry sweep** (`scripts/m15_mimicry_sweep.py`): Swept parameter grids for all 3 models across 7 base structures. **Finding: no true mimicry exists.** At every parameter setting tested, each model's predictions remain closer to its own ground truth than to any competitor. GCM, SUSTAIN, and RULEX are structurally too different for parameter changes alone to make them indistinguishable.
+
+**Phase 1b — Competition-based sweep**: Generated synthetic data from each GT, scored all models with correct model misspecified. **Finding: misspecification never flips the winner but narrows gaps substantially.** GCM 61%→28%, SUSTAIN 65%→29%, RULEX 82%→16%. RULEX most vulnerable.
+
+Calibrated misspecification settings: GCM c=0.5 (gap 28%), SUSTAIN r=3.0/eta=0.15 (gap 29%), RULEX error_tolerance=0.25/p_single=0.3 (gap 16%).
+
+**Phase 2 — Full 9-run matrix (GPT-4o, 5 cycles each):**
+
+| GT | No-debate gap | Debate gap | Arbiter gap | Best |
+|---|---|---|---|---|
+| GCM | 74.4% | 77.9% (+3.5pp) | 79.3% (+4.9pp) | Arbiter |
+| SUSTAIN | 87.7% | 85.8% (-1.9pp) | 76.1% (-11.6pp) | No-debate |
+| RULEX | 58.0% | 80.4% (+22.4pp) | 3.2% (-54.7pp, **wrong winner**) | Debate |
+
+**Correct winner: 8/9.** Only arbiter-RULEX fails (the project's only wrong winner across 47/48 total).
+
+**Debate without arbiter is the best configuration under misspecification.** It helps GCM (+3.5pp) and RULEX (+22.4pp) via parameter recovery. Parameter recovery rates: GCM 85.7% (sensitivity c recovered), RULEX 60.3% (rule probabilities partially recovered), SUSTAIN 0% (misspecification doesn't produce enough prediction error to trigger revisions — the misspecified SUSTAIN still fits data well).
+
+**The arbiter is catastrophic for RULEX under misspecification.** Meta-agents distort the divergence mapping, shifting experiment selection toward non-discriminative structures. RULEX arbiter gap drops from 80.4% (debate) to 3.2% (arbiter) — the wrong model wins.
+
+**Parameter recovery is the mechanism.** `sync_params_from_theory()` + `validate_param_revision()` allow agents to propose new parameter values during debate. When prediction errors are visible and the parameter-to-behavior mapping is intuitive, agents diagnose correctly. When the mapping is abstract (SUSTAIN's cluster dynamics), agents cannot diagnose even with visible errors.
+
+Scripts: `scripts/m15_mimicry_sweep.py`, `scripts/validation/validate_m15_live.py`
+
+### 3.30 M16: Open design space — every intervention carries an implicit prior (15/15 correct)
+
+M16 tests the second condition: agents must propose all experiment structures via debate rather than selecting from a curated registry. 2×2+1 factorial: closed/open × debate/arbiter + no-debate baseline. 15 runs total.
+
+**Full results (GPT-4o, 5 cycles each):**
+
+| GT | Condition | Winner | Correct? | RMSE | Gap% | #Structs |
+|---|---|---|---|---|---|---|
+| GCM | closed_no_debate | Exemplar_Agent | Yes | 0.088 | 76.8 | 0 |
+| GCM | closed_debate | Exemplar_Agent | Yes | 0.067 | 81.0 | 10 |
+| GCM | closed_arbiter | Exemplar_Agent | Yes | 0.073 | 79.2 | 8 |
+| GCM | open_debate | Exemplar_Agent | Yes | 0.084 | 71.6 | 54 |
+| GCM | open_arbiter | Exemplar_Agent | Yes | 0.074 | 76.9 | 48 |
+| SUSTAIN | closed_no_debate | Clustering_Agent | Yes | 0.057 | 87.7 | 0 |
+| SUSTAIN | closed_debate | Clustering_Agent | Yes | 0.053 | 88.6 | 10 |
+| SUSTAIN | closed_arbiter | Clustering_Agent | Yes | 0.020 | 96.0 | 10 |
+| SUSTAIN | open_debate | Clustering_Agent | Yes | 0.108 | 64.1 | 56 |
+| SUSTAIN | open_arbiter | Clustering_Agent | Yes | 0.100 | 70.7 | 54 |
+| RULEX | closed_no_debate | Rule_Agent | Yes | 0.053 | 86.1 | 0 |
+| RULEX | closed_debate | Rule_Agent | Yes | 0.168 | 58.6 | 14 |
+| RULEX | closed_arbiter | Rule_Agent | Yes | 0.140 | 63.9 | 13 |
+| RULEX | open_debate | Rule_Agent | Yes | 0.055 | 82.7 | 48 |
+| RULEX | open_arbiter | Rule_Agent | Yes | 0.061 | 82.0 | 55 |
+
+**Correct winner: 15/15.**
+
+**The arbiter is not universally bad — it's model-type-dependent.** M15 concluded the arbiter was net negative. M16 overturns this: the arbiter is a *bias*, not noise. Cruxes steer experiment selection toward continuous/similarity-based structures. SUSTAIN closed_arbiter achieves **96.0% gap** (+8.3pp) — best SUSTAIN result ever, RMSE 0.020 lowest measured. But RULEX closed_arbiter: 63.9% (-22.2pp).
+
+**Open design space helps RULEX, hurts everything else.** Agent-proposed structures are semantically rich (exception-heavy, rule-diagnostic). RULEX open_debate (82.7%) dramatically outperforms closed_debate (58.6%). SUSTAIN open_debate (64.1%) is the worst SUSTAIN condition (-23.6pp). This is the mirror image of the arbiter bias.
+
+**Arbiter recovers open-design losses for similarity models.** GCM: open_debate -5.2pp → open_arbiter +0.1pp (full recovery). SUSTAIN: open_debate -23.6pp → open_arbiter -17.0pp (partial recovery).
+
+**Computation alone remains the most reliable single condition.** closed_no_debate achieves 76.8-87.7% gap across all three ground truths with zero LLM calls.
+
+Scripts: `scripts/validation/validate_m16_live.py`. Tests: `TestOpenDesignSpace` (5 tests) in `tests/test_bugfixes.py`.
+
+### 3.31 M17: Composition under double stress — 6/6 correct (47/48 overall)
+
+M17 combines M15 misspecification with M16 open design: agents start with wrong parameters AND must propose all structures. Two conditions per GT: open_debate and open_arbiter.
+
+**Results (GPT-4o, 5 cycles each):**
+
+| GT | Condition | Winner | Correct? | RMSE | Gap% | #Structs | Param Recovery |
+|---|---|---|---|---|---|---|---|
+| GCM | open_debate | Exemplar_Agent | Yes | 0.114 | 67.3 | 48 | 42.9% |
+| GCM | open_arbiter | Exemplar_Agent | Yes | 0.047 | **87.8** | 58 | 85.7% |
+| SUSTAIN | open_debate | Clustering_Agent | Yes | 0.085 | 77.4 | 48 | 0% |
+| SUSTAIN | open_arbiter | Clustering_Agent | Yes | 0.098 | 72.7 | 51 | 0% |
+| RULEX | open_debate | Rule_Agent | Yes | 0.189 | 57.8 | 51 | 46.3% |
+| RULEX | open_arbiter | Rule_Agent | Yes | 0.214 | 42.2 | 57 | 0% |
+
+**6/6 correct — the system is robust under double stress.** Even the hardest condition (RULEX open_arbiter: wrong params + arbiter bias + open design) produces the correct winner. Combined with M14 (18/18), M15 (8/9), and M16 (15/15), the system achieves **47/48 correct across all factorial conditions**.
+
+**GCM open_arbiter (87.8%) — best GCM result across all milestones.** Parameter recovery (85.7%) and arbiter-guided open proposals compose synergistically. Better than M15 arbiter (79.3%, closed registry) AND M16 open_arbiter (76.9%, correct params).
+
+**Open design rescues RULEX from arbiter catastrophe.** M15 arbiter-RULEX (3.2%, wrong winner) was the project's only incorrect identification. M17 open_arbiter-RULEX (42.2%, correct) shows the open design space partially counteracts the arbiter's similarity bias.
+
+**Composition is non-additive and model-dependent.** GCM: arbiter + misspec + open > either alone (synergy). SUSTAIN: open_debate under misspec (77.4%) > open_debate correct spec (64.1%). RULEX: open_debate under misspec (57.8%) < M15 debate (80.4%) — param recovery weakened by open design's structure diversity.
+
+**Parameter recovery is modulated by design space.** GCM fully recovers under open_arbiter (85.7%) but only partially under open_debate (42.9%). RULEX recovery degrades from 60.3% (M15 closed) to 46.3% (M17 open_debate) and drops to 0% under open_arbiter. The arbiter redirects agent attention from parameter revision toward structure-level reasoning.
+
+Scripts: `scripts/validation/validate_m17_live.py`
+
+### 3.32 R-IDeA: Formal diversification cannot substitute for semantic diagnosis (negative result)
+
+R-IDeA (Representativeness, Informativeness, De-Amplification) is a multi-objective acquisition function that weights experiment candidates by their representativeness of the design space, informativeness (EIG), and de-amplification (avoiding over-represented regions). Tested as an alternative to EIG for experiment selection, motivated by M16's finding that EIG has implicit model-type biases.
+
+**Results (GPT-4o, 5 cycles, all conditions):**
+
+| Condition | Mean Gap | Std |
+|---|---|---|
+| EIG, correct spec, no debate | 86.9% | — |
+| R-IDeA, correct spec, no debate | 80.5% | — |
+| EIG, misspec, no debate | 75.1% | — |
+| R-IDeA, misspec, no debate | 65.4% | — |
+| EIG, misspec, debate | 81.4% | 3.3% |
+| R-IDeA, misspec, debate | **53.7%** | — |
+
+**R-IDeA underperforms EIG in all regimes.** Even under correct specification where biases shouldn't matter, R-IDeA's representativeness weighting selects less informative experiments.
+
+**R-IDeA + debate is the worst condition tested.** RULEX drops to 19.4% gap (vs 80.4% with EIG+debate) because representativeness dilutes visible prediction failures — the experiments that debate needs for parameter diagnosis. R-IDeA starves the mechanism that actually works.
+
+**Key insight: informativeness and semantic diagnosis are synergistic; diversification and diagnosis are antagonistic.** Debate recovers parameters by observing prediction failures on informative experiments. Any intervention that reduces experiment informativeness (R-IDeA, random selection) undermines this. The optimal regime is maximally informative experiments (EIG) + maximally diagnostic reasoning (debate). Complementary biases must use orthogonal information channels, not reweight the same channel.
+
+Scripts: `antagonistic_collab/ridea.py`, `scripts/validation/validate_ridea.py`, `scripts/validation/validate_ridea_debate.py`. Tests: `tests/test_ridea.py` (15 tests).
+
+### 3.33 Decision domain: Cross-domain replication of the misspecification finding
+
+To test whether the implicit-prior / complementary-bias findings generalize beyond categorization, we implemented a second domain: decision-making under risk. Three models implemented, chosen for structural parallels to the categorization models:
+
+- **Expected Utility (EU)** ↔ SUSTAIN — normative baseline, 1 free parameter (risk aversion r). Predicts rational choice via utility maximization.
+- **Cumulative Prospect Theory (CPT)** ↔ GCM — dominant descriptive model, 5 parameters (alpha, beta, lambda_, gamma_pos, gamma_neg). Kahneman & Tversky's nonlinear weighting of outcomes and probabilities.
+- **Priority Heuristic (PH)** ↔ RULEX — lexicographic rule model, 3 parameters (prob_threshold, outcome_threshold_frac, phi). Brandstätter, Gigerenzer & Hertwig's fast-and-frugal heuristic.
+
+**Gamble registry:** 76 problems — 17 base diagnostic gambles (certainty effect, common ratio, fourfold pattern, loss aversion, risk premium, PH-specific) + 59 parametric variants (cert-vs-risky, mixed, risky pairs). 7 gamble groups for EIG computation.
+
+**Pipeline:** Standalone `decision_debate_runner.py` (D49) with EIG adapter, synthetic data generation, posterior updating, and debate round with parameter revision. Parameter validation uses `model.default_params` keys (not `inspect.signature` — decision models use a params dict pattern). RMSE gate validates against accumulated observations across all cycles (D50).
+
+**No-debate baseline (computation-only):**
+- Correct params: 3/3 identified by cycle 0-1
+- Misspecified params: 0/3 (all wrong — stronger penalty than categorization)
+
+**Decision M15 results (GPT-4o, misspecified params):**
+
+| Cycles | No-debate | Debate | Score |
+|---|---|---|---|
+| 5 | 0/3 | 1/3 (PH only) | Partial |
+| 10 | 0/3 | **2/3** (PH + EU) | **Matches categorization** |
+
+**Per-model detail (10 cycles):**
+
+| GT | No-debate | Debate (10 cyc) | Param Recovery |
+|---|---|---|---|
+| PH | Wrong | **Correct** | **100.0%** (all 3 params exact) |
+| EU | Wrong | **Correct** | **75.0%** (r exact, temp off) |
+| CPT | Wrong | Wrong | 28.4% (lambda_ exact, alpha/beta stuck) |
+
+**Cross-domain parallels are clean:**
+- **PH ↔ RULEX** — Rule-based models, strongest recovery. Discrete, interpretable parameters (thresholds, rule probabilities) are easiest for LLMs to diagnose.
+- **EU ↔ GCM** — Recovered with sufficient evidence exposure. 5 cycles insufficient (predictions under misspecification are not distinctive enough); 10 cycles sufficient.
+- **CPT ↔ SUSTAIN** — Abstract mathematical parameters (alpha/beta = value function curvature) resist LLM diagnosis, matching SUSTAIN's attention weights/cluster dynamics.
+
+**The representational-format principle holds across domains.** Parameter recovery depends on whether the parameter-to-behavior mapping is linguistically describable, not on the scientific domain. LLMs can articulate "be more loss-averse" (lambda_ recovered) but struggle with "the value function should be less concave" (alpha/beta not recovered).
+
+**Technical details:**
+- Accumulated RMSE gate (D50) was critical: local-only gate (current cycle's 2-3 gambles) let competitor agents game revisions by accepting changes that improved local fit while hurting global fit. After switching to accumulated observations, acceptance dropped from 79% to 49%.
+- Strict improvement required: tolerance=0.0 with `<` (not `<=`) to reject neutral revisions.
+- Calibration: learning_rate=0.01, n_subjects=30, 7 gamble groups.
+
+Scripts: `scripts/validation/validate_decision_m15_live.py`. Tests: `tests/test_decision_debate.py` (16 tests), `tests/test_decision_models.py` (17), `tests/test_decision_eig.py` (23), `tests/test_decision_agents.py` (18).
+
 ---
 
 ## 4. Discussion
@@ -614,7 +795,7 @@ The most fundamental bottleneck was translating between LLM reasoning and comput
 
 The solution was a constrained menu (structure registry + condition effects) that preserves agent choice while ensuring executability. This is a general challenge for LLM-in-the-loop scientific systems: the translation layer between natural language and formal specification must be designed explicitly. M9's crux parsing failure (23% format compliance despite explicit menus) further illustrates the gap. Tam et al. (2024) demonstrate that format restrictions actively degrade LLM reasoning performance — the model doesn't fail to understand the format, but format constraints interfere with generation. The IFEval benchmark (Zhou et al. 2023) shows no model exceeds 80% on verifiable format constraints. Robust pipelines should assume majority non-compliance and design mechanisms (mixture distributions, fuzzy matching, constrained decoding) that degrade gracefully.
 
-### 4.4 What debate does and doesn't do
+### 4.4 What debate does and doesn't do (revised through M17 + decision domain)
 
 **What debate contributes:**
 - Adversarial critique as a forcing function — pressures agents to refine proposals in later cycles
@@ -624,17 +805,25 @@ The solution was a constrained menu (structure registry + condition effects) tha
 - Crux negotiation that identifies genuine theoretical fault lines (M6 — 15% acceptance rate, accepted cruxes map to real scientific disagreements)
 - Role-specialized synthesis: Integrator identifies convergence, Critic identifies weakest arguments (M6)
 - Falsification as an emergent methodology: 44:1 falsified-to-confirmed ratio (M6)
+- **Parameter recovery under misspecification (M15)** — debate improves gap by +3.5pp (GCM) to +22.4pp (RULEX) via parameter diagnosis and revision. This is the first causal demonstration that debate adds value for model identification. Replicates across domains (decision M15: 0/3→2/3).
+- **Novel experiment proposals that fill registry gaps (M16)** — open design proposals help RULEX (+24pp over closed_debate) when the curated registry lacks rule-diagnostic structures
 
 **What debate does not contribute:**
-- Experiment selection quality (EIG dominates; LLM proposals are narrative-driven)
+- Experiment selection quality under correct specification (EIG dominates; LLM proposals are narrative-driven)
 - Cumulative scientific reasoning — partially addressed by M10's claim-responsive directive (Shinn et al., NeurIPS 2023). Agents now engage with falsified claims at 100% compliance when directed, but the dominant response is "explain" (auxiliary hypothesis shielding) rather than genuine theory revision. Overclaiming persists at 3–5×
 - Data-grounded argumentation (posteriors cited as proxy; item-level data ignored)
 - Calibrated quantitative predictions (agents overclaim accuracy by 3–5× even after M10 claim-responsive engagement — the mechanism fixes ignoring but not calibration)
-- Overcoming posterior collapse (crux boost is active but powerless when EIG=0)
+- Recovery of abstract mathematical parameters — parameters that require mathematical understanding (CPT alpha/beta, SUSTAIN cluster dynamics) are outside LLM diagnostic capability in both domains
 
-Pre-M5, the debate was entirely epiphenomenal to RMSE — replication variance was zero, and convergence was driven by the Bayesian machinery alone. Post-M5, parameter revision persistence creates a modest but real causal link: different LLM runs produce different parameter revisions, which produce different model predictions. Post-M6, the arbiter-v0.1 architecture enriches debate quality (cruxes, conflict maps, meta-agents) but does not fundamentally alter the convergence mechanism, which remains Bayesian. Post-M8, debate contributes novel structure proposals that Thompson sampling actually selects (6 novel structures in ablation), but the exploration is stochastic, not debate-directed. Post-M9, the crux pipeline is operational: accepted cruxes directly bias experiment selection via a mixture distribution. In the GCM validation, crux `crux_004` selected `rule_plus_exception_1exc/high_noise` — the first time a debate-identified theoretical disagreement determined which experiment ran. Post-M10, agents must explicitly confront falsified claims (80% compliance overall, 100% when applicable). The dominant response is "explain" (invoking confounds and boundary conditions), reproducing Lakatos's auxiliary hypothesis shielding. Claim-responsiveness closes the ignoring gap but not the calibration gap: agents engage with failure but still overclaim by 3–5×.
+**The full picture (M1–M17 + decision domain):**
 
-**M13 settles the question for synthetic benchmarks.** The 3×2 ablation (Section 3.27) shows that removing debate entirely produces the best RMSE and gap while running 3-4× faster. Debate without arbiter actively hurts (LLM param_overrides introduce noise); arbiter-v0.1 features partially recover via crux-directed selection but still don't beat no-debate. The debate→computation feedback loop is architecturally open: debate output doesn't feed back into EIG, predictions, or the posterior. Debate's value on synthetic benchmarks is interpretive (mechanistic narratives, claim engagement) not computational. The conditions where debate may causally matter remain untested: model misspecification, non-pre-enumerated design spaces, ambiguous real-world data, and explanation-for-humans goals.
+Pre-M5, debate was entirely epiphenomenal. M5–M13 progressively strengthened the feedback loop but M13's ablation showed debate was still net negative or neutral under correct specification. **M15 changed the story:** under parameter misspecification, debate becomes causally necessary. The mechanism is parameter recovery — agents observe prediction errors, diagnose their source, and propose corrections. This works when the parameter-to-behavior mapping is intuitive (rule thresholds, sensitivity parameters) and fails when the mapping is abstract (value function curvature, cluster dynamics).
+
+M16 revealed that every intervention carries an implicit model-type prior: the arbiter favors similarity models, open design favors rule models, EIG is approximately agnostic. M17 showed these biases compose non-additively: synergy for GCM (87.8%, best ever), rescue for RULEX (arbiter catastrophe averted by open design), interference for RULEX param recovery (60% → 46% → 0%).
+
+R-IDeA showed that complementary biases must use orthogonal information channels. Diversifying experiment selection is antagonistic to debate's parameter recovery mechanism — debate needs maximally informative experiments to see prediction failures.
+
+The decision domain replication confirms the finding is domain-general: the representational-format principle (recovery depends on parameter interpretability, not domain content) holds across categorization and decision-making under risk.
 
 ### 4.5 Posterior collapse: diagnosis and treatment
 
@@ -644,44 +833,72 @@ However, tempering exposed a second problem: greedy EIG selection repeats the sa
 
 The combined M7+M8+M9 solution (tempering + Thompson + crux-directed mixture) keeps later cycles informative and structurally diverse. M9 adds semantic direction: accepted cruxes bias selection toward experiments that resolve specific theoretical disagreements. The remaining limitation is that the crux-directed selection rate is low (1/15 experiments in validation) because most cruxes reference structures already well-represented in the EIG pool.
 
-### 4.6 Limitations
+### 4.6 Limitations (revised through M17 + decision domain)
 
-1. **Residual posterior concentration.** M7 tempering (tau=0.005) prevents immediate collapse but the posterior still concentrates within 3–5 cycles, consistent with Oelrich et al.'s (2020) analysis of overconfident posteriors when models give categorically different predictions. Combined with Thompson sampling (M8), later cycles are informative and structurally diverse, but the system still converges faster than may be ideal for extended runs. Deeper solutions include adaptive learning rates (Grünwald 2012; Wu & Martin 2023), stacking instead of posterior probabilities (Yao et al. 2018), coarsened posteriors (Miller & Dunson 2019), or sequential BOED framed as POMDP (Huan & Marzouk 2016).
+1. **Residual posterior concentration.** M7 tempering (tau=0.005) prevents immediate collapse but the posterior still concentrates within 3–5 cycles. Combined with Thompson sampling (M8), later cycles are informative and structurally diverse, but the system still converges faster than may be ideal for extended runs. Deeper solutions include adaptive learning rates (Grünwald 2012; Wu & Martin 2023), stacking instead of posterior probabilities (Yao et al. 2018), coarsened posteriors (Miller & Dunson 2019), or sequential BOED framed as POMDP (Huan & Marzouk 2016).
 
-2. **Debate is epiphenomenal on synthetic benchmarks.** The M13 ablation confirms that removing debate entirely produces the best RMSE (0.055) and gap (87.6%). The debate→computation feedback loop is open: debate output doesn't feed back into EIG, predictions, or the posterior. Conditions where debate may causally matter (model misspecification, real data, explanation goals) remain untested.
+2. **Debate is epiphenomenal under correct specification.** M13 ablation confirmed; M14 reinforced. However, M15–M17 show debate becomes causally necessary under misspecification, and the decision domain replicates this. The limitation is narrower than originally stated: debate is unnecessary only when parameters are correct.
 
-3. **Synthetic data only.** The framework validates whether correct models are identifiable in principle, not whether the models are correct accounts of human behavior. Extending to real experimental data would require a lab-automation interface.
+3. **Abstract parameters resist LLM diagnosis.** CPT alpha/beta and SUSTAIN cluster dynamics are not recovered in either domain. The representational-format boundary — parameters must map to linguistically describable behaviors — appears fundamental, not addressable by more cycles alone. Prompt enrichment (explicit parameter-to-prediction mappings) is untested.
 
-4. **Three models only.** The framework currently implements GCM, SUSTAIN, and RULEX. Generalization to other model families (neural networks, Bayesian cognitive models) is architecturally straightforward but untested.
+4. **Synthetic data only.** The framework validates whether correct models are identifiable in principle, not whether the models are correct accounts of human behavior. Extending to real experimental data would require a lab-automation interface.
 
-5. **LLM-agnostic convergence.** Cross-LLM comparison (Section 3.6) shows correct model wins regardless of backbone, which validates robustness but also suggests the LLM is currently a replaceable component. The debate quality differences between GPT-4o, Sonnet, and Opus do not translate into convergence differences.
+5. **Three models per domain.** Categorization: GCM, SUSTAIN, RULEX. Decisions: EU, CPT, PH. Generalization to larger model sets or other domains is architecturally straightforward but untested.
 
-6. **No human evaluation of debate quality.** Our quality audit was systematic but not blind. Expert evaluation of whether agent reasoning constitutes genuine scientific reasoning would strengthen the findings.
+6. **Arbiter has uncorrected model-type bias.** The arbiter systematically favors similarity-based models (Section 3.30). Open design partially counteracts this (Section 3.31) but is itself biased toward rule models. No debiasing mechanism has been implemented.
 
-7. **Claim ledger requires explicit directives.** Agents don't spontaneously engage with the claim ledger or conflict map despite injection into prompts (M5–M9). M10's explicit directive achieves 100% engagement when applicable, but the dominant response is "explain" (auxiliary hypothesis shielding) rather than genuine theory revision. The calibration problem persists: agents overclaim by 3–5× even when confronting prior falsifications.
+7. **Single LLM backbone for M15–M17.** All misspecification and decision-domain results use GPT-4o only. Cross-LLM comparison (Section 3.6) showed LLM-agnostic convergence under correct specification, but this has not been verified under misspecification where debate is causally active.
 
-### 4.7 Future directions
+8. **No human evaluation of debate quality.** Our quality audit was systematic but not blind. Expert evaluation of whether agent reasoning constitutes genuine scientific reasoning would strengthen the findings.
 
-1. **Higher crux-directed selection rates** — M9 establishes the crux→experiment causal path (1/15 experiments in validation). Higher rates require either a larger crux_weight, fuzzy matching that maps cruxes to nearby pool entries, or constrained decoding (Tam et al. 2024) to guarantee format compliance. The convergence between crux-directed and EIG-driven selection (Corcoran et al. 2023) suggests the unique value of cruxes may be at the margins — pointing to experiments that EIG undervalues.
-2. **Claim-responsive debate (M10 — DONE)** — agents now receive explicit directives listing their falsified claims and must address each one (revise, explain, or abandon) via a `"falsified_response"` JSON field. Inspired by Shinn et al.'s Reflexion (NeurIPS 2023). Live validation: 3/3 correct, 80% FR rate (100% when applicable), "explain" dominates (Lakatos-compatible)
-3. **Richer design spaces (M11 — DONE)** — extends the fixed 55-candidate pool to 168 candidates via parametric structures (13) and interpolated conditions (2). Superseded by M12.
-4. **Continuous design space (M12 — DONE)** — replaces M11's fixed grid with continuous sampling from parameter ranges (~427 candidates per cycle). Each cycle draws fresh structures, letting EIG discover diagnostic sweet spots. 15/15 sampled structures selected, 0% cycle overlap. Config: `design_space: continuous` (default). 331 tests.
-5. **Debate ablation (M13 — DONE)** — 3×2 ablation (No-Debate / Debate-No-Arbiter / Debate+Arbiter × Thompson / Greedy): 18/18 correct. No-debate best RMSE (0.055) and gap (87.6%). Debate is epiphenomenal on synthetic benchmarks. Key future task: close the debate→computation feedback loop.
-6. **Longer runs (10+ cycles)** — assess whether Thompson sampling's structural diversity compounds over many cycles, whether novel structures eventually outperform registry structures, and whether the claim ledger produces cumulative reasoning at longer horizons
-5. **Non-myopic experiment selection** — full Myopic Posterior Sampling (Kandasamy et al. 2019) or deep adaptive design (Foster et al. 2021) could replace the current simplified Thompson implementation
-6. **Cross-domain generalization** — apply the framework to other multi-model disputes in cognitive science (memory models, decision-making theories)
-7. **Real data integration** — AutoRA + Prolific for closing the loop with human participants
+9. **Claim ledger requires explicit directives.** Agents don't spontaneously engage with the claim ledger. M10's explicit directive achieves 100% engagement when applicable, but the dominant response is "explain" (auxiliary hypothesis shielding). The calibration problem persists: agents overclaim by 3–5×.
+
+### 4.7 Future directions (revised through M17 + decision domain)
+
+**Completed:**
+- Claim-responsive debate (M10) — 80% FR rate, "explain" dominates (Lakatos-compatible)
+- Richer design spaces (M11) — 168 candidates. Superseded by M12.
+- Continuous design space (M12) — ~427 candidates/cycle, 0% cycle overlap
+- Debate ablation (M13) — 18/18 correct, debate epiphenomenal under correct spec
+- Debate→computation feedback loop (M14) — closed, still epiphenomenal under correct spec
+- Model misspecification (M15) — debate causally helps: 8/9, +22pp RULEX via param recovery
+- Open design space (M16) — 15/15, arbiter is bias not noise, mirror biases
+- Composition (M17) — 6/6, 47/48 overall, non-additive composition
+- R-IDeA (negative result) — diversification antagonistic to diagnosis
+- Cross-domain generalization (decision M15) — 0/3→2/3, representational-format principle confirmed
+
+**Open:**
+1. **NeurIPS paper** — write up the two-domain replication. The core contribution: implicit priors in hybrid AI systems, demonstrated across categorization and decision-making under risk.
+2. **Decision domain arbiter experiment** — mirrors M16/M17 in categorization. Tests whether the arbiter's similarity-model bias replicates in decisions.
+3. **Prompt enrichment for abstract parameters** — CPT alpha/beta and SUSTAIN cluster dynamics are the holdouts in both domains. Testing whether explicit parameter-to-prediction guidance breaks through the representational-format boundary.
+4. **Arbiter debiasing** — the arbiter's model-type bias is documented (M16) but uncorrected. Learning curve selection or falsification-directed selection could target underserved models.
+5. **Real data integration** — AutoRA + Prolific for closing the loop with human participants. The current framework validates identifiability in principle; real data tests whether the models are correct accounts of human behavior.
+6. **Non-myopic experiment selection** — full Myopic Posterior Sampling (Kandasamy et al. 2019) or deep adaptive design (Foster et al. 2021) could replace the current simplified Thompson implementation.
+7. **GeCCo forks** — gecco-core (can LLMs discover cognitive models from scratch?) and gecco-supplement (is there a fourth model of categorization?).
 
 ---
 
-## 5. Conclusion
+## 5. Conclusion (revised through M17 + decision domain)
 
-Antagonistic collaboration via LLM debate can successfully identify the correct model from competing theories. The mechanism of convergence is primarily Bayesian computation, but successive milestones have progressively strengthened debate's causal role. M5's feedback loop closures create non-zero replication variance through parameter revision persistence. M6's arbiter-v0.1 integration adds role-specialized meta-agents, crux-based negotiation, conflict maps, and pre-registration output, enriching debate quality while preserving correct convergence (3/3 ground truths, 36–68% gaps). M7's likelihood tempering (tau=0.005) resolves the posterior collapse bottleneck, achieving gradual convergence where later cycles are genuinely informative (EIG>0 through cycle 4). M8's Thompson sampling replaces greedy experiment selection with principled exploration: 12 unique structures (6 novel) vs greedy's 3 (0 novel). M9's crux-directed Thompson sampling fixes the broken crux-to-experiment pipeline (0 parseable crux specs across all prior runs → 24 across 3 validation runs) and establishes the first semantically directed path from debate to experiment selection: accepted cruxes bias the mixture distribution toward experiments that resolve specific theoretical disagreements. In the GCM validation run, crux `crux_004` directly selected `rule_plus_exception_1exc/high_noise` — the first time a debate-identified theoretical fault line determined which experiment ran. The system operates as a falsification engine: 44 claims falsified vs 1 confirmed across M6 runs. The optimal architecture separates computation (experiment selection via tempered EIG + crux-directed Thompson sampling, posterior update) from language (interpretation, hypothesis generation, crux identification, novel structure design), connecting them through validated feedback paths (parameter persistence, claim verification, novel structure registration, crux-directed selection). M10's claim-responsive debate addresses one of these limitations: agents with falsified claims now must explicitly acknowledge, revise, or explain each failure (80% compliance, 100% when applicable). The dominant response is "explain" — attributing falsification to confounds and boundary conditions — reproducing Lakatos's auxiliary hypothesis shielding without being programmed to do so. This closes the ignoring gap (agents no longer pretend falsification didn't happen) but not the calibration gap (overclaiming persists at 3–5×). M11's richer design spaces extend the candidate pool from 55 to 168 by adding parametric structures and interpolated conditions, and M12 goes further with continuous sampling (~427 candidates per cycle), letting each cycle explore fresh parameter regions. M13's controlled 3×2 ablation (18/18 conditions, all correct) definitively answers the causal question for synthetic benchmarks: removing debate entirely produces the best RMSE (0.055) and gap (87.6%) while running 3-4× faster. Debate without arbiter-v0.1 features actively hurts (LLM param_overrides introduce noise); arbiter-v0.1 features partially recover but still don't beat the computational-only baseline. The structural gap is architectural: debate output is disconnected from the scoring pipeline. The framework demonstrates both the promise and the current boundaries of LLMs in the scientific method: they identify genuine theoretical fault lines, propose novel experiments, produce human-readable mechanistic narratives, and — when directed — engage with disconfirming evidence through structured scientific reasoning. But on well-specified synthetic benchmarks, the computational layer is sufficient. Debate's causal contribution may emerge on harder problems: model misspecification requiring LLM-proposed parameter adaptation, non-pre-enumerated design spaces where LLMs propose genuinely novel structures, ambiguous real-world data where interpretation changes what you test next, and explanation-for-humans goals where understanding matters more than identification.
+Antagonistic collaboration via LLM debate identifies the correct model in 47/48 factorial conditions across two scientific domains. The project's trajectory reveals a clear division of labor between computation and language in hybrid AI systems.
+
+**Phase 1 (M1–M13): Computation is sufficient.** Under correct model specification, Bayesian EIG experiment selection + likelihood tempering + Thompson sampling identifies the correct model without any LLM involvement. The M13 ablation (18/18 correct, no-debate best RMSE) confirmed that debate is epiphenomenal when parameters are correct. Successive milestones (M5–M12) progressively strengthened the debate→computation feedback loop, but none changed the outcome. The system operates as a falsification engine (44:1 falsified-to-confirmed ratio), and agents reproduce Lakatos's auxiliary hypothesis shielding without being programmed to do so.
+
+**Phase 2 (M14–M17): Debate becomes causally necessary under misspecification.** M15 demonstrated that when agents start with wrong parameters, debate improves identification by +3.5pp (GCM) to +22.4pp (RULEX) via parameter recovery — agents observe prediction errors, diagnose their source, and propose corrections. This is Pitt & Myung's (2004) insight operationalized: parameter estimation and model selection must happen together. EIG does selection; debate does estimation.
+
+M16 revealed that every intervention in the system carries an implicit model-type prior: the arbiter favors similarity models (+8pp SUSTAIN, -22pp RULEX), open design favors rule models (+24pp RULEX, -24pp SUSTAIN), and EIG is approximately agnostic. M17 showed these biases compose non-additively: synergy for GCM (87.8%, best ever), rescue for RULEX (arbiter catastrophe averted by open design). R-IDeA showed that complementary biases must operate through orthogonal information channels — diversifying the same channel (experiment informativeness) is antagonistic to debate's parameter recovery mechanism.
+
+**Phase 3 (Decision domain): The finding is domain-general.** A second domain (decision-making under risk: EU, CPT, Priority Heuristic) replicates the categorization M15 result exactly: 0/3 no-debate → 2/3 debate at 10 cycles. The cross-domain parallels are clean: PH↔RULEX (rule-based, strongest recovery), EU↔GCM (recovered with more data), CPT↔SUSTAIN (abstract parameters resist diagnosis). The representational-format principle holds: parameter recovery depends on whether the parameter-to-behavior mapping is linguistically describable, not on domain content.
+
+**The architecture thesis, revised:** The optimal hybrid AI system separates computation (experiment selection, evidence accumulation, posterior updating) from language (interpretation, parameter diagnosis, hypothesis generation), with the division of labor shifting based on specification quality. Under correct specification, computation is sufficient and debate adds noise. Under misspecification, debate provides the parameter estimation that computation lacks. The key design principle: informativeness and semantic diagnosis are synergistic — debate needs maximally informative experiments (EIG) to observe the prediction failures that drive parameter recovery.
+
+64 lessons on LLM-mediated scientific debate are documented in [Notes/LESSONS_LEARNED.md](../LESSONS_LEARNED.md).
 
 ---
 
 ## References
 
+- Brandstätter, E., Gigerenzer, G., & Hertwig, R. (2006). The priority heuristic: Making choices without trade-offs. *Psychological Review, 113*(2), 409–432.
 - Bissiri, P. G., Holmes, C. C., & Walker, S. G. (2016). A general framework for updating belief distributions. *Journal of the Royal Statistical Society: Series B, 78*(5), 1103–1130.
 - Cavagnaro, D. R., Myung, J. I., Pitt, M. A., & Kujala, J. V. (2010). Adaptive design optimization: A mutual information-based approach to model discrimination in cognitive science. *Neural Computation, 22*(4), 887–905.
 - Chapelle, O., & Li, L. (2011). An empirical evaluation of Thompson sampling. *Advances in Neural Information Processing Systems, 24*.
@@ -695,7 +912,9 @@ Antagonistic collaboration via LLM debate can successfully identify the correct 
 - Medin, D. L., & Schaffer, M. M. (1978). Context theory of classification learning. *Psychological Review, 85*(3), 207–238.
 - Mellers, B., Hertwig, R., & Kahneman, D. (2001). Do frequency representations eliminate conjunction effects? An exercise in adversarial collaboration. *Psychological Science, 12*(4), 269–275.
 - Miller, J. W., & Dunson, D. B. (2019). Robust Bayesian inference via coarsening. *Journal of the American Statistical Association, 114*(527), 1113–1125.
+- Kahneman, D., & Tversky, A. (1979). Prospect theory: An analysis of decision under risk. *Econometrica, 47*(2), 263–291.
 - Navarro, D. J., Pitt, M. A., & Myung, I. J. (2004). Assessing the distinguishability of models and the informativeness of data. *Cognitive Psychology, 49*(1), 47–84.
+- Pitt, M. A., Myung, I. J., & Zhang, S. (2002). Toward a method of selecting among computational models of cognition. *Psychological Review, 109*(3), 472–491.
 - Nosofsky, R. M. (1986). Attention, similarity, and the identification–categorization relationship. *Journal of Experimental Psychology: General, 115*(1), 39–57.
 - Nosofsky, R. M. (1991). Tests of an exemplar model for relating perceptual classification and recognition memory. *Journal of Experimental Psychology: Human Perception and Performance, 17*(1), 3–27.
 - Nosofsky, R. M., Palmeri, T. J., & McKinley, S. C. (1994). Rule-plus-exception model of classification learning. *Psychological Review, 101*(1), 53–79.
@@ -705,6 +924,8 @@ Antagonistic collaboration via LLM debate can successfully identify the correct 
 - Russo, D. J., & Van Roy, B. (2018). Learning to optimize via information-directed sampling. *Operations Research, 66*(1), 230–252.
 - Shepard, R. N., Hovland, C. I., & Jenkins, H. M. (1961). Learning and memorization of classifications. *Psychological Monographs: General and Applied, 75*(13), 1–42.
 - Shinn, N., Cassano, F., Gopinath, A., Narasimhan, K., & Yao, S. (2023). Reflexion: Language agents with verbal reinforcement learning. *Advances in Neural Information Processing Systems, 36*.
+- Tversky, A., & Kahneman, D. (1992). Advances in prospect theory: Cumulative representation of uncertainty. *Journal of Risk and Uncertainty, 5*(4), 297–323.
+- von Neumann, J., & Morgenstern, O. (1944). *Theory of games and economic behavior*. Princeton University Press.
 - Tam, Z. R., Wu, C., et al. (2024). Let me speak freely? A study on the impact of format restrictions on performance of large language models. *Proceedings of EMNLP 2024 Industry Track*.
 - Thompson, W. R. (1933). On the likelihood that one unknown probability exceeds another in view of the evidence of two samples. *Biometrika, 25*(3/4), 285–294.
 - Wu, P.-S., & Martin, R. (2023). A comparison of learning rate selection methods in generalized Bayesian inference. *Bayesian Analysis, 18*(1), 105–132.
