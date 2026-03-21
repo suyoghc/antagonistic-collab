@@ -38,13 +38,39 @@ domain (decision-making under risk) to elevate the paper from CogSci to NeurIPS.
 3. ~~**Agent configs**~~ ✓ — `decision_agents.py` with CPT_Agent, EU_Agent,
    PH_Agent system prompts. 18 tests.
 
-**What's next:**
-- Wire debate/arbiter conditions into validation script (requires adapting
-  DebateProtocol for decision domain OR writing a lightweight decision debate loop)
-- Run live LLM experiments: no-debate vs debate vs arbiter, correct vs misspec
-- Prediction: debate helps under misspec (0/3 → ?) via parameter recovery,
-  arbiter biases toward CPT/EU (smooth gradients), PH proposals should be favored
-  by LLM agents (lexicographic rules are easy to articulate)
+**What's next: Standalone decision debate runner (Option C)**
+
+Architecture decision (D49): standalone runner rather than refactoring or
+subclassing DebateProtocol. Rationale: zero risk to 47/48 categorization
+results, and DebateProtocol is tightly coupled to categorization (LOO,
+STRUCTURE_REGISTRY, learning curves, condition effects).
+
+The standalone runner reuses domain-agnostic pieces:
+- `compute_eig()` and `ModelPosterior` from bayesian_selection.py
+- `decision_predictions_for_eig()` from decision_eig.py
+- `generate_synthetic_choices()` from decision_runner.py
+- Agent configs from decision_agents.py
+
+New code needed (~200 lines):
+1. **LLM debate round** — show agents prediction errors, ask for parameter
+   diagnosis + revision proposals
+2. **Parameter validation** — filter revisions through `inspect.signature`
+   (pattern from categorization runner.py)
+3. **Arbiter round** (optional) — identify cruxes, steer experiment selection
+4. **Cycle loop** — wire: EIG select → data → score → debate → param update → repeat
+
+Calibration notes:
+- learning_rate=0.01 (calibrated: converges over 3-5 cycles, leaves room
+  for debate; lr=0.1 collapses after cycle 0)
+- n_subjects=30 per gamble
+- 7 gamble groups as candidate experiments
+
+**Predictions to test:**
+- Debate should recover misspec (0/3 → 2-3/3) via parameter diagnosis
+- Arbiter should bias toward CPT/EU (smooth gradients) over PH (discrete rules)
+- LLM proposals should favor PH (easy to articulate lexicographic rules)
+- If pattern replicates across both domains → principle about representational
+  format, not domain content → NeurIPS paper
 
 **Key files:**
 - `antagonistic_collab/models/expected_utility.py` — EU model

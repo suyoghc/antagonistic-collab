@@ -1232,3 +1232,44 @@ Could tune, but the direction is clear — any weight on representativeness/de-a
 dilutes informativeness.
 
 **Status:** Complete. Negative result. R-IDeA not integrated into main pipeline.
+
+## D49: Decision-domain debate runner — standalone (Option C) — 2026-03-20
+
+**Problem:** The decision-making domain computational pipeline is complete (3/3
+correct under correct spec, 0/3 under misspecification). To test whether debate
+recovers misspecification via parameter diagnosis — the core NeurIPS experiment —
+we need a debate loop for decision models. Three options evaluated:
+
+- **Option A (refactor DebateProtocol):** Make DebateProtocol domain-agnostic via
+  dependency injection. Maximum reuse, but touches the core protocol that produces
+  the 47/48 categorization results. Medium-high regression risk. ~4-6 hours.
+- **Option B (subclass DebateProtocol):** Override 3-4 methods. Reuses phase machine
+  and LLM orchestration. Low risk but fragile — inherits 3000 lines of categorization
+  baggage (LOO, learning curves, condition effects, context language). ~2-3 hours.
+- **Option C (standalone runner):** New module reusing only domain-agnostic pieces
+  (compute_eig, ModelPosterior, decision_eig, decision_runner). Zero risk to
+  categorization pipeline. ~3-4 hours.
+
+**Decision:** Option C. Three reasons:
+1. The 47/48 categorization results are the core asset — don't risk them.
+2. We're testing a hypothesis (does the bias pattern replicate?), not building
+   a permanent multi-domain framework. If the pattern replicates, a future
+   refactor (Option A) will be easier because the standalone runner makes
+   domain-specific requirements explicit.
+3. Most computational work is already done. Only new code: LLM debate round
+   (~100-150 lines), parameter validation (~50 lines), optional arbiter.
+
+**Coupling analysis:** DebateProtocol is tightly coupled to categorization via:
+- `compute_model_predictions()` assumes LOO over category structures
+- `_synthetic_runner()` hardcodes STRUCTURE_REGISTRY, CONDITION_EFFECTS
+- `compute_learning_curve_predictions()` — irrelevant for decisions
+- Context generators reference "accuracy," "structure names," LOO language
+
+Domain-agnostic pieces (reusable without changes):
+- `compute_eig()`, `ModelPosterior`, `compute_log_likelihood()` from bayesian_selection.py
+- `EpistemicState` from epistemic_state.py
+- Phase machine logic (but not worth extracting for one use)
+
+**Alternatives considered:** Options A and B above.
+
+**Status:** In progress. Building standalone decision debate runner.

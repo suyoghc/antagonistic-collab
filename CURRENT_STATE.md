@@ -278,11 +278,11 @@ fully-specified models. 18/18 correct across ablation conditions.
 
 ## What's next
 
-1. **Decision-making domain (pipeline wired)** — EU, CPT, Priority Heuristic models
-   (17/17 tests), gamble registry (76 problems), EIG adapter (23 tests), agent configs
-   (18 tests), validation script all complete. No-debate baseline: 3/3 correct (correct
-   params), 0/3 correct (misspecified params). Remaining: wire debate/arbiter conditions,
-   run live LLM experiments. NeurIPS target.
+1. **Decision-making domain (debate runner in progress)** — Computational pipeline
+   complete: models (17/17), gamble registry (76), EIG adapter (23 tests), agent configs
+   (18 tests), validation script. No-debate baseline: 3/3 correct, 0/3 misspec.
+   Now building standalone decision debate runner (D49) to test whether debate recovers
+   misspecification via parameter diagnosis. NeurIPS target.
 2. Write up two-domain results as NeurIPS submission
 3. GeCCo forks (gecco-core, gecco-supplement) — model discovery + adjudication
 4. Real data integration (human participants via Prolific/AutoRA)

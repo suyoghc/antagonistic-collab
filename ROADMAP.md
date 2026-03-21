@@ -12,7 +12,10 @@ No-debate baseline results:
 - Correct params: 3/3 (all identified by cycle 0-1)
 - Misspecified params: 0/3 (all wrong — stronger penalty than categorization)
 
-Remaining: wire debate/arbiter into validation, run live LLM experiments.
+Now building: standalone decision debate runner (D49 — Option C). Avoids
+touching DebateProtocol (tightly coupled to categorization). Reuses
+compute_eig, ModelPosterior, decision_eig, decision_runner. New code:
+LLM debate round, param validation, optional arbiter, cycle loop.
 
 If the same bias pattern replicates → NeurIPS paper on implicit priors in hybrid
 AI systems as a domain-general principle.
